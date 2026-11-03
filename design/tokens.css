@@ -1,0 +1,74 @@
+/* JobPilot design tokens — extracted from the "JobPilot design system" Design artifact.
+   Import once in dashboard/app/globals.css and map them in tailwind config.
+   Never hardcode hex values in components; use these variables. */
+
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap");
+
+:root {
+  /* Surfaces and text */
+  --jp-ground: #F4F6F3;      /* page background */
+  --jp-surface: #FFFFFF;     /* cards, panels, sidebar, top bar */
+  --jp-line: #D9E0DB;        /* 1px borders, dividers */
+  --jp-line-soft: #E3E9E5;   /* row dividers, progress tracks */
+  --jp-line-strong: #C9D3CD; /* secondary button and input borders */
+  --jp-ink: #17201B;         /* body text, headings */
+  --jp-ink-2: #4A5650;       /* secondary text, labels */
+  --jp-muted-bg: #EEF1EF;    /* neutral tags */
+
+  /* Brand */
+  --jp-brand: #1F6B4F;       /* "Spruce": primary buttons, active nav, links */
+  --jp-brand-tint: #E3F1EA;  /* "Sprout tint": selected rows, good-news banners */
+  --jp-amber: #B45309;       /* warnings, AI guesses, flags */
+  --jp-amber-text: #8A4A07;
+  --jp-amber-bg: #FDF3DC;
+  --jp-amber-border: #E9CF95;
+  --jp-danger: #B42318;      /* STOP, LIVE badge, failed */
+  --jp-danger-bg: #FDECEA;
+  --jp-danger-border: #F3B8B2;
+
+  /* Status: text / background (chips) */
+  --jp-status-new: #5F6B64;        --jp-status-new-bg: #EEF1EF;
+  --jp-status-queued: #1D4ED8;     --jp-status-queued-bg: #E8EFFD;
+  --jp-status-approved: #4338CA;   --jp-status-approved-bg: #EEEDFC;
+  --jp-status-submitted: #15803D;  --jp-status-submitted-bg: #E6F4EA;
+  --jp-status-manual: #7E22CE;     --jp-status-manual-bg: #F3E8FD;
+  --jp-status-failed: #B42318;     --jp-status-failed-bg: #FDECEA;
+  --jp-status-rejected: #374151;   --jp-status-rejected-bg: #E5E7EB;
+  --jp-status-interview: #0F766E;  --jp-status-interview-bg: #E0F2F1;
+  --jp-status-offer: #8A5A00;      --jp-status-offer-bg: #FBF1DC;
+
+  /* Type */
+  --jp-font-sans: "Geist", system-ui, sans-serif;
+  --jp-font-serif: "Newsreader", Georgia, serif; /* page titles and big numbers only */
+
+  /* Shape and layout */
+  --jp-radius-control: 6px;
+  --jp-radius-card: 10px;
+  --jp-sidebar: 220px;
+  --jp-sidebar-collapsed: 64px;
+  --jp-topbar: 56px;
+  --jp-drawer: 520px;
+  --jp-row: 36px;
+  --jp-shadow-overlay: 0 8px 24px rgba(23, 32, 27, 0.12); /* drawer and dialogs only */
+}
+
+/* Dark theme */
+:root[data-theme="dark"] {
+  --jp-ground: #0F1613;
+  --jp-surface: #161F1B;
+  --jp-line: #2B3832;
+  --jp-ink: #E8EFEA;
+  --jp-ink-2: #A9B8B0;
+  --jp-brand: #5FBF93;
+  --jp-status-new: #A9B8B0;
+  --jp-status-queued: #7AA7FF;
+  --jp-status-approved: #A5B4FC;
+  --jp-status-submitted: #4ADE80;
+  --jp-status-manual: #C4A1FF;
+  --jp-status-failed: #FF8A80;
+  --jp-status-rejected: #B8C2BD;
+  --jp-status-interview: #5EEAD4;
+  --jp-status-offer: #F5C76B;
+  /* Dark values for the tints, soft lines and amber were not defined in the
+     design system. Ask before inventing them. */
+}

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+
+  <div style="height:56px;flex:0 0 56px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:#FFFFFF;border-bottom:1px solid #D9E0DB">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:500">JobPilot</span>
+    <span style="display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:6px;background:#E8EFFD;color:#1D4ED8;font-size:13px;font-weight:600;letter-spacing:0.02em">DRY RUN</span>
+    <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:8px;height:8px;border-radius:50%;background:#15803D"></span>Running</span>
+    <span style="display:inline-flex;flex-direction:column;gap:4px;font-size:13px;color:#4A5650;font-variant-numeric:tabular-nums;min-width:120px"><span>Applied 7 / 15</span><span style="height:3px;border-radius:2px;background:#E3E9E5;overflow:hidden"><span style="display:block;width:47%;height:3px;background:#1F6B4F"></span></span></span>
+    <span style="display:inline-flex;flex-direction:column;gap:4px;font-size:13px;color:#4A5650;font-variant-numeric:tabular-nums;min-width:120px"><span>Emails 4 / 10</span><span style="height:3px;border-radius:2px;background:#E3E9E5;overflow:hidden"><span style="display:block;width:40%;height:3px;background:#1F6B4F"></span></span></span>
+    <span style="flex:1"></span>
+    <span style="font-size:13px;color:#4A5650">Quota 38 / 250</span>
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#B42318;color:#FFFFFF;font-size:12px;font-weight:600">4</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:13px;background:#FFFFFF">Pause</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:6px;background:#B42318;color:#FFFFFF;font-size:13px;font-weight:600">STOP</span>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <nav style="width:220px;flex:0 0 220px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9E0DB;padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Home</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Review batch <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#1D4ED8;color:#FFFFFF;font-size:12px;font-weight:600">9</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Applications</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Questions <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#B45309;color:#FFFFFF;font-size:12px;font-weight:600">3</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Emails</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Profile</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Settings</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Activity log</div>
+      <span style="flex:1"></span>
+      <div style="font-size:13px;color:#4A5650;padding:0 10px;line-height:1.6">Sun, Nov 4<br>Runs 9 AM to 11 PM<br>Version 1.0</div>
+    </nav>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:20px;padding:24px 28px;box-sizing:border-box;overflow:hidden">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px;line-height:1.15">Good morning, Jenel</h1>
+          <p style="margin:0;font-size:14px;color:#4A5650">Found 42 jobs today, 18 matched your filters.</p>
+        </div>
+        <div style="display:flex;gap:10px">
+          <span style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:14px;font-weight:500">Run once now</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;border-left:3px solid #1D4ED8;font-size:14px"><span>9 applications ready for review</span><span style="color:#1F6B4F;font-weight:600">Review</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;border-left:3px solid #B45309;font-size:14px"><span>3 questions need answers</span><span style="color:#1F6B4F;font-weight:600">Answer</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;border-left:3px solid #B45309;font-size:14px"><span>Prosple is paused: CAPTCHA</span><span style="color:#1F6B4F;font-weight:600">Open browser</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+        <div style="padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#4A5650">Found today</span><span style="font-family:Newsreader,Georgia,serif;font-size:36px;line-height:1;font-variant-numeric:tabular-nums">42</span><span style="font-size:13px;color:#4A5650">18 matched (score 60+)</span></div>
+        <div style="padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#4A5650">Waiting for review</span><span style="font-family:Newsreader,Georgia,serif;font-size:36px;line-height:1;font-variant-numeric:tabular-nums">9</span><span style="font-size:13px;color:#4A5650">oldest 1 day ago</span></div>
+        <div style="padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#4A5650">Submitted this week</span><span style="font-family:Newsreader,Georgia,serif;font-size:36px;line-height:1;font-variant-numeric:tabular-nums">31</span><span style="font-size:13px;color:#15803D">+8 vs last week</span></div>
+        <div style="padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#4A5650">Emails sent this week</span><span style="font-family:Newsreader,Georgia,serif;font-size:36px;line-height:1;font-variant-numeric:tabular-nums">22</span><span style="font-size:13px;color:#B42318">2 bounced</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:60fr 40fr;gap:14px">
+        <div style="padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:14px;font-weight:600">Applications per day, last 30 days</span>
+          <svg width="100%" height="170" viewBox="0 0 600 170" preserveAspectRatio="none" aria-label="Bar chart of applications per day, split submitted and manual" role="img" style="display:block">
+            <line x1="0" y1="150" x2="600" y2="150" stroke="#D9E0DB"/>
+            <rect x="10" y="110" width="12" height="40" fill="#15803D"/><rect x="28" y="120" width="12" height="30" fill="#15803D"/><rect x="46" y="96" width="12" height="54" fill="#15803D"/><rect x="64" y="130" width="12" height="20" fill="#7E22CE"/>
+            <rect x="82" y="112" width="12" height="38" fill="#15803D"/><rect x="100" y="100" width="12" height="50" fill="#15803D"/><rect x="118" y="124" width="12" height="26" fill="#15803D"/><rect x="136" y="118" width="12" height="32" fill="#15803D"/>
+            <rect x="154" y="90" width="12" height="60" fill="#15803D"/><rect x="172" y="104" width="12" height="46" fill="#15803D"/><rect x="190" y="136" width="12" height="14" fill="#7E22CE"/><rect x="208" y="112" width="12" height="38" fill="#15803D"/>
+            <rect x="226" y="98" width="12" height="52" fill="#15803D"/><rect x="244" y="120" width="12" height="30" fill="#15803D"/><rect x="262" y="108" width="12" height="42" fill="#15803D"/><rect x="280" y="84" width="12" height="66" fill="#15803D"/>
+            <rect x="298" y="102" width="12" height="48" fill="#15803D"/><rect x="316" y="126" width="12" height="24" fill="#7E22CE"/><rect x="334" y="114" width="12" height="36" fill="#15803D"/><rect x="352" y="100" width="12" height="50" fill="#15803D"/>
+            <rect x="370" y="92" width="12" height="58" fill="#15803D"/><rect x="388" y="120" width="12" height="30" fill="#15803D"/><rect x="406" y="110" width="12" height="40" fill="#15803D"/><rect x="424" y="96" width="12" height="54" fill="#15803D"/>
+            <rect x="442" y="78" width="12" height="72" fill="#15803D"/><rect x="460" y="104" width="12" height="46" fill="#15803D"/><rect x="478" y="118" width="12" height="32" fill="#7E22CE"/><rect x="496" y="98" width="12" height="52" fill="#15803D"/>
+            <rect x="514" y="90" width="12" height="60" fill="#15803D"/><rect x="532" y="112" width="12" height="38" fill="#15803D"/><rect x="550" y="100" width="12" height="50" fill="#15803D"/><rect x="568" y="84" width="12" height="66" fill="#15803D"/>
+            <rect x="586" y="76" width="12" height="74" fill="#15803D"/>
+          </svg>
+          <div style="display:flex;gap:16px;font-size:13px;color:#4A5650"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#15803D;vertical-align:middle"></span> Submitted</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#7E22CE;vertical-align:middle"></span> Manual</span></div>
+        </div>
+        <div style="padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:10px">
+          <span style="font-size:14px;font-weight:600">Funnel</span>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;font-variant-numeric:tabular-nums">
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;color:#4A5650">Found</span><span style="flex:1;height:18px;background:#E3E9E5;border-radius:4px"><span style="display:block;width:100%;height:18px;border-radius:4px;background:#5F6B64"></span></span><span style="width:56px;text-align:right">142</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;color:#4A5650">Matched</span><span style="flex:1;height:18px;background:#E3E9E5;border-radius:4px"><span style="display:block;width:60%;height:18px;border-radius:4px;background:#1D4ED8"></span></span><span style="width:56px;text-align:right">86 · 61%</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;color:#4A5650">Submitted</span><span style="flex:1;height:18px;background:#E3E9E5;border-radius:4px"><span style="display:block;width:36%;height:18px;border-radius:4px;background:#15803D"></span></span><span style="width:56px;text-align:right">31 · 36%</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;color:#4A5650">Replied</span><span style="flex:1;height:18px;background:#E3E9E5;border-radius:4px"><span style="display:block;width:10%;height:18px;border-radius:4px;background:#0F766E"></span></span><span style="width:56px;text-align:right">4 · 13%</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;color:#4A5650">Interview</span><span style="flex:1;height:18px;background:#E3E9E5;border-radius:4px"><span style="display:block;width:3%;height:18px;border-radius:4px;background:#0F766E"></span></span><span style="width:56px;text-align:right">1</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:0">
+        <div style="padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <span style="font-size:14px;font-weight:600;margin-bottom:4px">Top matches today</span>
+          <div style="display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid #E3E9E5"><span style="font-weight:600;color:#15803D;font-variant-numeric:tabular-nums">86</span><span>Junior Dev, Acme PH <span style="color:#4A5650">· Makati</span></span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E8EFFD;color:#1D4ED8;font-size:12px;font-weight:500">Queued</span></div>
+          <div style="display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid #E3E9E5"><span style="font-weight:600;color:#15803D;font-variant-numeric:tabular-nums">84</span><span>Web Developer Intern, Kumu <span style="color:#4A5650">· Remote</span></span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E8EFFD;color:#1D4ED8;font-size:12px;font-weight:500">Queued</span></div>
+          <div style="display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:6px 0"><span style="font-weight:600;color:#B45309;font-variant-numeric:tabular-nums">72</span><span>Data Analyst Intern, Appify <span style="color:#4A5650">· Taguig</span></span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E8EFFD;color:#1D4ED8;font-size:12px;font-weight:500">Queued</span></div>
+        </div>
+        <div style="padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:14px;font-weight:600">Recent activity</span><span style="color:#1F6B4F;font-weight:500;font-size:13px">See all</span></div>
+          <div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #E3E9E5"><span style="font-variant-numeric:tabular-nums;color:#4A5650;width:70px">2:14 PM</span><span>Submitted · Junior Dev at Acme PH</span></div>
+          <div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #E3E9E5"><span style="font-variant-numeric:tabular-nums;color:#4A5650;width:70px">1:58 PM</span><span>Email sent to Maria Santos</span></div>
+          <div style="display:flex;gap:12px;padding:6px 0"><span style="font-variant-numeric:tabular-nums;color:#4A5650;width:70px">1:40 PM</span><span>Scored 86 · Junior Dev at Acme PH</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

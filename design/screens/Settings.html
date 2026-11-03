@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+
+  <div style="height:56px;flex:0 0 56px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:#FFFFFF;border-bottom:1px solid #D9E0DB">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:500">JobPilot</span>
+    <span style="display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:6px;background:#E8EFFD;color:#1D4ED8;font-size:13px;font-weight:600;letter-spacing:0.02em">DRY RUN</span>
+    <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:8px;height:8px;border-radius:50%;background:#15803D"></span>Running</span>
+    <span style="flex:1"></span>
+    <span style="font-size:13px;color:#4A5650">Quota 38 / 250</span>
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#B42318;color:#FFFFFF;font-size:12px;font-weight:600">4</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:13px;background:#FFFFFF">Pause</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:6px;background:#B42318;color:#FFFFFF;font-size:13px;font-weight:600">STOP</span>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <nav style="width:220px;flex:0 0 220px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9E0DB;padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Home</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Review batch <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#1D4ED8;color:#FFFFFF;font-size:12px;font-weight:600">9</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Applications</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Questions <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#B45309;color:#FFFFFF;font-size:12px;font-weight:600">3</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Emails</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Profile</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Settings</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Activity log</div>
+      <span style="flex:1"></span>
+      <div style="font-size:13px;color:#4A5650;padding:0 10px;line-height:1.6">Sun, Nov 4<br>Runs 9 AM to 11 PM<br>Version 1.0</div>
+    </nav>
+
+    <div style="width:250px;flex:0 0 250px;box-sizing:border-box;border-right:1px solid #D9E0DB;background:#FBFCFB;padding:20px 14px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+      <span style="padding:8px 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Run mode</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">AI provider</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Search filters</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Thresholds and caps</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Schedule</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Blocklist</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Connections</span>
+      <span style="padding:8px 10px;border-radius:6px;color:#17201B">Notifications</span>
+    </div>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:18px;padding:24px 28px;box-sizing:border-box;overflow:hidden">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px;line-height:1.15">Run mode</h1>
+        <p style="margin:0;font-size:14px;color:#4A5650">How much JobPilot is allowed to do. Mock and Dry run never submit anything.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
+          <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600"><span style="width:14px;height:14px;border-radius:50%;border:1px solid #C9D3CD"></span>Mock</span>
+          <span style="font-size:13px;color:#4A5650;line-height:1.5">Offline, fake AI, nothing sent.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:10px;background:#E8EFFD;border:2px solid #1D4ED8">
+          <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600"><span style="width:14px;height:14px;border-radius:50%;border:4px solid #1D4ED8;background:#FFFFFF"></span>Dry run</span>
+          <span style="font-size:13px;color:#17201B;line-height:1.5">Real sites and AI, nothing submitted or sent.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
+          <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600"><span style="width:14px;height:14px;border-radius:50%;border:1px solid #C9D3CD"></span>Live</span>
+          <span style="font-size:13px;color:#4A5650;line-height:1.5">Submits after your approval. Opens a confirm dialog first.</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
+        <span style="font-size:15px;font-weight:600">AI provider</span>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead><tr style="text-align:left;color:#4A5650;font-size:13px"><th style="padding:6px 0;border-bottom:1px solid #E3E9E5;font-weight:500">Task</th><th style="padding:6px 0;border-bottom:1px solid #E3E9E5;font-weight:500">Provider</th><th style="padding:6px 0;border-bottom:1px solid #E3E9E5;font-weight:500">Model</th></tr></thead>
+          <tbody>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Match and resume pick</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Ollama</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5;font-variant-numeric:tabular-nums">qwen:8b</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Form answers</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Gemini</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5;font-variant-numeric:tabular-nums">gemini-flash</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Embeddings</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5">Ollama</td><td style="padding:8px 0;border-bottom:1px solid #E3E9E5;font-variant-numeric:tabular-nums">qwen:8b</td></tr>
+            <tr><td style="padding:8px 0">Cold emails</td><td style="padding:8px 0">Gemini</td><td style="padding:8px 0;font-variant-numeric:tabular-nums">gemini-flash</td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#4A5650">
+          <span><span style="color:#15803D">●</span> Ollama connected · 2 models installed</span>
+          <span style="display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px;color:#17201B">Test</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:0">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;font-size:14px">
+          <span style="font-size:15px;font-weight:600">Thresholds and caps</span>
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="display:flex;justify-content:space-between"><span>Minimum score to queue</span><span style="font-variant-numeric:tabular-nums;font-weight:600">55</span></span><span style="height:4px;border-radius:2px;background:#E3E9E5;position:relative"><span style="position:absolute;left:0;top:0;height:4px;width:55%;border-radius:2px;background:#1F6B4F"></span></span></div>
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="display:flex;justify-content:space-between"><span>Score for a personal email</span><span style="font-variant-numeric:tabular-nums;font-weight:600">80</span></span><span style="height:4px;border-radius:2px;background:#E3E9E5;position:relative"><span style="position:absolute;left:0;top:0;height:4px;width:80%;border-radius:2px;background:#1F6B4F"></span></span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px;color:#4A5650">
+            <span>Applications per day<br><span style="color:#17201B;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">15</span></span>
+            <span>Emails per day<br><span style="color:#17201B;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">10</span></span>
+            <span>AI calls per day<br><span style="color:#17201B;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">250</span></span>
+          </div>
+          <span style="font-size:13px;color:#1F6B4F;font-weight:500">With these settings, about 12 applications a day.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;font-size:14px">
+          <span style="font-size:15px;font-weight:600">Search filters</span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px"><span style="padding:3px 10px;border-radius:999px;background:#EEF1EF;font-size:13px">React intern</span><span style="padding:3px 10px;border-radius:999px;background:#EEF1EF;font-size:13px">Flutter intern</span><span style="padding:3px 10px;border-radius:999px;background:#EEF1EF;font-size:13px">Junior developer</span></div>
+          <span style="font-size:13px;color:#4A5650">Locations: Metro Manila, Remote · Remote OK: on</span>
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="display:flex;justify-content:space-between"><span>Maximum posting age</span><span style="font-variant-numeric:tabular-nums;font-weight:600">21 days</span></span><span style="height:4px;border-radius:2px;background:#E3E9E5;position:relative"><span style="position:absolute;left:0;top:0;height:4px;width:35%;border-radius:2px;background:#1F6B4F"></span></span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Applications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;position:relative">
+
+  <div style="height:56px;flex:0 0 56px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:#FFFFFF;border-bottom:1px solid #D9E0DB">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:500">JobPilot</span>
+    <span style="display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:6px;background:#E8EFFD;color:#1D4ED8;font-size:13px;font-weight:600;letter-spacing:0.02em">DRY RUN</span>
+    <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:8px;height:8px;border-radius:50%;background:#15803D"></span>Running</span>
+    <span style="flex:1"></span>
+    <span style="font-size:13px;color:#4A5650">Quota 38 / 250</span>
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#B42318;color:#FFFFFF;font-size:12px;font-weight:600">4</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:13px;background:#FFFFFF">Pause</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:6px;background:#B42318;color:#FFFFFF;font-size:13px;font-weight:600">STOP</span>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <nav style="width:220px;flex:0 0 220px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9E0DB;padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Home</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Review batch <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#1D4ED8;color:#FFFFFF;font-size:12px;font-weight:600">9</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Applications</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Questions <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#B45309;color:#FFFFFF;font-size:12px;font-weight:600">3</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Emails</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Profile</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Settings</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Activity log</div>
+      <span style="flex:1"></span>
+      <div style="font-size:13px;color:#4A5650;padding:0 10px;line-height:1.6">Sun, Nov 4<br>Runs 9 AM to 11 PM<br>Version 1.0</div>
+    </nav>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;padding:22px 24px;box-sizing:border-box">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px;line-height:1.15">Applications</h1>
+          <p style="margin:0;font-size:14px;color:#4A5650">124 total · every job JobPilot has touched</p>
+        </div>
+        <div style="display:flex;gap:10px">
+          <span style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:14px;font-weight:500">Column picker</span>
+          <span style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:14px;font-weight:500">Export CSV</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #D9E0DB">
+        <div style="display:flex;gap:18px;font-size:14px">
+          <span style="padding:8px 0;border-bottom:2px solid #1F6B4F;color:#1F6B4F;font-weight:600">All</span>
+          <span style="padding:8px 0;color:#4A5650">Submitted</span>
+          <span style="padding:8px 0;color:#4A5650">Needs manual apply (8)</span>
+          <span style="padding:8px 0;color:#4A5650">Failed (2)</span>
+          <span style="padding:8px 0;color:#4A5650">Interviews</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding-bottom:6px">
+          <span style="display:inline-flex;align-items:center;height:32px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px;color:#4A5650;width:180px;box-sizing:border-box">Search company or role</span>
+          <span style="display:inline-flex;align-items:center;height:32px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Status</span>
+          <span style="display:inline-flex;align-items:center;height:32px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Score</span>
+          <span style="display:inline-flex;align-items:center;height:32px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Resume</span>
+        </div>
+      </div>
+
+      <div style="flex:1;min-height:0;background:#FFFFFF;border:1px solid #D9E0DB;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;background:#F4F6F3;border-bottom:1px solid #D9E0DB;font-size:12px;font-weight:600;color:#4A5650">
+          <span>Date</span><span>Company</span><span>Role</span><span>Score</span><span>Resume</span><span>Email</span><span>Status</span>
+        </div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 12</span><span>Acme PH</span><span>Junior Full Stack Dev</span><span style="color:#15803D;font-weight:600">86</span><span>A</span><span style="color:#15803D">Sent ✓</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E6F4EA;color:#15803D;font-size:12px;font-weight:500">Submitted</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums;background:#E3F1EA;border-left:3px solid #1F6B4F"><span style="color:#4A5650">Nov 11</span><span>Appify</span><span>Data Analyst Intern</span><span style="color:#B45309;font-weight:600">72</span><span>B</span><span style="color:#15803D">Sent ✓</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E0F2F1;color:#0F766E;font-size:12px;font-weight:500">Interview</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 11</span><span>Kanaya</span><span>Mobile Developer Intern</span><span style="color:#5F6B64;font-weight:600">58</span><span>B</span><span style="color:#4A5650">None</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#F3E8FD;color:#7E22CE;font-size:12px;font-weight:500">Manual</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 10</span><span>Kumu</span><span>Web Developer Intern</span><span style="color:#15803D;font-weight:600">84</span><span>A</span><span style="color:#4A5650">Queued</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#FDECEA;color:#B42318;font-size:12px;font-weight:500">Failed</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 9</span><span>Pulse Labs</span><span>Frontend Intern</span><span style="color:#B45309;font-weight:600">68</span><span>A</span><span style="color:#15803D">Sent ✓</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E5E7EB;color:#374151;font-size:12px;font-weight:500">Rejected</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 9</span><span>Prosple partner</span><span>Mobile Dev, Flutter</span><span style="color:#15803D;font-weight:600">81</span><span>B</span><span style="color:#4A5650">None</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#F3E8FD;color:#7E22CE;font-size:12px;font-weight:500">Manual</span></span></div>
+        <div style="display:grid;grid-template-columns:64px 1.1fr 1.4fr 70px 60px 70px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">Nov 8</span><span>Taguig Tech</span><span>Junior Developer</span><span style="color:#15803D;font-weight:600">80</span><span>A</span><span style="color:#15803D">Sent ✓</span><span><span style="display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:999px;background:#E6F4EA;color:#15803D;font-size:12px;font-weight:500">Submitted</span></span></div>
+      </div>
+    </main>
+  </div>
+
+  <aside style="position:absolute;top:56px;right:0;bottom:0;width:520px;box-sizing:border-box;background:#FFFFFF;border-left:1px solid #D9E0DB;box-shadow:-8px 0 24px rgba(23,32,27,0.10);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid #D9E0DB">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-family:Newsreader,Georgia,serif;font-size:22px;line-height:1.2;font-weight:500">Data Analyst Intern</span>
+        <span style="font-size:13px;color:#4A5650">Appify · Taguig · Internship</span>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+          <span style="display:inline-flex;height:24px;align-items:center;padding:0 10px;border-radius:999px;background:#E0F2F1;color:#0F766E;font-size:13px;font-weight:500">Interview</span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;border:2px solid #B45309;color:#B45309;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">72</span>
+        </div>
+      </div>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid #C9D3CD;border-radius:6px;font-size:16px;color:#4A5650">×</span>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:14px;font-weight:600">Timeline</span>
+        <div style="display:flex;gap:12px;font-size:13px"><span style="width:64px;color:#4A5650;font-variant-numeric:tabular-nums">Nov 9</span><span>Found on Prosple</span></div>
+        <div style="display:flex;gap:12px;font-size:13px"><span style="width:64px;color:#4A5650;font-variant-numeric:tabular-nums">Nov 9</span><span>Scored 72</span></div>
+        <div style="display:flex;gap:12px;font-size:13px"><span style="width:64px;color:#4A5650;font-variant-numeric:tabular-nums">Nov 10</span><span>Queued, then approved by you</span></div>
+        <div style="display:flex;gap:12px;font-size:13px"><span style="width:64px;color:#4A5650;font-variant-numeric:tabular-nums">Nov 11</span><span>Submitted, email sent to Maria Santos</span></div>
+        <div style="display:flex;gap:12px;font-size:13px"><span style="width:64px;color:#4A5650;font-variant-numeric:tabular-nums">Nov 14</span><span>Recruiter replied in Gmail, status set to Interview by you</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #E3E9E5;padding-top:14px">
+        <span style="font-size:14px;font-weight:600">Notes</span>
+        <span style="display:block;min-height:56px;padding:10px 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:14px;color:#17201B">Interview Nov 20, 10 AM, Google Meet</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #E3E9E5;padding-top:14px">
+        <span style="font-size:14px;font-weight:600">Email</span>
+        <span style="font-size:13px;color:#4A5650">To Maria Santos, Talent Acquisition Lead · ✓ Sent 2:31 PM · <span style="color:#1F6B4F;font-weight:500">View in Gmail</span></span>
+      </div>
+    </div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

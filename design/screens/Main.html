@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot foundations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+</helmet>
+<div style="width:1280px;height:1000px;box-sizing:border-box;padding:56px 64px;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;gap:36px;overflow:hidden">
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:48px;line-height:1.1;letter-spacing:-0.01em">JobPilot design system</h1>
+    <p style="margin:0;font-size:16px;line-height:1.5;color:#4A5650;max-width:760px">Foundations for a calm desktop work tool. Colour carries meaning: each application status keeps the same colour on every screen, so a glance tells you where a job stands.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:48px;align-items:start">
+
+    <section style="display:flex;flex-direction:column;gap:16px">
+      <h2 style="margin:0;font-size:20px;font-weight:600">Brand and surfaces</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="height:88px;border-radius:10px;background:#1F6B4F"></div>
+          <div style="font-size:14px;font-weight:600">Spruce</div>
+          <div style="font-size:13px;color:#4A5650">#1F6B4F</div>
+          <div style="font-size:13px;color:#4A5650">Primary actions, active nav</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="height:88px;border-radius:10px;background:#E3F1EA;border:1px solid #C4DDD0"></div>
+          <div style="font-size:14px;font-weight:600">Sprout tint</div>
+          <div style="font-size:13px;color:#4A5650">#E3F1EA</div>
+          <div style="font-size:13px;color:#4A5650">Selected rows, good-news banners</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="height:88px;border-radius:10px;background:#17201B"></div>
+          <div style="font-size:14px;font-weight:600">Ink</div>
+          <div style="font-size:13px;color:#4A5650">#17201B</div>
+          <div style="font-size:13px;color:#4A5650">Body text, headings</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="height:88px;border-radius:10px;background:#B45309"></div>
+          <div style="font-size:14px;font-weight:600">Amber</div>
+          <div style="font-size:13px;color:#4A5650">#B45309</div>
+          <div style="font-size:13px;color:#4A5650">Warnings, AI guesses, flags</div>
+        </div>
+      </div>
+
+      <h3 style="margin:14px 0 0;font-size:16px;font-weight:600">Light and dark tokens</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead>
+          <tr style="text-align:left;color:#4A5650;font-size:13px">
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Token</th>
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Light</th>
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Dark</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB">Ground</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#F4F6F3;border:1px solid #D9E0DB;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#F4F6F3</span></td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#0F1613;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#0F1613</span></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB">Surface</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#FFFFFF;border:1px solid #D9E0DB;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#FFFFFF</span></td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#161F1B;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#161F1B</span></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB">Line</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#D9E0DB;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#D9E0DB</span></td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#2B3832;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#2B3832</span></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB">Ink</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#17201B;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#17201B</span></td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#E8EFEA;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#E8EFEA</span></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB">Ink 2</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#4A5650;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#4A5650</span></td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#A9B8B0;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#A9B8B0</span></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0">Brand</td>
+            <td style="padding:9px 0"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#1F6B4F;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#1F6B4F</span></td>
+            <td style="padding:9px 0"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#5FBF93;vertical-align:middle"></span> <span style="font-variant-numeric:tabular-nums">#5FBF93</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:16px">
+      <h2 style="margin:0;font-size:20px;font-weight:600">Status colours</h2>
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#4A5650">These colours never change between screens. The dark-mode value is shown beside the light one.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead>
+          <tr style="text-align:left;color:#4A5650;font-size:13px">
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Status</th>
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Light / dark</th>
+            <th style="padding:8px 0;border-bottom:1px solid #D9E0DB;font-weight:500">Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#5F6B64">● </span>New</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#5F6B64 / #A9B8B0</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">Found, not scored yet</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#1D4ED8">● </span>Queued</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#1D4ED8 / #7AA7FF</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">Waiting for your review</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#4338CA">● </span>Approved</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#4338CA / #A5B4FC</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">You approved it; waiting to submit</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#15803D">● </span>Submitted</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#15803D / #4ADE80</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">Sent to the employer</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#7E22CE">● </span>Manual</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#7E22CE / #C4A1FF</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">You need to apply yourself</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#B42318">● </span>Failed</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#B42318 / #FF8A80</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">Something went wrong; check it</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#374151">● </span>Rejected</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#374151 / #B8C2BD</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">You or the employer said no</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-weight:500"><span style="color:#0F766E">● </span>Interview</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;font-variant-numeric:tabular-nums;color:#4A5650">#0F766E / #5EEAD4</td>
+            <td style="padding:9px 0;border-bottom:1px solid #D9E0DB;color:#4A5650">Set by you</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;font-weight:500"><span style="color:#8A5A00">● </span>Offer</td>
+            <td style="padding:9px 0;font-variant-numeric:tabular-nums;color:#4A5650">#8A5A00 / #F5C76B</td>
+            <td style="padding:9px 0;color:#4A5650">Set by you</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;border-top:1px solid #D9E0DB;padding-top:28px">
+
+    <section style="display:flex;flex-direction:column;gap:14px">
+      <h2 style="margin:0;font-size:20px;font-weight:600">Type</h2>
+      <div style="font-family:Newsreader,Georgia,serif;font-size:40px;line-height:1.1;font-weight:500;letter-spacing:-0.01em">Review batch</div>
+      <div style="font-family:Newsreader,Georgia,serif;font-size:40px;line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums">86 <span style="font-size:20px;color:#4A5650">score</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:#4A5650">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #D9E0DB;padding-bottom:8px"><span style="font-size:28px;color:#17201B;font-weight:500">Page title, 28 px</span><span>Newsreader 500</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #D9E0DB;padding-bottom:8px"><span style="font-size:20px;color:#17201B;font-weight:600">Section heading, 20 px</span><span>Geist 600</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #D9E0DB;padding-bottom:8px"><span style="font-size:16px;color:#17201B">Lead text, 16 px</span><span>Geist 400</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #D9E0DB;padding-bottom:8px"><span style="font-size:14px;color:#17201B">Body and table text, 14 px</span><span>Geist 400</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;color:#4A5650">Labels and helper text, 13 px</span><span>Geist 500</span></div>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.55;color:#4A5650;max-width:520px">Newsreader is used only for page titles and large numbers, so the serif reads as a headline, not as body copy. Numbers in tables use tabular figures so columns line up.</p>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:14px">
+      <h2 style="margin:0;font-size:20px;font-weight:600">Space, shape and layout</h2>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Spacing unit</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">4 px, use 8, 12, 16, 24, 32</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Table row height</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">36 px</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Sidebar, collapsed</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">220 px, icons only at 64 px</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Top bar</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">56 px, fixed</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Detail drawer</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">520 px from the right</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #D9E0DB;padding-bottom:9px"><span>Radius, controls and cards</span><span style="color:#4A5650;font-variant-numeric:tabular-nums">6 px and 10 px</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Radius, chips only</span><span style="color:#4A5650">Full pill</span></div>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.55;color:#4A5650;max-width:520px">Surfaces separate by a 1 px line, not by shadow. Only the drawer and dialogs lift off the page, and they do it with one shadow each.</p>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

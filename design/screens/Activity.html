@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Activity log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+
+  <div style="height:56px;flex:0 0 56px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:#FFFFFF;border-bottom:1px solid #D9E0DB">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:500">JobPilot</span>
+    <span style="display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:6px;background:#E8EFFD;color:#1D4ED8;font-size:13px;font-weight:600;letter-spacing:0.02em">DRY RUN</span>
+    <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:8px;height:8px;border-radius:50%;background:#15803D"></span>Running</span>
+    <span style="flex:1"></span>
+    <span style="font-size:13px;color:#4A5650">Quota 38 / 250</span>
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#B42318;color:#FFFFFF;font-size:12px;font-weight:600">4</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:13px;background:#FFFFFF">Pause</span>
+    <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:6px;background:#B42318;color:#FFFFFF;font-size:13px;font-weight:600">STOP</span>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <nav style="width:220px;flex:0 0 220px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9E0DB;padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Home</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Review batch <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#1D4ED8;color:#FFFFFF;font-size:12px;font-weight:600">9</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Applications</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Questions <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#B45309;color:#FFFFFF;font-size:12px;font-weight:600">3</span></div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Emails</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Profile</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Settings</div>
+      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Activity log</div>
+      <span style="flex:1"></span>
+      <div style="font-size:13px;color:#4A5650;padding:0 10px;line-height:1.6">Sun, Nov 4<br>Runs 9 AM to 11 PM<br>Version 1.0</div>
+    </nav>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;padding:22px 24px;box-sizing:border-box">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px;line-height:1.15">Activity log</h1>
+          <p style="margin:0;font-size:14px;color:#4A5650">Exactly what the bot did, and when. Use it to check results or find a bug.</p>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:10px;font-size:14px"><span style="width:36px;height:20px;border-radius:999px;background:#1F6B4F;position:relative;display:inline-block"><span style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF"></span></span>Follow new events</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;height:30px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Type: all</span>
+        <span style="display:inline-flex;align-items:center;height:30px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Site: all</span>
+        <span style="display:inline-flex;align-items:center;height:30px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px">Date: today</span>
+        <span style="display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-size:13px;color:#4A5650;width:200px;box-sizing:border-box">Search company, job or text</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:14px;height:14px;border-radius:3px;border:1px solid #C9D3CD"></span>Errors only</span>
+        <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:14px;height:14px;border-radius:3px;background:#1F6B4F"></span>Group by run</span>
+      </div>
+
+      <div style="flex:1;min-height:0;background:#FFFFFF;border:1px solid #D9E0DB;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:34px;align-items:center;padding:0 14px;background:#F4F6F3;border-bottom:1px solid #D9E0DB;font-size:12px;font-weight:600;color:#4A5650">
+          <span>Time</span><span>Type</span><span>Site</span><span>Target</span><span>Result</span><span>Detail</span>
+        </div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">2:14:08 PM</span><span>Submit</span><span>Acme PH</span><span>Junior Dev @ Acme PH</span><span style="color:#15803D;font-weight:600">✓ Submitted</span><span style="color:#4A5650">Confirmed by you</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">2:13:41 PM</span><span>Fill</span><span>Acme PH</span><span>Junior Dev @ Acme PH, field "Expected salary"</span><span style="color:#15803D;font-weight:600">✓ Filled</span><span style="color:#4A5650">PHP 18,000 from answer bank</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">1:58:12 PM</span><span>Email</span><span>Gmail</span><span>Maria Santos, Acme PH</span><span style="color:#15803D;font-weight:600">✓ Sent</span><span style="color:#4A5650">Approved by you</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums;background:#FDF3DC"><span style="color:#4A5650">1:20:55 PM</span><span>CAPTCHA</span><span>Prosple</span><span>Login page</span><span style="color:#8A4A07;font-weight:600">⏸ Waiting</span><span style="color:#4A5650">Paused until you solve it</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">11:02:30 AM</span><span>AI call</span><span>Ollama</span><span>Match and resume pick, Acme PH</span><span style="color:#15803D;font-weight:600">✓ Done</span><span style="color:#4A5650">Picked Resume A · Web</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums;background:#FDECEA"><span style="color:#4A5650">10:47:03 AM</span><span>Submit</span><span>Kumu</span><span>Web Developer Intern</span><span style="color:#B42318;font-weight:600">✕ Failed</span><span style="color:#B42318">Form field not found: resume upload</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">9:15:40 AM</span><span>Navigate</span><span>Appify</span><span>Data Analyst Intern job page</span><span style="color:#15803D;font-weight:600">✓ Loaded</span><span style="color:#4A5650">Screenshot saved</span></div>
+        <div style="display:grid;grid-template-columns:86px 150px 110px 1.6fr 110px 1fr;gap:10px;height:36px;align-items:center;padding:0 14px;border-bottom:1px solid #E3E9E5;font-size:13px;font-variant-numeric:tabular-nums"><span style="color:#4A5650">9:14:58 AM</span><span>Stop</span><span>All sites</span><span>Kill switch pressed</span><span style="color:#B42318;font-weight:600">■ Stopped</span><span style="color:#4A5650">Set by you</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
