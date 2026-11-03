@@ -1,9 +1,22 @@
-﻿data/*
+﻿# Local data (database, resumes, screenshots, browser profile)
+data/*
 !data/.gitkeep
+*.db
+*.sqlite3
+profiles/
+screenshots/
+resumes/
+
+# Secrets: never commit
+.env
+.env.*
+*.env*
+
+# Python
 __pycache__/
 .pytest_cache/
 .venv/
+
+# Dashboard
 node_modules/
 .next/
-.env
-

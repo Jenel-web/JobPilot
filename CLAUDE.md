@@ -2,7 +2,7 @@
 
 JobPilot is a personal job-application copilot that runs locally on Windows. It finds jobs on Prosple, scores them against my profile, picks one of my two resumes, fills applications with Playwright, writes and sends cold emails through Gmail, and tracks everything on a local dashboard. **I approve every batch before anything is submitted.**
 
-The full spec is in the "JobPilot MVP Spec" doc. Read the section for the current stage before starting work.
+The full spec is in SPEC.md (Part 1: spec, Part 2: UI screens, Part 3: roadmap). Before starting work, read only the sections you need: the current phase in Part 3, plus the Part 1 or Part 2 sections it refers to. Don't load the whole file every session.
 
 ## Who I am and how to work with me
 
@@ -19,7 +19,7 @@ The full spec is in the "JobPilot MVP Spec" doc. Read the section for the curren
 
 **v0 · Phase 0: setup and foundations** (see the Roadmap tab in the spec: v0 = Phases 0–5, then v1–v4).
 
-v0 scope only: profile + resumes, Prosple scraper, matching + resume picker, dashboard (shell, Home lite, Applications, Emails lite), email *drafts* (no sending, no auto-apply, no contact finder, no RAG yet). Rules below that mention later features apply once we reach them.
+v0 scope only: profile + resumes, Prosple scraper, matching + resume picker, dashboard (shell, Home lite, Applications, Emails lite), email _drafts_ (no sending, no auto-apply, no contact finder, no RAG yet). Rules below that mention later features apply once we reach them.
 
 ## Stack
 
@@ -67,11 +67,11 @@ playwright codegen https://prosple.com   # record selectors
 
 ## Run modes (a setting, default = mock)
 
-| Mode | Site | AI | Submit / send |
-|---|---|---|---|
-| `mock` | saved HTML in `fixtures/prosple/` | canned JSON from `fixtures/ai/` | never |
-| `dry_run` | real | real | never: screenshot instead of submit, email only logged |
-| `live` | real | real | only after batch approval |
+| Mode      | Site                              | AI                              | Submit / send                                          |
+| --------- | --------------------------------- | ------------------------------- | ------------------------------------------------------ |
+| `mock`    | saved HTML in `fixtures/prosple/` | canned JSON from `fixtures/ai/` | never                                                  |
+| `dry_run` | real                              | real                            | never: screenshot instead of submit, email only logged |
+| `live`    | real                              | real                            | only after batch approval                              |
 
 - Every new feature must work in `mock` mode, with a test, before it is tried in `dry_run`.
 - Never switch to `live` in code or tests. Only I change the mode, from the dashboard.
