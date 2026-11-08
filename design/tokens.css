@@ -2,7 +2,10 @@
    Import once in dashboard/app/globals.css and map them in tailwind config.
    Never hardcode hex values in components; use these variables. */
 
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap");
+/* Fonts: the dashboard loads Geist and Newsreader through next/font (dashboard/app/layout.tsx).
+   The Google Fonts @import that used to be here broke the CSS build (an @import must come
+   first, but Tailwind inlines this file mid-stylesheet). The HTML mockups link their own fonts.
+   @import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"); */
 
 :root {
   /* Surfaces and text */

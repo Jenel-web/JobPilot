@@ -1,12 +1,12 @@
 # JobPilot MVP Spec
 
-Exported from the "JobPilot MVP Spec" doc (Nov 4, 2026). Three parts:
+Exported from the "JobPilot MVP Spec" doc (Nov 4, 2026), updated Nov 9, 2026 when the plan changed to put RAG + AI form filling first. Three parts:
 
-- **Part 1: Spec** — what JobPilot is, features, architecture, stack, data model, security, run modes, risks
-- **Part 2: UI screens** — every dashboard screen in detail, plus user scenarios
-- **Part 3: Roadmap** — the build order (v0 in 6 phases, then v1–v4), with checklists, prompts and commands
+- **Part 1: Spec** — what JobPilot is, features by version, architecture, stack, data model, security, run modes, risks
+- **Part 2: UI screens** — every dashboard screen in detail (with the version that builds each), the v0 controls page, plus user scenarios
+- **Part 3: Roadmap** — the build order (v0 form filler in 5 phases, then v1 batch mode, v2 cold email, v3 hands-off), with checklists, prompts and commands
 
-> **For AI assistants:** the current build scope is set by "Current stage" in `CLAUDE.md`. Part 1 describes the full MVP; build only what the current phase in Part 3 asks for. Read only the section you need.
+> **For AI assistants:** the current build scope is set by "Current stage" in `CLAUDE.md`. **The core feature of JobPilot is RAG + AI form filling.** Job discovery, batch mode, cold email and scheduling are later versions built on top of it. Part 1 describes the full plan; build only what the current phase in Part 3 asks for. Read only the section you need.
 
 ---
 
@@ -14,78 +14,89 @@ Exported from the "JobPilot MVP Spec" doc (Nov 4, 2026). Three parts:
 
 ## Overview
 
-JobPilot is a job-application copilot that runs on your Windows PC. It finds jobs on Prosple, picks the better of your two resumes, fills applications, writes and sends cold emails, and tracks everything on a local dashboard. You approve each batch before anything is submitted.
+JobPilot is a job-application copilot that runs on your Windows PC. Its core is a form filler: you open any job application page in the bot's browser, press **Fill this page**, and JobPilot reads the form and fills it from your profile, resumes, projects and a saved answer bank (found with RAG, so differently worded questions still find the right answer). It highlights anything it guessed, then stops. **You review and click Submit yourself.** Later versions add job discovery, batch mode, cold emails and scheduling around that same filler.
 
-**Goals for the MVP**
+**Goals**
 
-- Apply to 10–25 good-match Prosple jobs a day with about 10 minutes of your time for batch review.
-- Send a personal cold email to the hiring manager or recruiter for each application, within a safe daily cap.
-- Keep one place that shows every application, contact, email and status.
+- v0: fill any application page correctly (Prosple's own form, Google Forms, company career pages) so each application takes minutes of review instead of long typing.
+- Never invent facts: personal fields are filled by code, known questions come from the answer bank, new open questions are drafted from your real facts and flagged, legal and eligibility questions are never guessed.
+- Keep one place that shows every page JobPilot filled and whether you submitted it.
+- Later: apply in batches (v1), send personal cold emails (v2), run hands-off (v3).
 - Learn real skills along the way: browser automation, LLM APIs, RAG, OAuth, and a full-stack app.
 
-**Non-goals for the MVP**
+**Non-goals**
 
 - No resume tailoring. The AI only chooses between your two existing resumes.
 - No LinkedIn login or LinkedIn automation of any kind.
-- No filling of external employer sites. Those are logged for you to apply manually.
+- The bot never automates logins and never stores passwords. You sign in by hand in the bot's browser.
+- In v0 the bot never clicks Submit.
 - No paid AI or paid services. Free tiers only.
 
-## Features
+## Features by version
 
-The MVP has nine features. Everything else waits for v1.1.
-
-| # | Feature | What it does |
+| Version | Feature | What it does |
 | --- | --- | --- |
-| 1 | Profile + RAG | Stores your details (name, school, year level, graduation year, location, links), your two resumes, and an answer bank. The AI retrieves only the pieces each task needs. |
-| 2 | Prosple discovery | Searches Prosple with your filters: role type (internship/OJT, part-time, freelance, full-time), allowed locations, and maximum posting age. |
-| 3 | AI matching + resume picker | Scores each job 0–100 against your profile, explains the score, and picks resume A or B. |
-| 4 | Playwright apply | Fills Prosple's own application forms and uploads the chosen resume. Stops before Submit. |
-| 5 | Answer bank + unknown questions | Answers form questions from the bank. Location-dependent answers (salary, relocation, commute, on-site) adapt to the job's city. Guessed answers are flagged, and new questions go to a list for you to answer once. |
-| 6 | Batch review | You approve or reject queued applications and emails, then it submits the approved ones. |
-| 7 | Contact finder | A web search API finds names and titles of recruiters or hiring managers. Hunter finds and verifies their email. |
-| 8 | Cold email | Tiered: top matches get a researched personal email, others a shorter one. Sent through the Gmail API with a daily cap. Goes through batch review for the first 2 weeks, then auto-sends. |
-| 9 | Dashboard | A local Next.js app: tracker, batch review, unanswered questions, email log, settings, kill switch, blocklist, action log. |
+| **v0** | Profile + resumes | Personal details, education, links, job preferences, and 2 labeled resumes (A = Web, B = Mobile). |
+| v0 | Answer bank with location scope | Saved answers; salary, relocation and similar answers have a scope (any / city / remote / abroad) so they fit the job's location. |
+| v0 | RAG | Profile, resumes, projects and answer bank are chunked and embedded (Ollama `nomic-embed-text` + `sqlite-vec`), so a differently worded question finds the right saved answer. |
+| v0 | Form reader | Playwright reads every field's label, type and options on the page you opened. |
+| v0 | Answer engine | Personal fields (name, phone, address) filled by code and never sent to AI. Known questions come from the answer bank. New open questions are drafted by Ollama from your real facts only and flagged. Legal and eligibility questions are never guessed. |
+| v0 | Resume picker | Reads the job post on the page and uploads resume A or B. |
+| v0 | Fill + review | Fills everything, highlights guessed answers, stops before Submit, never clicks Submit. |
+| v0 | Unknown questions list | Questions with no saved answer are saved so you answer each one once. |
+| v0 | Filled pages history | One row per "Fill this page": URL, job and company, resume used, flagged count, screenshot, status `filled` → `submitted` / `abandoned`. You mark it, or (Phase 4) passive detection offers to. |
+| v0 | Controls page | A small local dashboard: Fill this page, unknown questions, answer bank editor, filled pages history (see Part 2). |
+| v0 | Safety basics | Mock mode, action log, safety check before every action. |
+| **v1** | Batch mode | Prosple job discovery with filters and duplicate detection; BM25 pre-filter + Ollama match score; background filling with the v0 filler; Review batch screen; Submit approved with confirmation check (never resubmit); full Applications tracker with manual statuses, notes and a Needs manual apply tab; Home screen; kill switch; daily cap. |
+| **v2** | Cold email | Contact finder (search API + Hunter, verified emails, source link saved); email writer using only your real projects with `facts_used`; personal vs short tiers; Gmail API send-only with daily cap and spacing; review for the first 2 weeks, then an auto-send switch; Emails screen; blocklist. |
+| **v3** | Hands-off | Scheduler with active hours and class pauses; Windows alerts; CAPTCHA/logout handling; encryption of personal fields; AI provider per task with Gemini → Ollama fallback; Settings, Profile, Activity log, onboarding, empty/error screens; a first week live at a low cap. |
 
-**v1.1 and later**
+**Not in v0:** job discovery, ranking, batch mode, emails, scheduling.
 
+**Later (optional)**
+
+- More job boards as site adapters (JobStreet, Indeed, Kalibrr).
 - Gmail reply tracking that updates statuses automatically (needs read permission).
-- More job boards: JobStreet, Indeed, Kalibrr, LinkedIn jobs.
-- LinkedIn contact lookups (capped low) and LinkedIn note drafting that you send yourself.
-- AI filling of external employer sites, always routed to batch review.
-- One follow-up email after a few days without a reply.
-- Cold emails to companies with no open posting.
-- Phone notifications.
+- Follow-up emails after a few days without a reply.
+- LinkedIn note drafting that you send yourself (no LinkedIn automation).
 
 ## How it works
 
-Code does every action and the AI only answers questions. Playwright drives a browser, the Gmail API sends email, and SQLite stores everything. The AI (Ollama locally, or Gemini) is called at a few points and returns JSON that the code acts on.
+Code does every action and the AI only answers questions. Playwright drives a browser, SQLite stores everything, and the AI (Ollama locally; Gemini optional from v3) is called at a few points and returns JSON that the code acts on.
 
-**Flow of one job:**
+**Flow of one page in v0:**
 
 ```
-Find jobs (Playwright on Prosple)
-  → Score + pick resume (AI, 1 call)
-  → Fill the form (Playwright + answer bank)
-  → Batch review (YOU approve)
-  → Submit application (Playwright, screenshot saved)
-  → Find contact (search API + Hunter)
-  → Write cold email (AI, 1 call)
-  → Send email (Gmail API, capped)
-Every step logs to the encrypted SQLite database, and the dashboard reads it.
+You open an application page in the bot's browser and press "Fill this page"
+  → Form reader: every field's label, type and options (Playwright)
+  → Answer engine, per field:
+       personal field (name, phone, address)   → filled by code, never sent to AI
+       known question                           → answer bank (found with RAG, scope matches the job's location)
+       new open question                        → Ollama drafts from retrieved real facts, flagged
+       legal / eligibility question             → answer bank only; otherwise unknown-questions list
+  → Resume picker: reads the job post on the page, uploads resume A or B (AI, 1 call)
+  → Fill + review: fills the form, highlights guesses, STOPS before Submit
+  → Filled pages history row + screenshot saved (status: filled)
+  → YOU review and click Submit
+  → You mark it submitted (or passive detection offers to, Phase 4)
+Every step logs to SQLite, and the controls page reads it.
 ```
 
-An application costs about 2–3 AI calls: one to score and pick a resume, one to map form fields to answers when the form has questions, and one for the cold email.
+**Flow later (v1–v2):** find jobs → score + pick resume → fill in the background → Review batch (you approve) → submit approved → find contact → write cold email → send (capped).
+
+A page costs about 1–2 AI calls in v0: one to pick the resume and one to draft open questions (batched).
 
 **Where the AI is used**
 
-- **Match + resume pick:** job post + profile summary in, `{score, reasons, missing_skills, resume: "A"|"B"}` out.
-- **Form answers:** field labels + retrieved profile and answer-bank snippets in, `{field: answer, confidence}` out. Low confidence = flagged; no match = added to the unknown-questions list.
-- **Cold email:** job, contact name and title, and your matching projects in, subject + body out.
-- **RAG retrieval:** profile, resumes and answer bank are split into chunks and embedded. Each task pulls only the top matching chunks.
+- **Form answers:** field labels + retrieved profile and answer-bank snippets in, `{field: answer, confidence, source}` out. Low confidence = flagged; no match = unknown-questions list.
+- **Resume pick:** job post text + profile summary in, `{resume: "A"|"B", reason}` out.
+- **RAG retrieval:** profile, resumes, projects and answer bank are split into chunks and embedded. Each task pulls only the top matching chunks.
+- **Match score (v1) and cold email (v2):** job post + profile summary in, `{score, reasons, missing_skills, resume}` out; job, contact and your matching projects in, subject + body + `facts_used` out.
 
-**What stays out of the AI:** phone number, home address, ID numbers and similar fields are filled by code directly from the encrypted database.
+**What stays out of the AI:** phone number, home address, ID numbers and similar fields are filled by code directly from the database.
 
-**Claude Pro vs the app's AI:** Claude Pro (with Claude Code) is the coding assistant for building JobPilot. It does not give the app an API key. The running app uses Ollama (local) and/or the Gemini API free tier.
+**Claude Pro vs the app's AI:** Claude Pro (with Claude Code) is the coding assistant for building JobPilot. It does not give the app an API key. The running app uses Ollama (local) and, from v3, optionally the Gemini API free tier.
+
 
 ## Stack
 
@@ -94,11 +105,11 @@ Python runs the engine, and Next.js runs the dashboard. Everything is free, and 
 | Part | Choice | Why |
 | --- | --- | --- |
 | Language | Python 3.12 | Best libraries for automation and AI |
-| Browser automation | Playwright for Python, with a dedicated Chrome profile logged into Prosple | Real logged-in session; `playwright codegen` records selectors |
+| Browser automation | Playwright for Python, with a dedicated persistent browser profile (you log in by hand to Prosple and other sites) | Real logged-in sessions; `playwright codegen` records selectors |
 | Engine API | FastAPI | Dashboard talks to the engine over localhost; used in EconLens |
-| Database | SQLite + `cryptography` (Fernet) for sensitive columns | One file, no server; personal fields encrypted |
+| Database | SQLite (+ `cryptography` Fernet for sensitive columns from v3) | One file, no server |
 | Secrets | `keyring` → Windows Credential Manager | No API keys in `.env` files that could get committed |
-| AI | Ollama (local) and/or Gemini API free tier via `google-genai` | Free; structured JSON output |
+| AI | Ollama (local) in v0; Gemini API free tier via `google-genai` optional from v3 | Free; structured JSON output |
 | Embeddings + RAG | Ollama `nomic-embed-text` + `sqlite-vec` | Vectors live in the same SQLite file |
 | Email | Gmail API via `google-api-python-client`, `gmail.send` scope only | Official OAuth, can only send |
 | Contacts | Google Programmable Search or Brave Search API + Hunter API | Names and titles without logging into LinkedIn; verified emails |
@@ -111,18 +122,19 @@ Free-tier limits for Gemini, the search API and Hunter change often. Check the c
 
 **Local AI: Ollama.** All AI calls go through one `ask_ai()` function. A setting picks the provider per task:
 
-| Task | Suggested provider | Why |
-| --- | --- | --- |
-| Match + resume pick | Ollama | Many calls, short JSON, private, no quota |
-| Form answers | Ollama | Your personal details never leave the PC |
-| Embeddings (RAG) | Ollama (`nomic-embed-text`) | Free and fast locally |
-| Cold emails | Gemini | Writing quality matters most here |
+| Task | Suggested provider | Version | Why |
+| --- | --- | --- | --- |
+| Form answers | Ollama | v0 | Your personal details never leave the PC |
+| Resume pick | Ollama | v0 | Short JSON, private, no quota |
+| Embeddings (RAG) | Ollama (`nomic-embed-text`) | v0 | Free and fast locally |
+| Match score | Ollama | v1 | Many calls, short JSON, no quota |
+| Cold emails | Ollama or Gemini | v2 / v3 | Writing quality matters most here; Gemini needs the v3 provider setting |
 
-Model size depends on the PC: a 7–8B model needs about 8 GB of GPU VRAM; a 3–4B model (e.g. `qwen3:4b`, `gemma3:4b`, `llama3.2:3b`) works on 4–6 GB VRAM or 8–16 GB RAM. Local models follow JSON instructions less reliably, so Pydantic validation and one retry are required. If Gemini's quota runs out, the app can fall back to Ollama for that task.
+Model size depends on the PC: a 7–8B model needs about 8 GB of GPU VRAM; a 3–4B model (e.g. `qwen3:4b`, `gemma3:4b`, `llama3.2:3b`) works on 4–6 GB VRAM or 8–16 GB RAM. Local models follow JSON instructions less reliably, so Pydantic validation and one retry are required. In v0 everything uses Ollama. From v3, if Gemini's quota runs out, the app falls back to Ollama for that task.
 
 ## Data model
 
-Ten SQLite tables hold everything. Columns marked (enc) are encrypted.
+Eleven SQLite tables hold everything. Columns marked (enc) are encrypted from v3. **v0 uses `profile`, `resumes`, `chunks`, `answers`, `unknown_questions`, `fills` and `action_log`.** `jobs` and `applications` arrive in v1, `contacts` and `emails` in v2.
 
 | Table | Key columns |
 | --- | --- |
@@ -131,6 +143,7 @@ Ten SQLite tables hold everything. Columns marked (enc) are encrypted.
 | `chunks` | source (profile/resume/answer), text, embedding |
 | `answers` | question, answer, location_scope (any / city / remote / abroad), times_used |
 | `unknown_questions` | question_text, job_id, first_seen, status (open/answered) |
+| `fills` | url, job_title, company, resume_id, filled_fields, flagged_fields, screenshot_path, status (filled → submitted / abandoned), filled_at, submitted_at (v0 filled pages history; v1 extends it into `applications`) |
 | `jobs` | source, url, title, company, location, job_type, posted_at, text, fingerprint (for duplicates), apply_type (native/external) |
 | `applications` | job_id, score, reasons, resume_id, status (new → queued → approved → submitted / rejected / failed / manual), filled_fields, flagged_fields, submitted_at, screenshot_path |
 | `contacts` | company, name, title, email (enc), email_verified, source_url |
@@ -144,24 +157,25 @@ Settings (daily caps, score thresholds, filters, blocklist, run mode, the auto-s
 These rules are requirements, not suggestions. Each one should have a test or a check.
 
 1. **No secrets in the repo.** API keys, the Gmail OAuth token and the database key live in Windows Credential Manager via `keyring`. `.gitignore` covers `data/`, `*.db`, `*.env*`, `profiles/`, `screenshots/`, and the resumes folder.
-2. **Encrypt personal fields.** Phone, address, email and contact emails are encrypted with Fernet. The key is stored in Credential Manager.
+2. **Encrypt personal fields (v3).** Phone, address, email and contact emails are encrypted with Fernet. The key is stored in Credential Manager.
 3. **Least data to the AI.** Each prompt gets only the retrieved chunks it needs. Phone, address and ID numbers are never sent; code fills those fields directly.
 4. **No invented facts.** The AI may only use facts from the profile, resumes and answer bank. Legal, eligibility, GPA and "have you ever" questions come only from the answer bank. Otherwise they go to unknown questions.
 5. **Least permission.** Gmail uses the `gmail.send` scope only. The bot uses its own Chrome profile, separate from your everyday browser.
-6. **Never store site passwords.** You log into Prosple once by hand in the bot's Chrome profile. The tool reuses that session.
+6. **Never store site passwords.** The bot never automates logins. You sign in by hand to Prosple or any other site in the bot's browser profile, and the tool reuses that session.
 7. **Localhost only.** The FastAPI engine and the dashboard bind to `127.0.0.1`, never `0.0.0.0`.
-8. **Kill switch.** One dashboard button stops all browser actions and emails within a second. The engine checks a stop flag before every action.
-9. **Blocklist.** Companies, domains and people that must never get an application or email. Checked before every submit and send.
-10. **Action log.** Every navigate, fill, submit and email is logged, with a screenshot for submits and errors.
-11. **Contact data stays local.** Names and emails of other people are never shared or exported. Check the Philippine Data Privacy Act before sharing the tool with others.
+8. **Never click Submit in v0.** The form filler fills and stops. Legal and eligibility questions are answered only from the answer bank.
+9. **Kill switch (v1).** One dashboard button stops all browser actions and emails within a second. The engine checks a stop flag before every action.
+10. **Blocklist. (v2)** Companies, domains and people that must never get an application or email. Checked before every submit and send.
+11. **Action log.** Every navigate, fill, submit and email is logged, with a screenshot for submits and errors.
+12. **Contact data stays local.** Names and emails of other people are never shared or exported. Check the Philippine Data Privacy Act before sharing the tool with others.
 
 ## Run modes
 
-Three modes share the same code. Only two switches change: whether the AI is real, and whether submit and send are real.
+Three modes share the same code. Only two switches change: whether the AI is real, and whether submit and send are real. **In v0, no mode ever clicks Submit or sends email**; the filler always stops for you. Live mode only matters from v1.
 
 | Mode | Prosple | AI | Submit | Email | Use it for |
 | --- | --- | --- | --- | --- | --- |
-| Mock | Saved HTML pages, offline | Fake: canned JSON from `fixtures/ai/` | Never | Never; saved to the log | Building and testing the plumbing, no quota used |
+| Mock | Saved HTML pages (`fixtures/forms/`, later `fixtures/prosple/`), offline | Fake: canned JSON from `fixtures/ai/` | Never | Never; saved to the log | Building and testing the plumbing, no quota used |
 | Dry run | Real site | Real AI calls | Never; screenshot of the filled form instead | Never; shown in the log for reading | Checking quality of matches, answers and emails |
 | Live | Real site | Real | After batch approval | Real (reviewed for the first 2 weeks) | Actual applying |
 
@@ -173,11 +187,14 @@ The current mode shows as a coloured badge on every dashboard screen, so live mo
 
 ## Limits, risks and edge cases
 
-Free-tier quotas will cap real throughput below 25 a day. Each other risk has a planned response.
+Rows marked (v1+) apply once batch mode exists. Each risk has a planned response.
 
 | Situation | What JobPilot does |
 | --- | --- |
-| AI or Hunter free quota used up | Spends quota on the best matches first, queues the rest for tomorrow, alerts you |
+| Field type the reader doesn't recognise, or a custom widget (v0) | Leaves it empty, adds it to the report as "needs you", logs a screenshot |
+| Multi-step form (v0) | Fills the visible step; you press Fill this page again on the next step |
+| You submit without marking it (v0) | Stays `filled` in the history; passive detection (Phase 4) offers to mark it |
+| AI or Hunter free quota used up (v1+) | Spends quota on the best matches first, queues the rest for tomorrow, alerts you |
 | CAPTCHA, logout or 2FA on Prosple | Pauses Prosple, Windows alert, logs it; you solve it in the bot's browser and press Resume |
 | Page layout changed, field not found | Skips the job as "needs manual apply", logs a screenshot |
 | Listing redirects to an employer site | Marked "manual" with the link; no automation in the MVP |
@@ -206,6 +223,45 @@ Free-tier quotas will cap real throughput below 25 a day. Each other risk has a 
 # Part 2: UI screens
 
 Screen-by-screen detail for the JobPilot dashboard, plus scenarios showing how Jenel uses it. The visual source of truth is `design/` (tokens, rules and HTML mockups); this part describes behaviour and content.
+
+**Which version builds which screen**
+
+| Screen | Version |
+| --- | --- |
+| v0 controls page: Fill this page, Unknown questions, Answer bank, Filled pages history | **v0** |
+| Review batch, Applications tracker, Home | **v1** |
+| Emails | **v2** |
+| Settings, Profile, Activity log, onboarding, empty and error states | **v3** |
+
+The screens below describe the finished product. In v0 you build only the controls page, reusing the shared components and design tokens. Unknown questions in v0 is a simpler version of Screen 4, and the Answer bank is the "Answered" tab of that screen.
+
+## The v0 controls page
+
+A single small page at `localhost:3000` that you keep open next to the bot's browser window. It uses the existing Next.js dashboard, the design system in `design/`, and the engine API on `127.0.0.1`. It is the remote control for the form filler: it starts a fill and shows what happened. It has four sections (tabs or stacked cards).
+
+**1. Fill this page (the main control)**
+
+- A big **Fill this page** button, a **mode badge** (MOCK / DRY RUN / LIVE) and a status line: "Browser ready · current page: acme.com/careers/apply".
+- You log in to sites and open the application page yourself in the bot's browser. When you press the button, the engine reads the page and fills it. The status line then shows progress: "Reading form… 14 fields found → answering → uploading resume A → done".
+- When it finishes, you see a result summary: "12 filled · 2 flagged (guessed) · 1 new question · resume A (Web)". Flagged answers are also highlighted in the page itself in the bot's browser, so you can fix them there.
+- It never clicks Submit. The page says "Review the form in the browser, then submit it yourself."
+
+**2. Unknown questions**
+
+- A list of questions the engine could not answer, each with the page it came from. You type the answer once, pick a location scope (any / city / remote / abroad) and save. Next time that question, even worded differently, is answered from the bank.
+- Legal and eligibility questions show "You must answer this yourself" and never get an AI suggestion.
+
+**3. Answer bank editor**
+
+- A searchable table: question, answer, location scope, times used. Add, edit and delete rows. Changes trigger a quick re-index so RAG can find them.
+
+**4. Filled pages history**
+
+- A table of every "Fill this page": date, job and company, URL, resume used, flagged count, status chip, and a screenshot. Clicking a row opens a drawer with the screenshot and the filled values.
+- Statuses: `filled` (default) → `submitted` or `abandoned`. A **Mark as submitted** button and an **Abandoned** button sit on each row. In Phase 4, passive detection watches the page after you submit (read-only, no clicks) and offers "Looks submitted. Mark it?".
+
+**What it does not show in v0:** job lists, scores, batches, emails, a kill switch or settings. Those arrive in v1–v3.
+
 
 ## Design notes
 
@@ -613,24 +669,24 @@ The tab shows 8 jobs that redirect to company sites. For each one Jenel clicks "
 
 # Part 3: Roadmap
 
-Build JobPilot in small versions, each one finished and usable on its own: v0 (job finder and tracker) in 6 phases, then v1–v4. Each phase lists what to learn, what to prompt Claude Code, what to run, and how to know it's done.
+Build JobPilot in small versions, each one finished and usable on its own: v0 (the form filler) in 5 phases, then v1 (batch mode), v2 (cold email) and v3 (hands-off). Each v0 phase lists what to learn, what to prompt Claude Code, what to run, and how to know it's done.
 
 ## At a glance
 
 | Version / phase | What | Time |
 | --- | --- | --- |
 | **v0** Phase 0 | Setup and foundations | 3–4 days |
-| v0 Phase 1 | Profile and resumes | 1 week |
-| v0 Phase 2 | Prosple scraper | 1–1.5 weeks |
-| v0 Phase 3 | Matching and resume picker | 1 week |
-| v0 Phase 4 | Engine API and dashboard v0 | 1.5 weeks |
-| v0 Phase 5 | Email drafts and v0 release → **tag v0.1, resume-ready** | 1 week |
-| **v1** | Apply flow: forms + batch review | 2–3 weeks |
-| **v2** | Contact finder + Gmail sending | 1–1.5 weeks |
-| **v3** | RAG, encryption, AI routing and fallback | 1.5 weeks |
-| **v4** | Safety, polish, first live run → **JobPilot 1.0** | 1–1.5 weeks |
+| v0 Phase 1 | Profile, resumes and answer bank | 1 week |
+| v0 Phase 2 | Form reader | 1–1.5 weeks |
+| v0 Phase 3 | RAG + answer engine + resume picker | 1.5 weeks |
+| v0 Phase 4 | Fill, upload, review, controls page, a week of real use → **tag v0.1** | 1.5 weeks |
+| **v1** | Batch mode | 3–4 weeks |
+| **v2** | Cold email | 1–2 weeks |
+| **v3** | Hands-off → **JobPilot 1.0** | 1–2 weeks |
 
-v0 takes about 6 weeks at 10–15 hours a week and is a complete project on its own. Each later version adds one capability, and you can stop after any of them.
+v0 takes about 5–6 weeks at 10–15 hours a week and is a complete, resume-ready project on its own. Each later version adds one capability, and you can stop after any of them.
+
+**v0 is done when** it correctly fills Prosple's own form, one Google Form and one company career page, and you've used it for a week of real applications.
 
 ## How to use this roadmap
 
@@ -720,9 +776,9 @@ python -c "from engine.ai import ask_ai; print(ask_ai('match', 'test'))"
 
 **Done when:** tests pass, mock and Ollama both return JSON, and `git log` shows your first commits with no secrets.
 
-## Phase 1: Profile and resumes (1 week)
+## Phase 1: Profile, resumes and answer bank (1 week)
 
-Goal: your details and both resumes live in a local SQLite database, loaded from a JSON file and readable by code.
+Goal: your details, both resumes and your answer bank live in a local SQLite database, loaded from files and readable by code.
 
 **Learn**
 
@@ -734,379 +790,130 @@ Goal: your details and both resumes live in a local SQLite database, loaded from
 
 **Checklist**
 
-- [ ] `engine/db.py`: create tables `profile`, `resumes`, `jobs`, `applications`, `action_log` (from the Data model in Part 1)
-- [ ] `data/profile.json` (git-ignored) with your real details; a `profile.example.json` with fake ones is committed
-- [ ] Your 2 resume PDFs in `data/resumes/` with labels (e.g. A = Web, B = Mobile)
+- [ ] `engine/db.py`: create tables `profile`, `resumes`, `answers`, `unknown_questions`, `fills` (filled pages history) and `action_log` (from the Data model in Part 1)
+- [ ] `data/profile.json` (git-ignored) with your real details, education, links, job preferences and projects; a `profile.example.json` with fake ones is committed
+- [ ] Your 2 resume PDFs in `data/resumes/` with labels (A = Web, B = Mobile)
 - [ ] `engine/profile.py`: load the profile and resumes into the DB, extract resume text
-- [ ] `engine/secrets.py`: get/set API keys through `keyring`
-- [ ] CLI command: `python -m engine.cli profile show`
-- [ ] Tests with a fake profile and a small sample PDF
+- [ ] Answer bank: `answers` table with `location_scope` (any / city / remote / abroad); load a starter `data/answers.json`; lookup by exact question
+- [ ] `engine/secrets.py`: get/set secrets through `keyring`
+- [ ] CLI commands: `python -m engine.cli profile show` and `python -m engine.cli answers list`
+- [ ] Tests with a fake profile, a small sample PDF and a fake answer bank
 
 **Prompts for Claude Code**
 
 ```text
-Phase 1. First explain how SQLite works in Python and what each table in the spec's
-data model is for. Then create engine/db.py with only the tables profile, resumes,
-jobs, applications and action_log. Use Pydantic models for rows. Show me the SQL.
+Phase 1. Explain the tables we need for profile, resumes, answer bank and filled
+pages, and why answers need a location_scope. Show the schema and wait for my OK.
 ```
 
 ```text
-Create engine/profile.py that loads data/profile.json and the resumes in
-data/resumes/ into the database, extracting each resume's text with pdfplumber.
-Add a CLI command "profile show" that prints the profile with phone and address
-masked. Write tests using fixtures, never my real data.
+Implement engine/db.py and engine/profile.py: create the tables, load
+data/profile.json and the two resumes, extract resume text with pdfplumber. Add
+the answer bank loader. Tests use a fake profile and a sample PDF only.
 ```
 
-**Run and check**
+**Run and check** (Windows PowerShell)
 
 ```powershell
-python -m engine.cli profile load
 python -m engine.cli profile show
+python -m engine.cli answers list
 python -m pytest -q
-git status   # data/ must NOT appear
 ```
 
-**Done when:** the profile loads, resume text prints, tests pass, and `git status` shows no personal files.
+**Done when:** your profile, both resumes and the answer bank load into SQLite, `profile show` prints them (no secrets in the output), and tests pass.
 
-## Phase 2: Prosple scraper (1–1.5 weeks)
+## Phase 2: Form reader (1–1.5 weeks)
 
-Goal: JobPilot opens Prosple in its own Chrome profile, searches with your filters, and saves job listings to the database without duplicates.
+Goal: Playwright opens a persistent bot browser, and for the page you opened it returns every field's label, type and options, tested offline against saved HTML.
 
 **Learn**
 
-- HTML and CSS selectors (enough to read a page's structure) — [MDN: CSS selectors](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_selectors)
-- Playwright for Python: intro, locators, waits, persistent context — [Playwright Python docs](https://playwright.dev/python/docs/intro)
-- Recording selectors with codegen — [Test generator](https://playwright.dev/python/docs/codegen)
-- Read Prosple's terms of use before automating it
+- Playwright basics and persistent contexts — [Playwright Python intro](https://playwright.dev/python/docs/intro) and [Persistent context](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context)
+- Locators: role, label, text — [Locators](https://playwright.dev/python/docs/locators)
+- Auto-waiting — [Actionability](https://playwright.dev/python/docs/actionability)
+- Recording selectors — [Codegen](https://playwright.dev/python/docs/codegen)
 
 **Checklist**
 
-- [ ] `playwright install chromium`; create the bot's persistent browser profile in `data/browser/`
-- [ ] Log into Prosple once by hand in that profile
-- [ ] Run `playwright codegen` on a Prosple search, note the selectors
-- [ ] `engine/sites/prosple.py`: search → collect job links → open each → extract title, company, location, type, posted date, description, apply type (native or external)
-- [ ] Random 1–4 s delays between actions; a max of N jobs per run
-- [ ] Duplicate fingerprint (company + title + location)
-- [ ] Record mode: save each page's HTML to `fixtures/prosple/`
-- [ ] Mock mode: parse the saved HTML instead of the live site
-- [ ] Log every navigate to `action_log`
+- [ ] `engine/forms/reader.py`: connect to the bot browser and read the current page
+- [ ] Persistent browser profile in `data/browser_profile/` (you log in to sites by hand; the bot never stores passwords)
+- [ ] For each field: label, type (text, textarea, select, radio, checkbox, file, date), required, options
+- [ ] Pydantic model `FormField`; output is a list of fields
+- [ ] Handles labels via `<label>`, `aria-label`, placeholder and nearby text
+- [ ] Save form HTML fixtures to `fixtures/forms/` (Prosple form, a Google Form, one career page)
+- [ ] Tests run on the saved HTML only, never on live sites
+- [ ] `safety.check()` before every navigate and read; each read logged to `action_log`
+- [ ] CLI: `python -m engine.cli forms read` prints the fields of the current page
 
 **Prompts for Claude Code**
 
 ```text
-Phase 2. Explain how Playwright's persistent context works and why we use a separate
-Chrome profile. Then write a small script that opens Prosple in data/browser/ with
-a visible window so I can log in once by hand. Nothing else yet.
+Phase 2. Explain how Playwright finds elements and why we prefer role/label/text
+selectors. Then explain how a persistent browser profile keeps me logged in. Don't
+code yet.
 ```
 
 ```text
-Here are the selectors I recorded with codegen: <paste>. Write
-engine/sites/prosple.py with search_jobs(filters) and get_job(url). Separate
-"fetch the HTML" from "parse the HTML" so parsing can be tested on saved files in
-fixtures/prosple/. Add human-like delays and log each navigation. Prefer role and
-text locators over CSS classes.
-```
-
-```text
-Write tests for the parser using the saved HTML fixtures. Then show me what happens
-if a field is missing: it should skip that job and log it, not crash.
+Write engine/forms/reader.py: read every field's label, type, required flag and
+options from the current page into FormField models. Save the HTML of 3 different
+forms into fixtures/forms/ and test the reader on those files offline.
 ```
 
 **Run and check**
 
 ```powershell
-playwright codegen https://prosple.com
-python -m engine.cli scrape --mode mock
-python -m engine.cli scrape --mode dry_run --limit 20
-python -m engine.cli jobs list
+playwright install chromium
+python -m engine.cli forms read
+python -m pytest -q
 ```
 
-**Done when:** a dry run saves about 20 real jobs, running it twice adds no duplicates, and the parser tests pass offline.
+**Done when:** the reader returns correct fields for the Prosple form, a Google Form and a company career page fixture, and tests pass offline.
 
-## Phase 3: Matching and resume picker (1 week)
+## Phase 3: RAG + answer engine + resume picker (1.5 weeks)
 
-Goal: every saved job gets a score 0–100, reasons, missing skills, and resume A or B. Your own judgment is the test.
-
-**Learn**
-
-- How LLM APIs work: messages, temperature, tokens — [Ollama API reference](https://github.com/ollama/ollama/blob/main/docs/api.md)
-- Structured (JSON) output — [Ollama structured outputs](https://ollama.com/blog/structured-outputs) and [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output)
-- Prompt design basics — [Anthropic prompt engineering overview](https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview) (the ideas apply to any model)
-- BM25 (already in `jobpilot/bm25.py`) — read the code and explain it
-
-**Checklist**
-
-- [ ] Move the existing `bm25.py` + `matcher.py` in as a cheap pre-filter (skip obvious misfits before any AI call)
-- [ ] Filters before AI: job type, location, posting age, blocklist
-- [ ] Prompt in `prompts/match.md`: profile summary + both resume summaries + job → `{score, reasons[], missing_skills[], resume: "A"|"B", resume_reason}`
-- [ ] Pydantic validation; on invalid JSON retry once, then skip and log
-- [ ] Save the results to `applications` with status `new`
-- [ ] An evaluation file: 10 real jobs where you wrote down your own score and resume choice
-- [ ] Compare the AI vs your answers; tweak the prompt until they mostly agree
-
-**Prompts for Claude Code**
-
-```text
-Phase 3. Explain the difference between the BM25 pre-filter and the AI scoring,
-and why we use both. Then design the match prompt in prompts/match.md. Show me the
-prompt and the JSON schema before writing code.
-```
-
-```text
-Write engine/matcher.py: pre-filter -> ask_ai("match", ...) -> validate -> save.
-Add a CLI "match --limit 10" and an "eval" command that compares AI results with
-data/eval/my_scores.json and prints where we disagree.
-```
-
-**Run and check**
-
-```powershell
-python -m engine.cli match --mode mock
-python -m engine.cli match --limit 10
-python -m engine.cli eval
-```
-
-**Done when:** on your 10 evaluation jobs, the AI's resume choice matches yours at least 8 times and the scores rank jobs roughly the way you would.
-
-## Phase 4: Engine API and dashboard v0 (1.5 weeks)
-
-Goal: a local dashboard, styled from your design system, that shows the app shell, a simple Home, and the Applications tracker with real data.
-
-**Learn**
-
-- FastAPI: path operations, request/response models, CORS — [FastAPI tutorial](https://fastapi.tiangolo.com/tutorial/)
-- Next.js App Router: pages, layouts, data fetching — [Next.js docs](https://nextjs.org/docs)
-- Tailwind CSS theme customization (to map your tokens) — [Tailwind theme](https://tailwindcss.com/docs/theme)
-- TypeScript refresher — [TypeScript handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
-
-**Checklist**
-
-- [ ] `engine/api.py`: FastAPI on `127.0.0.1:8000` with `GET /jobs`, `GET /applications`, `PATCH /applications/{id}` (status, notes), `GET /stats`
-- [ ] `npx create-next-app@latest dashboard` (TypeScript, Tailwind, App Router)
-- [ ] Import `design/tokens.css` in `globals.css`; map tokens in the Tailwind theme
-- [ ] Shared components in `components/ui/`: StatusChip, ScoreBadge, ModeBadge, Button, NavItem, StatCard, DataTable, Drawer, EmptyState
-- [ ] App shell: top bar + sidebar, matching `design/screens/Patterns.html`
-- [ ] Home (lite): stat cards + top matches, from `Home.html`
-- [ ] Applications tracker: table, filters, status dropdown, detail drawer with notes, from `Applications.html`
-- [ ] Side-by-side check of each screen vs its mockup
-
-**Prompts for Claude Code**
-
-```text
-Phase 4, backend. Explain how FastAPI routes and Pydantic response models work.
-Then create engine/api.py with the endpoints in the roadmap, bound to 127.0.0.1
-only, with CORS allowing http://localhost:3000.
-```
-
-```text
-Phase 4, frontend. Read design/DESIGN.md and design/tokens.css. Set up the Next.js
-app so tokens.css is imported and mapped into the Tailwind theme. Then build the
-shared components listed in DESIGN.md, matching design/screens/Components.html.
-Show them all on a /dev/components page so I can compare with the mockup.
-```
-
-```text
-Build the Applications tracker page from design/screens/Applications.html, using
-only components from components/ui and data from GET /applications. When done,
-list every visual difference from the mockup.
-```
-
-**Run and check**
-
-```powershell
-python -m engine.api                # terminal 1
-cd dashboard; npm run dev           # terminal 2, open http://localhost:3000
-```
-
-**Done when:** the tracker shows your real jobs from Phase 3, changing a status persists after a refresh, and the screens look like your mockups.
-
-## Phase 5: Email drafts and v0 release (1 week)
-
-Goal: each good match gets a cold email draft you can edit and copy, and v0 is finished, documented and in daily use.
-
-**Learn**
-
-- Writing good cold emails (short, specific, one ask). Read 2–3 guides and save examples you like.
-- Gemini API quickstart, if you use it for emails — [Gemini API docs](https://ai.google.dev/gemini-api/docs)
-
-**Checklist**
-
-- [ ] `prompts/email.md`: job + your matching projects + optional contact name → `{subject, body, facts_used[]}`; only facts from your profile
-- [ ] Generate drafts for applications with score ≥ your threshold
-- [ ] `emails` table + `GET /emails`, `PATCH /emails/{id}`
-- [ ] Emails screen (lite) from `Emails.html`: list + preview, editable body, **Copy** button, "Facts used" list
-- [ ] Link from each tracker row to its draft
-- [ ] Use v0 for real for a week: run scrape + match each morning, apply manually, send emails yourself from Gmail
-- [ ] Write the README: what it does, a screenshot, how to run, design decisions, what's next
-- [ ] Tag the release: `git tag v0.1`
-
-**Prompts for Claude Code**
-
-```text
-Phase 5. Write prompts/email.md for a short, friendly cold email from a CS student.
-Rules: under 120 words, mention one specific project that matches the job, one
-clear ask, no invented facts. Return facts_used so I can verify. Show me 3 sample
-drafts in mock mode first.
-```
-
-```text
-Build the Emails page (lite) from design/screens/Emails.html: list on the left,
-preview on the right with editable subject/body, a Copy button, and the facts_used
-list. No sending yet.
-```
-
-```text
-Help me write the README for v0. Ask me 5 questions about my design decisions
-first, then draft it. Keep it honest about what's not built yet.
-```
-
-**Run and check**
-
-```powershell
-python -m engine.cli scrape --mode dry_run
-python -m engine.cli match
-python -m engine.cli drafts
-```
-
-**Done when:** you have used v0 for a week to find jobs and send emails, the README is written, and `v0.1` is tagged. **This is a complete project you can put on your resume.**
-
-## v1: Apply flow with batch review (2–3 weeks)
-
-Goal: JobPilot fills Prosple's own application forms and uploads the right resume, then waits for your approval in Review batch before submitting.
-
-**Learn**
-
-- Playwright forms: fill, select, check, file upload, waiting — [Input actions](https://playwright.dev/python/docs/input) and [Auto-waiting](https://playwright.dev/python/docs/actionability)
-- Screenshots — [Screenshots](https://playwright.dev/python/docs/screenshots)
-
-**Checklist**
-
-- [ ] Read the form: collect every field's label, type and options
-- [ ] Answer bank table + `answers` lookup (exact and similar questions, with location scope)
-- [ ] `prompts/form.md`: field labels + allowed facts → `{field: answer, confidence, source}`; legal/eligibility questions never answered by AI
-- [ ] Private fields (phone, address) filled by code, never sent to AI
-- [ ] Unknown questions go to the `unknown_questions` table
-- [ ] Stop before Submit, screenshot, set status `queued`
-- [ ] Review batch screen from `Review.html`; Questions screen from `Questions.html`
-- [ ] Submit approved: click Submit, check for the confirmation, screenshot, status `submitted` or `failed` (never resubmit)
-- [ ] Kill switch: a stop flag checked before every action, plus a STOP button in the top bar
-
-**Prompts for Claude Code**
-
-```text
-v1. Explain how we'll read an unknown form's fields with Playwright and decide
-which answers come from code, the answer bank, or the AI. Draw it as a short flow
-in text. Don't code yet.
-```
-
-```text
-Implement fill_application(job) in engine/sites/prosple.py following that flow.
-It must stop before Submit, take a screenshot, and save filled and flagged fields.
-Test it on saved form HTML in fixtures/prosple/forms/.
-```
-
-```text
-Build the Review batch page from design/screens/Review.html and the Questions
-page from Questions.html. Approve and reject call the API; "Submit approved" opens
-the confirm dialog from Components.html.
-```
-
-**Run and check**
-
-```powershell
-python -m engine.cli apply --mode dry_run --limit 5   # fills, screenshots, never submits
-```
-
-**Done when:** a dry run fills 5 real forms correctly, you approve 3 in Review batch, they submit for real, and you see the confirmations.
-
-## v2: Contact finder and Gmail sending (1–1.5 weeks)
-
-Goal: JobPilot finds a recruiter or hiring manager for each good match, verifies their email, and sends the approved cold email from your Gmail within a daily cap.
-
-**Learn**
-
-- OAuth 2.0 basics (what a token and a scope are) — [Google: Using OAuth 2.0](https://developers.google.com/identity/protocols/oauth2)
-- Gmail API Python quickstart — [Quickstart](https://developers.google.com/gmail/api/quickstart/python)
-- A search API — [Google Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) or [Brave Search API](https://brave.com/search/api/)
-- Hunter API: domain search, email finder, verifier — [Hunter API docs](https://hunter.io/api-documentation)
-- Check each service's current free limits
-
-**Checklist**
-
-- [ ] Google Cloud project; OAuth client; `gmail.send` scope only; token stored with `keyring`
-- [ ] `engine/contacts.py`: search for `"<company>" recruiter OR "talent acquisition" site:linkedin.com/in` → names + titles → Hunter finder → verifier
-- [ ] Save the contact's source URL with every contact
-- [ ] Tiered emails: personal for score ≥ 80, short for the rest
-- [ ] `engine/mailer.py`: send only verified addresses, daily cap, 2–5 min random spacing, plain text
-- [ ] Emails queue in Review batch for the first 2 weeks; then an auto-send switch
-- [ ] Bounce handling: mark the contact invalid
-- [ ] Full Emails screen (Queued / Sent / Failed tabs, Regenerate)
-
-**Prompts for Claude Code**
-
-```text
-v2. Explain OAuth 2.0 for Gmail in simple terms: client ID, consent screen, scope,
-access and refresh tokens. Then walk me through the Google Cloud setup step by
-step. I'll do the clicking; you tell me what to click.
-```
-
-```text
-Write engine/mailer.py using the Gmail API with only the gmail.send scope, token
-from keyring. Enforce the daily cap and random spacing. In mock and dry_run modes
-it must never send. Send exactly one test email to myself in live mode.
-```
-
-```text
-Write engine/contacts.py: search API -> candidate names and titles -> Hunter
-finder -> verifier. Count every API call against the daily quota. Test with saved
-responses in fixtures/, never live calls.
-```
-
-**Run and check**
-
-```powershell
-python -m engine.cli contacts --limit 3 --mode dry_run
-python -m engine.cli email test --to me
-```
-
-**Done when:** the test email reaches your inbox, 3 real contacts are found with sources, and a full dry run produces emails ready for review.
-
-## v3: RAG, encryption and AI routing (1.5 weeks)
-
-Goal: forms and emails pull only the relevant pieces of your profile, personal fields are encrypted, and each AI task can use Ollama or Gemini with automatic fallback.
+Goal: for each field, the right source answers it: code, answer bank, or Ollama drafting from real facts. The right resume is picked from the job post.
 
 **Learn**
 
 - Embeddings and similarity search: what a vector is and why cosine similarity works. Any short intro article, then the [Ollama embeddings docs](https://github.com/ollama/ollama/blob/main/docs/api.md)
 - Vector storage in SQLite — [sqlite-vec](https://github.com/asg017/sqlite-vec)
-- Symmetric encryption — [cryptography: Fernet](https://cryptography.io/en/latest/fernet/)
+- Structured JSON output and validation — [Pydantic](https://docs.pydantic.dev/latest/)
+- Prompting for structured output — [Prompt engineering](https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview)
 
 **Checklist**
 
-- [ ] `engine/rag.py`: chunk the profile, resumes and answer bank; embed with `nomic-embed-text` via Ollama; store in sqlite-vec
-- [ ] `retrieve(question, k=5)`; form and email prompts now use only retrieved chunks
-- [ ] Re-index command, plus a Re-index button on the Profile screen
-- [ ] Fernet encryption for phone, address, email and contact emails; the key in keyring
-- [ ] Migration: encrypt the existing rows
-- [ ] Provider per task in settings; Gemini → Ollama fallback when quota runs out; quota counters
-- [ ] Profile screen from `Profile.html`; Settings screen from `Settings.html`
+- [ ] `engine/rag.py`: chunk profile, resumes, projects and answer bank; embed with `nomic-embed-text` via Ollama; store in sqlite-vec
+- [ ] `retrieve(question, k=5)` returns chunks with a similarity score
+- [ ] Re-index command; answer bank edits re-index their rows
+- [ ] `engine/forms/answers.py`: the rules per field, in this order:
+  - personal field (name, email, phone, address) → code, never sent to AI
+  - legal / eligibility / GPA / "have you ever" → answer bank only; otherwise unknown-questions list
+  - known question → answer bank via RAG, using the scope that matches the job's location
+  - new open question → Ollama drafts from retrieved facts only, flagged
+- [ ] `prompts/form.md`: field labels + allowed facts → `{field, answer, confidence, source}`; "use only the provided facts"
+- [ ] Pydantic validation of Ollama JSON; retry once, then log and skip that field
+- [ ] Resume picker: job post text from the page + profile summary → `{resume: "A"|"B", reason}`
+- [ ] Canned responses in `fixtures/ai/` for mock mode; tests cover each rule
+- [ ] A test that no prompt contains phone, address, email or ID numbers
 
 **Prompts for Claude Code**
 
 ```text
-v3. Teach me RAG with a tiny example first: 5 sentences, embed them with Ollama,
-ask a question, show the similarity scores. Then we'll apply it to my profile.
+Phase 3. Teach me RAG with a tiny example first: 5 sentences, embed them with
+Ollama, ask a question, show the similarity scores. Then we'll apply it to my
+profile and answer bank.
 ```
 
 ```text
 Implement engine/rag.py with sqlite-vec and nomic-embed-text. Show me which chunks
-are retrieved for 3 real form questions, so I can judge if retrieval works.
+are retrieved for 5 real form questions, worded differently from my saved ones, so
+I can judge if retrieval works.
 ```
 
 ```text
-Add Fernet encryption for the sensitive columns listed in the spec, with the key
-in keyring, and write a one-time migration. Prove with a test that the database
-file doesn't contain my phone number in plain text.
+Write the answer engine: decide per field whether code, the answer bank or Ollama
+answers it, following the rules in the spec. Legal and eligibility questions must
+never come from the AI. Test every rule in mock mode.
 ```
 
 **Run and check**
@@ -1114,77 +921,165 @@ file doesn't contain my phone number in plain text.
 ```powershell
 python -m engine.cli rag reindex
 python -m engine.cli rag ask "What is your expected graduation date?"
+python -m engine.cli forms answer --fixture fixtures/forms/prosple.html
 python -m pytest -q
 ```
 
-**Done when:** retrieval returns the right chunks for 5 test questions, the DB shows encrypted values, and switching a task's provider in Settings works.
+**Done when:** retrieval returns the right chunks for 5 differently worded questions, the answer engine gives the right source for every field of the 3 form fixtures, legal questions are never guessed, and the resume picker chooses sensibly on 3 sample job posts.
 
-## v4: Safety, polish and first live run (1–1.5 weeks)
+## Phase 4: Fill, upload and review (1.5 weeks, then a week of real use)
 
-Goal: JobPilot runs on its own while your PC is on, alerts you when it needs you, and is safe enough to leave in live mode at a low cap.
+Goal: press **Fill this page** and the form gets filled, the resume uploaded and guesses highlighted, then it stops. You submit yourself and track what you filled.
 
 **Learn**
 
-- Scheduling jobs — [APScheduler user guide](https://apscheduler.readthedocs.io/en/3.x/userguide.html)
-- Windows notifications — [win11toast](https://pypi.org/project/win11toast/)
+- Playwright forms: fill, select, check, file upload — [Input actions](https://playwright.dev/python/docs/input)
+- Screenshots — [Screenshots](https://playwright.dev/python/docs/screenshots)
+- Page events and navigation (for passive detection) — [Events](https://playwright.dev/python/docs/events) and [Navigations](https://playwright.dev/python/docs/navigations)
+- FastAPI — [Tutorial](https://fastapi.tiangolo.com/tutorial/)
+- Next.js + Tailwind (the existing dashboard) — [Next.js docs](https://nextjs.org/docs), [Tailwind](https://tailwindcss.com/docs)
 
 **Checklist**
 
-- [ ] Scheduler: active days and hours, class-hour pauses, "Run once now"
-- [ ] Blocklist (companies, domains, people), checked before every submit and send
-- [ ] Daily caps for applications, emails, AI calls and lookups, shown in the top bar
-- [ ] CAPTCHA / logout detection → pause the site, Windows alert, resume button
-- [ ] Windows alerts: batch ready, CAPTCHA, quota out, submit failed
-- [ ] Activity log screen from `Activity.html`; full Home from `Home.html`
-- [ ] Onboarding from `Onboarding.html`; empty and error states from `States.html`
-- [ ] A full week in dry run, then live at 5 applications a day
-- [ ] Update the README with results (applications, reply rate, what you changed) and tag `v1.0`
+- [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume; random 1–4 s delays between actions
+- [ ] `safety.check()` before every fill; every fill logged to `action_log`
+- [ ] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
+- [ ] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked
+- [ ] Screenshot of the filled form; save a row in `fills`: URL, job and company, resume, flagged count, screenshot path, status `filled`
+- [ ] Unknown questions saved to `unknown_questions` with their source page
+- [ ] `engine/api.py` (FastAPI, `127.0.0.1` only): endpoints for fill, unknown questions, answers, filled pages
+- [ ] Controls page in `dashboard/` (existing scaffold, design system, shared components first): Fill this page, Unknown questions, Answer bank editor, Filled pages history (see Part 2)
+- [ ] **Mark as submitted** and **Abandoned** buttons on the history
+- [ ] **Passive submit detection:** after a fill, the engine watches the page read-only (confirmation text such as "thank you / application received", or a URL change after you click Submit) and offers "Looks submitted. Mark it?". It never clicks anything and never marks it without your confirmation
+- [ ] Run for a week of real applications; fix what breaks (log each miss in a notes file)
+- [ ] README with how to run it and what it does; tag `v0.1`
 
 **Prompts for Claude Code**
 
 ```text
-v4. Review the whole engine for safety: list every place that can submit, send, or
-navigate, and confirm each one calls safety.check() and logs to action_log. Show me
-any gaps before fixing them.
+Phase 4. Explain how the filler handles each field type and how we highlight
+guessed answers. Then explain, step by step, how passive submit detection can work
+without ever clicking. Don't code yet.
 ```
 
 ```text
-Build the onboarding flow and the empty/error states from Onboarding.html and
-States.html. Then do a design QA pass: open every screen next to its mockup and
-list the differences.
+Implement engine/forms/filler.py: fill the fields from the answer engine, upload the
+resume, highlight guesses, screenshot, save the fills row, and stop. Write a test
+that fails if any code path clicks Submit. Test on saved form HTML.
+```
+
+```text
+Build the controls page from the design system: Fill this page, Unknown questions,
+Answer bank editor and Filled pages history. Build the shared components first,
+then compose the page. When done, compare it with the nearest mockups in
+design/screens/ and list the differences.
 ```
 
 **Run and check**
 
 ```powershell
-python -m engine.cli run --mode dry_run     # leave it running for a day
-python -m engine.cli stats --week
+python -m engine.api                      # engine API on 127.0.0.1
+cd dashboard; npm run dev                 # controls page at localhost:3000
+python -m engine.cli forms fill --mode dry_run
+python -m pytest -q
 ```
 
-**Done when:** a week of live runs at 5 a day goes smoothly, and your README shows real numbers. That's JobPilot 1.0.
+**Done when:** it correctly fills Prosple's own form, one Google Form and one company career page; it never clicks Submit; flagged answers are highlighted; the history shows each page with its status; and you've used it for a week of real applications. **This is a complete project you can put on your resume.**
+
+## v1: Batch mode (3–4 weeks)
+
+Goal: JobPilot finds Prosple jobs, scores them, fills the good ones in the background with the v0 filler, and waits for your approval before submitting.
+
+**Learn**
+
+- BM25 pre-filtering — [rank-bm25](https://github.com/dorianbrown/rank_bm25)
+- Playwright background contexts and screenshots — [Screenshots](https://playwright.dev/python/docs/screenshots)
+
+**Checklist**
+
+- [ ] Prosple job discovery with filters (role type, locations, max posting age) and fingerprint duplicate detection
+- [ ] BM25 pre-filter, then an Ollama match score `{score, reasons, missing_skills, resume}`
+- [ ] Background filling using the v0 filler, with a screenshot per application
+- [ ] Review batch screen (approve/reject, edit answers, switch resume)
+- [ ] Submit approved: click Submit, check for the confirmation, screenshot, status `submitted` or `failed`; never resubmit
+- [ ] Applications tracker (extends the v0 filled pages history) with manual statuses, notes and a Needs manual apply tab
+- [ ] Home screen
+- [ ] Kill switch (a stop flag checked before every action) and a daily cap
+
+**Done when:** a dry run fills 5 discovered jobs correctly, you approve 3 in Review batch, they submit for real, and the tracker shows the confirmations.
+
+## v2: Cold email (1–2 weeks)
+
+Goal: JobPilot finds a recruiter or hiring manager for each good match, verifies their email, and sends the approved cold email from your Gmail within a daily cap.
+
+**Learn**
+
+- OAuth 2.0 basics — [Google: Using OAuth 2.0](https://developers.google.com/identity/protocols/oauth2)
+- Gmail API Python quickstart — [Quickstart](https://developers.google.com/gmail/api/quickstart/python)
+- A search API — [Google Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) or [Brave Search API](https://brave.com/search/api/)
+- Hunter API — [Hunter API docs](https://hunter.io/api-documentation)
+- Check each service's current free limits
+
+**Checklist**
+
+- [ ] `engine/contacts.py`: search API → names and titles → Hunter finder → verifier; save the source URL with every contact
+- [ ] Email writer using only your real projects, returning `facts_used`
+- [ ] Tiers: personal for top matches, short for the rest
+- [ ] `engine/mailer.py`: Gmail API, `gmail.send` scope only, verified addresses only, daily cap, 2–5 min spacing, plain text
+- [ ] Emails go through review for the first 2 weeks, then an auto-send switch
+- [ ] Blocklist (companies, domains, people), checked before every send
+- [ ] Bounce handling: mark the contact invalid
+- [ ] Emails screen (Queued / Sent / Failed tabs, Regenerate)
+
+**Done when:** a test email reaches your inbox, 3 real contacts are found with sources, and a full dry run produces emails ready for review.
+
+## v3: Hands-off (1–2 weeks)
+
+Goal: JobPilot runs on its own while your PC is on, alerts you when it needs you, protects your personal data, and is safe enough to leave in live mode at a low cap.
+
+**Learn**
+
+- Scheduling — [APScheduler user guide](https://apscheduler.readthedocs.io/en/3.x/userguide.html)
+- Windows notifications — [win11toast](https://pypi.org/project/win11toast/)
+- Symmetric encryption — [cryptography: Fernet](https://cryptography.io/en/latest/fernet/)
+- Gemini API (optional provider) — [Gemini API](https://ai.google.dev/gemini-api/docs)
+
+**Checklist**
+
+- [ ] Scheduler with active days and hours, class-hour pauses, "Run once now"
+- [ ] Windows alerts: batch ready, CAPTCHA, quota out, submit failed
+- [ ] CAPTCHA / logout detection → pause the site, alert, Resume button
+- [ ] Fernet encryption for phone, address, email and contact emails; key in keyring; migration for existing rows
+- [ ] AI provider per task in settings; Gemini → Ollama fallback when quota runs out; quota counters
+- [ ] Settings, Profile, Activity log screens; onboarding; empty and error states
+- [ ] A first week live at a low cap (5 a day)
+- [ ] README with real results (applications, reply rate, what you changed); tag `v1.0`
+
+**Done when:** a week of live runs at a low cap goes smoothly, the database shows encrypted personal fields, switching a task's provider works, and your README shows real numbers. That's JobPilot 1.0.
 
 ## Technologies to learn
 
-There are 17 technologies in total. Learn each one right before the phase that needs it, not all at once.
+Learn each technology right before the phase that needs it, not all at once.
 
 | Technology | What it does in JobPilot | First needed | Docs |
 | --- | --- | --- | --- |
-| Git + GitHub | Version control, safe experiments | Phase 0 | [Pro Git](https://git-scm.com/book/en/v2) |
-| Python venv + pip | Isolated project dependencies | Phase 0 | [venv](https://docs.python.org/3/library/venv.html) |
-| pytest | Tests that run offline | Phase 0 | [pytest](https://docs.pytest.org/en/stable/getting-started.html) |
-| Ollama | Local AI: matching, form answers, embeddings | Phase 0 | [ollama-python](https://github.com/ollama/ollama-python) |
-| Pydantic | Validating AI JSON and data rows | Phase 0 | [Pydantic](https://docs.pydantic.dev/latest/) |
-| SQL + SQLite | All storage | Phase 1 | [SQLBolt](https://sqlbolt.com/), [sqlite3](https://docs.python.org/3/library/sqlite3.html) |
-| keyring | API keys and tokens in Windows Credential Manager | Phase 1 | [keyring](https://pypi.org/project/keyring/) |
-| Playwright (Python) | Browser automation: scraping, filling forms | Phase 2 | [Playwright](https://playwright.dev/python/docs/intro) |
-| LLM prompting + structured output | Scoring, resume pick, answers, emails | Phase 3 | [Prompt engineering](https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview) |
-| FastAPI | Engine API for the dashboard | Phase 4 | [FastAPI tutorial](https://fastapi.tiangolo.com/tutorial/) |
-| Next.js + TypeScript | Dashboard | Phase 4 | [Next.js](https://nextjs.org/docs) |
-| Tailwind CSS | Styling from your design tokens | Phase 4 | [Tailwind](https://tailwindcss.com/docs) |
-| Gemini API | Cold email writing (optional) | Phase 5 | [Gemini API](https://ai.google.dev/gemini-api/docs) |
+| Git + GitHub | Version control, safe experiments | v0 Phase 0 | [Pro Git](https://git-scm.com/book/en/v2) |
+| Python venv + pip | Isolated project dependencies | v0 Phase 0 | [venv](https://docs.python.org/3/library/venv.html) |
+| pytest | Tests that run offline | v0 Phase 0 | [pytest](https://docs.pytest.org/en/stable/getting-started.html) |
+| Ollama | Local AI: form answers, resume pick, embeddings | v0 Phase 0 | [ollama-python](https://github.com/ollama/ollama-python) |
+| Pydantic | Validating AI JSON and data rows | v0 Phase 0 | [Pydantic](https://docs.pydantic.dev/latest/) |
+| SQL + SQLite | All storage | v0 Phase 1 | [SQLBolt](https://sqlbolt.com/), [sqlite3](https://docs.python.org/3/library/sqlite3.html) |
+| keyring | Secrets in Windows Credential Manager | v0 Phase 1 | [keyring](https://pypi.org/project/keyring/) |
+| Playwright (Python) | Reading and filling forms | v0 Phase 2 | [Playwright](https://playwright.dev/python/docs/intro) |
+| Embeddings + sqlite-vec | RAG retrieval | v0 Phase 3 | [sqlite-vec](https://github.com/asg017/sqlite-vec) |
+| LLM prompting + structured output | Form answers, resume pick | v0 Phase 3 | [Prompt engineering](https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview) |
+| FastAPI | Engine API for the controls page | v0 Phase 4 | [FastAPI tutorial](https://fastapi.tiangolo.com/tutorial/) |
+| Next.js + TypeScript | Dashboard / controls page | v0 Phase 4 | [Next.js](https://nextjs.org/docs) |
+| Tailwind CSS | Styling from your design tokens | v0 Phase 4 | [Tailwind](https://tailwindcss.com/docs) |
+| BM25 (rank-bm25) | Pre-filtering jobs | v1 | [rank-bm25](https://github.com/dorianbrown/rank_bm25) |
 | OAuth 2.0 + Gmail API | Sending email safely | v2 | [Gmail quickstart](https://developers.google.com/gmail/api/quickstart/python) |
-| Embeddings + sqlite-vec | RAG retrieval | v3 | [sqlite-vec](https://github.com/asg017/sqlite-vec) |
 | cryptography (Fernet) | Encrypting personal fields | v3 | [Fernet](https://cryptography.io/en/latest/fernet/) |
-| APScheduler | Running on a schedule | v4 | [APScheduler](https://apscheduler.readthedocs.io/en/3.x/userguide.html) |
+| APScheduler | Running on a schedule | v3 | [APScheduler](https://apscheduler.readthedocs.io/en/3.x/userguide.html) |
+| Gemini API | Optional AI provider with fallback | v3 | [Gemini API](https://ai.google.dev/gemini-api/docs) |
 
 The concepts matter more than the libraries: how a browser loads and finds elements, how an LLM turns a prompt into JSON, how embeddings find similar text, and how OAuth grants limited permission. If you can explain those four, you understand the system.

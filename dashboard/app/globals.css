@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* All colours, radii and sizes live in the design system. Never hardcode them here. */
+@import "../../design/tokens.css";
+
+/*
+ * Map the design tokens into Tailwind's theme (CLAUDE.md: colors.jp.*,
+ * fontFamily.sans/serif, borderRadius.control/card).
+ *   --color-jp-ink       -> bg-jp-ink, text-jp-ink, border-jp-ink ...
+ *   --radius-control     -> rounded-control
+ * `inline` makes Tailwind reference the variable instead of copying its value.
+ */
+@theme inline {
+  /* Surfaces and text */
+  --color-jp-ground: var(--jp-ground);
+  --color-jp-surface: var(--jp-surface);
+  --color-jp-line: var(--jp-line);
+  --color-jp-line-soft: var(--jp-line-soft);
+  --color-jp-line-strong: var(--jp-line-strong);
+  --color-jp-ink: var(--jp-ink);
+  --color-jp-ink-2: var(--jp-ink-2);
+  --color-jp-muted-bg: var(--jp-muted-bg);
+
+  /* Brand and signals */
+  --color-jp-brand: var(--jp-brand);
+  --color-jp-brand-tint: var(--jp-brand-tint);
+  --color-jp-amber: var(--jp-amber);
+  --color-jp-amber-text: var(--jp-amber-text);
+  --color-jp-amber-bg: var(--jp-amber-bg);
+  --color-jp-amber-border: var(--jp-amber-border);
+  --color-jp-danger: var(--jp-danger);
+  --color-jp-danger-bg: var(--jp-danger-bg);
+  --color-jp-danger-border: var(--jp-danger-border);
+
+  /* Status chips: text colour and background */
+  --color-jp-status-new: var(--jp-status-new);
+  --color-jp-status-new-bg: var(--jp-status-new-bg);
+  --color-jp-status-queued: var(--jp-status-queued);
+  --color-jp-status-queued-bg: var(--jp-status-queued-bg);
+  --color-jp-status-approved: var(--jp-status-approved);
+  --color-jp-status-approved-bg: var(--jp-status-approved-bg);
+  --color-jp-status-submitted: var(--jp-status-submitted);
+  --color-jp-status-submitted-bg: var(--jp-status-submitted-bg);
+  --color-jp-status-manual: var(--jp-status-manual);
+  --color-jp-status-manual-bg: var(--jp-status-manual-bg);
+  --color-jp-status-failed: var(--jp-status-failed);
+  --color-jp-status-failed-bg: var(--jp-status-failed-bg);
+  --color-jp-status-rejected: var(--jp-status-rejected);
+  --color-jp-status-rejected-bg: var(--jp-status-rejected-bg);
+  --color-jp-status-interview: var(--jp-status-interview);
+  --color-jp-status-interview-bg: var(--jp-status-interview-bg);
+  --color-jp-status-offer: var(--jp-status-offer);
+  --color-jp-status-offer-bg: var(--jp-status-offer-bg);
+
+  /* Fonts: Geist for everything, Newsreader only for page titles and big numbers */
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, serif;
+
+  /* Shape */
+  --radius-control: var(--jp-radius-control);
+  --radius-card: var(--jp-radius-card);
+  --shadow-overlay: var(--jp-shadow-overlay);
+
+  /* Type scale from DESIGN.md (13px is the "label" size; 12/14/16 are Tailwind's xs/sm/base) */
+  --text-label: 13px;
+  --text-label--line-height: 1.5;
+}
+
+body {
+  background: var(--jp-ground);
+  color: var(--jp-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/* Numbers in tables and counters line up in columns. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
