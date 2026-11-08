@@ -23,7 +23,7 @@ v0 scope only (the form filler): profile + 2 labeled resumes (A = Web, B = Mobil
 
 ## Stack
 
-- Python 3.12 engine: Playwright (Python), FastAPI, SQLite, `cryptography` (Fernet), `keyring`, `google-genai` (Gemini free tier), `ollama` (local models; provider chosen per task in settings, with fallback from Gemini to Ollama), `sqlite-vec`, pytest. **Later versions only:** `google-api-python-client` (Gmail, v2), APScheduler and `win11toast` (v3), Gemini and Fernet (v3). In v0 all AI is Ollama.
+- Python 3.13 engine: Playwright (Python), FastAPI, SQLite, `cryptography` (Fernet), `keyring`, `google-genai` (Gemini free tier), `ollama` (local models; provider chosen per task in settings, with fallback from Gemini to Ollama), `sqlite-vec`, pytest. **Later versions only:** `google-api-python-client` (Gmail, v2), APScheduler and `win11toast` (v3), Gemini and Fernet (v3). In v0 all AI is Ollama.
 - Dashboard: Next.js + TypeScript + Tailwind in `dashboard/`
 - Runs on Windows. Use `pathlib` for every path; never hardcode `C:\...`.
 

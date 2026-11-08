@@ -1,6 +1,7 @@
-﻿# Local data (database, resumes, screenshots, browser profile)
+# Local data (database, resumes, screenshots, browser profile)
 data/*
 !data/.gitkeep
+!data/*.example.json
 *.db
 *.sqlite3
 profiles/

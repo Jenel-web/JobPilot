@@ -1,0 +1,15 @@
+{
+  "name": "Your Name",
+  "email": "you@example.com",
+  "location": "Metro Manila, Philippines",
+  "open_to_remote": true,
+  "target_roles": ["junior software engineer", "full stack developer", "mobile developer"],
+  "years_experience": 0,
+  "skills": ["python", "fastapi", "react", "typescript", "next.js", "flutter", "dart", "java", "spring boot", "mysql", "postgresql", "tailwind", "git", "rest api"],
+  "summary": "Computer science student building full-stack and mobile apps with AI integrations.",
+  "projects": [
+    {"name": "Pag-IBIG Housing Loan System", "tech": ["java", "spring boot", "react", "typescript", "mysql"], "blurb": "Full-stack loan application and admin review app."},
+    {"name": "EconLens PH", "tech": ["flutter", "dart", "fastapi", "python", "postgresql", "gemini"], "blurb": "Explains Philippine economic news in plain Filipino using an LLM pipeline."},
+    {"name": "Countdown Game", "tech": ["next.js", "typescript", "tailwind"], "blurb": "Multiplayer-style web game built with Next.js."}
+  ]
+}

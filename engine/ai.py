@@ -60,7 +60,8 @@ class EmailDraft(BaseModel):
 
 # The task whitelist. A task not listed here is rejected, which also means a
 # task name can never be used to read an arbitrary file (e.g. "../secrets").
-# The ``form`` task is added in v1, when the apply flow is built.
+# The ``form_answer`` and ``resume_pick`` tasks are added in v0 Phase 0/3 (form filler);
+# ``match`` and ``email`` are used from v1 and v2.
 TASK_MODELS: dict[str, type[BaseModel]] = {
     "match": MatchResult,
     "email": EmailDraft,

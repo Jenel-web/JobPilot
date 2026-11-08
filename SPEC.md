@@ -104,7 +104,7 @@ Python runs the engine, and Next.js runs the dashboard. Everything is free, and 
 
 | Part | Choice | Why |
 | --- | --- | --- |
-| Language | Python 3.12 | Best libraries for automation and AI |
+| Language | Python 3.13 | Best libraries for automation and AI |
 | Browser automation | Playwright for Python, with a dedicated persistent browser profile (you log in by hand to Prosple and other sites) | Real logged-in sessions; `playwright codegen` records selectors |
 | Engine API | FastAPI | Dashboard talks to the engine over localhost; used in EconLens |
 | Database | SQLite (+ `cryptography` Fernet for sensitive columns from v3) | One file, no server |
@@ -737,7 +737,7 @@ Goal: an empty but well-organized repo where tests run and `ask_ai()` answers in
 
 **Checklist**
 
-- [ ] Install Python 3.12, Node.js LTS, Git, VS Code, Ollama
+- [ ] Install Python 3.13, Node.js LTS, Git, VS Code, Ollama
 - [ ] Pull a model your PC can run (e.g. `ollama pull qwen3:4b`; `llama3.1:8b` only with ~8 GB VRAM) and test it with `ollama run`
 - [ ] Create a private GitHub repo `jobpilot`
 - [ ] Copy in `CLAUDE.md`, `docs/` and the `design/` folder
@@ -767,7 +767,7 @@ for mock mode only.
 **Run and check** (Windows PowerShell)
 
 ```powershell
-py -3.12 -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python -m pytest -q
