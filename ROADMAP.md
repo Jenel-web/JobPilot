@@ -45,6 +45,8 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-09: plan changed to RAG + form filler; SPEC.md, CLAUDE.md and this roadmap rewritten.
 - 2026-11-09: Phase 0 cleanup (Python 3.13 docs, old matcher removed, `engine/forms/`, `fixtures/forms/`, `prompts/` added).
 - 2026-11-09: `form_answer` and `resume_pick` AI tasks added with fixtures and mock-mode tests (40 tests pass).
+- 2026-11-09: data folders and templates created (`data/resumes/`, `screenshots/`, `browser_profile/`, `answers.json`, new `profile.example.json`); resumes are now "A and B with your own label and target", not Web/Mobile.
+- 2026-11-09: reviewed `answers.json` (96 answers): added `kind` per answer (fixed/open/legal/consent/personal), fixed typos in 2 answers and the GPA wording; resume picker now returns `evidence` and judges by resume content; upload uses a formal file name.
 - 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
 
 
@@ -113,11 +115,11 @@ git status
 
 **You do** (the part that takes real thought, so start before the session)
 
-- [ ] Fill `data/profile.json` with your real details: name, email, phone, address, school, year level, graduation year, location, links (GitHub, LinkedIn, portfolio), job preferences, and a short blurb per project. `data/` is git-ignored, so it stays local.
-- [ ] Export your 2 resume PDFs and put them in `data/resumes/` as `resume_a_web.pdf` and `resume_b_mobile.pdf`.
-- [ ] Write 20+ starter answers in `data/answers.json`, because only you know them: expected salary (Metro Manila vs remote vs abroad), relocation, availability and start date, work authorization, notice period, why you want to work here (generic), strengths, GPA if asked, and so on. Give each a location scope (any / city / remote / abroad).
-- [ ] Mark which answers are legal or eligibility (work authorization, visa, "have you ever…"). Those are never drafted by the AI.
-- [ ] Approve adding `pdfplumber` and `keyring` (Claude asks first).
+- [ ] Fill `data/profile.json` (the file exists but uses the old format; copy the new shape from `data/profile.example.json`) with your real details: name, email, phone, address, school, year level, graduation year, location, links (GitHub, LinkedIn, portfolio), job preferences, and a short blurb per project. `data/` is git-ignored, so it stays local.
+- [ ] Your 2 resume PDFs are in `data/resumes/` (`java dev.pdf`, `startup.pdf`; the file names don't matter). In `data/profile.json` list them under `resumes` with an `id` (A/B), a display `label` and the `file`. The resume picker ignores names and labels and judges by what each resume says. The employer sees a formal name like `Your Name.pdf`, set once as `upload_name`.
+- [ ] Write 20+ starter answers in `data/answers.json` (it exists with 6 fake examples; replace them. Format: `question`, `answer`, `location_scope`, `city`, `kind` = `normal` or `legal`), because only you know them: expected salary (Metro Manila vs remote vs abroad), relocation, availability and start date, work authorization, notice period, why you want to work here (generic), strengths, GPA if asked, and so on. Give each a location scope (any / city / remote / abroad).
+- [x] Mark each answer's `kind` in `answers.json` (done, reviewed Nov 9): `fixed` (use as written), `open` (AI may rewrite it to fit the job, from your facts only), `legal` (bank only, AI never touches), `consent` (bank only, always highlighted for you), `personal` (code fills it from the profile; never sent to AI).
+- [ ] Approve adding `pdfplumber` (reads resume text from the PDFs) and `keyring` (stores secrets in Windows Credential Manager). Just reply "yes"; Claude installs them and updates `requirements.txt`.
 
 **Prompt Claude Code**
 
@@ -188,7 +190,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 
 - [ ] Write a **test set** of 20 questions in `tests/fixtures/eval_questions.json`: for each, the question as a form would word it and which saved answer or source should answer it. Include 8 reworded versions of your saved questions, 4 legal/eligibility, 4 personal fields, and 4 brand-new open questions ("Why do you want to join us?"). This is how you'll judge quality.
 - [ ] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these.
-- [ ] Collect 5 real job posts (3 web, 2 mobile) as text files to test the resume picker.
+- [ ] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
 - [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
 - [ ] Decide the confidence cutoff for "flagged" (start at 0.7).
 - [ ] Approve adding `sqlite-vec`.

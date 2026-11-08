@@ -198,15 +198,17 @@ def test_mock_resume_pick_returns_a_or_b() -> None:
 
 
 def test_a_test_can_choose_the_resume() -> None:
-    chosen = {"resume": "B", "reason": "mobile app post"}
+    chosen = {"resume": "B", "reason": "post asks for X", "evidence": ["resume B project uses X"]}
     assert ask_ai("resume_pick", "x", settings=MOCK, mock_response=chosen)["resume"] == "B"
 
 
 @pytest.mark.parametrize(
     ("task", "bad"),
     [
-        ("resume_pick", {"resume": "C", "reason": "nope"}),
-        ("resume_pick", {"resume": "A", "reason": ""}),
+        ("resume_pick", {"resume": "C", "reason": "nope", "evidence": ["e"]}),
+        ("resume_pick", {"resume": "A", "reason": "", "evidence": ["e"]}),
+        ("resume_pick", {"resume": "A", "reason": "r", "evidence": []}),
+        ("resume_pick", {"resume": "A", "reason": "r"}),
         ("form_answer", {"answers": [{"field": "q", "answer": "a", "confidence": 1.5, "source": "s"}]}),
         ("form_answer", {"answers": [{"field": "", "answer": "a", "confidence": 0.5, "source": "s"}]}),
         ("form_answer", [{"field": "q"}]),

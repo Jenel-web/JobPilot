@@ -36,12 +36,12 @@ JobPilot is a job-application copilot that runs on your Windows PC. Its core is 
 
 | Version | Feature | What it does |
 | --- | --- | --- |
-| **v0** | Profile + resumes | Personal details, education, links, job preferences, and 2 labeled resumes (A = Web, B = Mobile). |
+| **v0** | Profile + resumes | Personal details, education, links, job preferences, and 2 resumes (A and B) with a label of your choice. The resume picker decides from each resume's actual content, never from its label or file name. |
 | v0 | Answer bank with location scope | Saved answers; salary, relocation and similar answers have a scope (any / city / remote / abroad) so they fit the job's location. |
 | v0 | RAG | Profile, resumes, projects and answer bank are chunked and embedded (Ollama `nomic-embed-text` + `sqlite-vec`), so a differently worded question finds the right saved answer. |
 | v0 | Form reader | Playwright reads every field's label, type and options on the page you opened. |
 | v0 | Answer engine | Personal fields (name, phone, address) filled by code and never sent to AI. Known questions come from the answer bank. New open questions are drafted by Ollama from your real facts only and flagged. Legal and eligibility questions are never guessed. |
-| v0 | Resume picker | Reads the job post on the page and uploads resume A or B. |
+| v0 | Resume picker | Reads the job post on the page, compares it with the content of both resumes (skills, projects, experience) and uploads the better one under a formal file name (e.g. `Your Name.pdf`). |
 | v0 | Fill + review | Fills everything, highlights guessed answers, stops before Submit, never clicks Submit. |
 | v0 | Unknown questions list | Questions with no saved answer are saved so you answer each one once. |
 | v0 | Filled pages history | One row per "Fill this page": URL, job and company, resume used, flagged count, screenshot, status `filled` → `submitted` / `abandoned`. You mark it, or (Phase 4) passive detection offers to. |
@@ -89,7 +89,7 @@ A page costs about 1–2 AI calls in v0: one to pick the resume and one to draft
 **Where the AI is used**
 
 - **Form answers:** field labels + retrieved profile and answer-bank snippets in, `{field: answer, confidence, source}` out. Low confidence = flagged; no match = unknown-questions list.
-- **Resume pick:** job post text + profile summary in, `{resume: "A"|"B", reason}` out.
+- **Resume pick:** job post text + the most similar chunks of each resume (found with RAG) in, `{resume: "A"|"B", reason, evidence}` out. It judges by resume content, not by file name or label.
 - **RAG retrieval:** profile, resumes, projects and answer bank are split into chunks and embedded. Each task pulls only the top matching chunks.
 - **Match score (v1) and cold email (v2):** job post + profile summary in, `{score, reasons, missing_skills, resume}` out; job, contact and your matching projects in, subject + body + `facts_used` out.
 
@@ -139,9 +139,9 @@ Eleven SQLite tables hold everything. Columns marked (enc) are encrypted from v3
 | Table | Key columns |
 | --- | --- |
 | `profile` | name, email (enc), phone (enc), address (enc), school, year_level, grad_year, location, links, preferred_locations, job_types |
-| `resumes` | id (A/B), label (e.g. web, mobile), file_path, extracted_text |
+| `resumes` | id (A/B), label (your own name, display only), file_path, upload_name (the formal name the employer sees, default `<Full Name>.pdf`), extracted_text |
 | `chunks` | source (profile/resume/answer), text, embedding |
-| `answers` | question, answer, location_scope (any / city / remote / abroad), times_used |
+| `answers` | question, answer, location_scope (any / city / remote / abroad), kind (fixed / open / legal / consent / personal), times_used |
 | `unknown_questions` | question_text, job_id, first_seen, status (open/answered) |
 | `fills` | url, job_title, company, resume_id, filled_fields, flagged_fields, screenshot_path, status (filled → submitted / abandoned), filled_at, submitted_at (v0 filled pages history; v1 extends it into `applications`) |
 | `jobs` | source, url, title, company, location, job_type, posted_at, text, fingerprint (for duplicates), apply_type (native/external) |
@@ -243,7 +243,7 @@ A single small page at `localhost:3000` that you keep open next to the bot's bro
 
 - A big **Fill this page** button, a **mode badge** (MOCK / DRY RUN / LIVE) and a status line: "Browser ready · current page: acme.com/careers/apply".
 - You log in to sites and open the application page yourself in the bot's browser. When you press the button, the engine reads the page and fills it. The status line then shows progress: "Reading form… 14 fields found → answering → uploading resume A → done".
-- When it finishes, you see a result summary: "12 filled · 2 flagged (guessed) · 1 new question · resume A (Web)". Flagged answers are also highlighted in the page itself in the bot's browser, so you can fix them there.
+- When it finishes, you see a result summary: "12 filled · 2 flagged (guessed) · 1 new question · resume A". Flagged answers are also highlighted in the page itself in the bot's browser, so you can fix them there.
 - It never clicks Submit. The page says "Review the form in the browser, then submit it yourself."
 
 **2. Unknown questions**
@@ -387,7 +387,7 @@ Keyboard shortcuts shown in a hint bar at the bottom: `J/K` next/previous, `A` a
 
 1. **Header:** role, company, location, a link button "Open on Prosple ↗", and Approve / Reject buttons that stay visible while scrolling.
 2. **Why it matched:** the score badge large, 2–3 one-line reasons ("Uses React + Spring Boot, both in your projects"), and a "Missing" line with grey skill chips (Docker, AWS).
-3. **Resume:** a toggle with two options, `Resume A · Web` and `Resume B · Mobile`, the AI's choice pre-selected with "AI picked this because…". A Preview link opens the PDF.
+3. **Resume:** a toggle with two options, `Resume A · <its label>` and `Resume B · <its label>`, the AI's choice pre-selected with "AI picked this because…". A Preview link opens the PDF.
 4. **Filled answers:** a two-column list, question on the left and answer on the right, editable inline.
    - Answers from your profile: normal text with a small "from profile" tag.
    - Answers from the answer bank: "from answer bank" tag.
@@ -627,7 +627,7 @@ Ten scenarios show how Jenel, a PUP student looking for internships and junior r
 
 **1. First setup on a Sunday evening** (Onboarding → Review batch)
 
-Jenel opens JobPilot for the first time. The stepper asks for his details, school and expected graduation. He drags in Resume A (Web / Full stack) and Resume B (Mobile / Flutter). He picks Internship, Part-time and Full-time, with Metro Manila and Remote as locations. He connects Gmail, which says "Send-only permission", and chooses Ollama for matching and Gemini for emails. He logs into Prosple in the bot browser. He clicks "Find my first matches (dry run)", watches the progress list, and lands on Review batch with 14 matches and nothing submitted.
+Jenel opens JobPilot for the first time. The stepper asks for his details, school and expected graduation. He drags in Resume A and Resume B, each with a label and the kind of role it targets. He picks Internship, Part-time and Full-time, with Metro Manila and Remote as locations. He connects Gmail, which says "Send-only permission", and chooses Ollama for matching and Gemini for emails. He logs into Prosple in the bot browser. He clicks "Find my first matches (dry run)", watches the progress list, and lands on Review batch with 14 matches and nothing submitted.
 
 **2. Morning review before class, 10 minutes** (Windows pop-up → Review batch → Submit)
 
@@ -792,7 +792,7 @@ Goal: your details, both resumes and your answer bank live in a local SQLite dat
 
 - [ ] `engine/db.py`: create tables `profile`, `resumes`, `answers`, `unknown_questions`, `fills` (filled pages history) and `action_log` (from the Data model in Part 1)
 - [ ] `data/profile.json` (git-ignored) with your real details, education, links, job preferences and projects; a `profile.example.json` with fake ones is committed
-- [ ] Your 2 resume PDFs in `data/resumes/` with labels (A = Web, B = Mobile)
+- [ ] Your 2 resume PDFs in `data/resumes/` with a label each (set in `profile.json`)
 - [ ] `engine/profile.py`: load the profile and resumes into the DB, extract resume text
 - [ ] Answer bank: `answers` table with `location_scope` (any / city / remote / abroad); load a starter `data/answers.json`; lookup by exact question
 - [ ] `engine/secrets.py`: get/set secrets through `keyring`
@@ -886,13 +886,14 @@ Goal: for each field, the right source answers it: code, answer bank, or Ollama 
 - [ ] `retrieve(question, k=5)` returns chunks with a similarity score
 - [ ] Re-index command; answer bank edits re-index their rows
 - [ ] `engine/forms/answers.py`: the rules per field, in this order:
-  - personal field (name, email, phone, address) → code, never sent to AI
-  - legal / eligibility / GPA / "have you ever" → answer bank only; otherwise unknown-questions list
-  - known question → answer bank via RAG, using the scope that matches the job's location
-  - new open question → Ollama drafts from retrieved facts only, flagged
+  - `personal` (name, email, phone, address, gender, ethnicity, marital status, disability, veteran, pronouns) → code from the profile; never embedded, never sent to AI
+  - `legal` (work authorization, visa, "have you ever", convictions, relatives) → answer bank only; otherwise unknown-questions list
+  - `consent` (background check, drug test, terms, data processing) → answer bank only, always highlighted so you read it before submitting
+  - `fixed` → answer bank via RAG, used as written, using the scope that matches the job's location
+  - `open` (about you, why this company, strengths, projects) and any new open question → Ollama rewrites the saved answer to fit this job, using only your saved answers, projects and resume facts; always flagged
 - [ ] `prompts/form.md`: field labels + allowed facts → `{field, answer, confidence, source}`; "use only the provided facts"
 - [ ] Pydantic validation of Ollama JSON; retry once, then log and skip that field
-- [ ] Resume picker: job post text from the page + profile summary → `{resume: "A"|"B", reason}`
+- [ ] Resume picker: job post text from the page + the most similar chunks of each resume (RAG) → `{resume: "A"|"B", reason, evidence}`. It never decides from the file name or label
 - [ ] Canned responses in `fixtures/ai/` for mock mode; tests cover each rule
 - [ ] A test that no prompt contains phone, address, email or ID numbers
 
@@ -941,7 +942,7 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 
 **Checklist**
 
-- [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume; random 1–4 s delays between actions
+- [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
 - [ ] `safety.check()` before every fill; every fill logged to `action_log`
 - [ ] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
 - [ ] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked

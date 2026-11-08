@@ -1,15 +1,63 @@
 {
   "name": "Your Name",
   "email": "you@example.com",
+  "phone": "+63 900 000 0000",
+  "address": "123 Example St, Sample City, Metro Manila, Philippines",
+  "education": {
+    "school": "Example University",
+    "degree": "BS Computer Science",
+    "year_level": "3rd year",
+    "grad_year": 2027,
+    "gpa": ""
+  },
   "location": "Metro Manila, Philippines",
   "open_to_remote": true,
-  "target_roles": ["junior software engineer", "full stack developer", "mobile developer"],
-  "years_experience": 0,
-  "skills": ["python", "fastapi", "react", "typescript", "next.js", "flutter", "dart", "java", "spring boot", "mysql", "postgresql", "tailwind", "git", "rest api"],
-  "summary": "Computer science student building full-stack and mobile apps with AI integrations.",
+  "links": {
+    "github": "https://github.com/your-username",
+    "linkedin": "https://linkedin.com/in/your-username",
+    "portfolio": ""
+  },
+  "job_preferences": {
+    "job_types": [
+      "internship",
+      "part-time",
+      "full-time"
+    ],
+    "target_roles": [
+      "junior software engineer"
+    ],
+    "preferred_locations": [
+      "Metro Manila",
+      "remote"
+    ]
+  },
+  "skills": [
+    "python",
+    "react",
+    "typescript"
+  ],
+  "summary": "One or two true sentences about you.",
   "projects": [
-    {"name": "Pag-IBIG Housing Loan System", "tech": ["java", "spring boot", "react", "typescript", "mysql"], "blurb": "Full-stack loan application and admin review app."},
-    {"name": "EconLens PH", "tech": ["flutter", "dart", "fastapi", "python", "postgresql", "gemini"], "blurb": "Explains Philippine economic news in plain Filipino using an LLM pipeline."},
-    {"name": "Countdown Game", "tech": ["next.js", "typescript", "tailwind"], "blurb": "Multiplayer-style web game built with Next.js."}
-  ]
+    {
+      "name": "Example Project",
+      "tech": [
+        "python",
+        "fastapi"
+      ],
+      "blurb": "What you built and what it does. Only true facts: the AI may use only this."
+    }
+  ],
+  "resumes": [
+    {
+      "id": "A",
+      "label": "Your name for resume A (display only)",
+      "file": "your resume a.pdf"
+    },
+    {
+      "id": "B",
+      "label": "Your name for resume B (display only)",
+      "file": "your resume b.pdf"
+    }
+  ],
+  "upload_name": "Your Name.pdf"
 }

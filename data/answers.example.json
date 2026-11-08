@@ -1,0 +1,44 @@
+[
+  {
+    "question": "What is your expected monthly salary?",
+    "answer": "PHP 20,000 for Metro Manila roles",
+    "location_scope": "city",
+    "city": "Metro Manila",
+    "kind": "fixed"
+  },
+  {
+    "question": "What is your expected monthly salary?",
+    "answer": "USD 600 for remote roles",
+    "location_scope": "remote",
+    "city": "",
+    "kind": "fixed"
+  },
+  {
+    "question": "Are you willing to relocate?",
+    "answer": "Yes, within the Philippines",
+    "location_scope": "any",
+    "city": "",
+    "kind": "fixed"
+  },
+  {
+    "question": "When can you start?",
+    "answer": "Immediately, or any date that fits the company",
+    "location_scope": "any",
+    "city": "",
+    "kind": "fixed"
+  },
+  {
+    "question": "Are you legally authorized to work in the Philippines?",
+    "answer": "Yes",
+    "location_scope": "any",
+    "city": "",
+    "kind": "legal"
+  },
+  {
+    "question": "Do you now or in the future require visa sponsorship?",
+    "answer": "No (for roles in the Philippines)",
+    "location_scope": "city",
+    "city": "Metro Manila",
+    "kind": "legal"
+  }
+]

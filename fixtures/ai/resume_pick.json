@@ -1,4 +1,5 @@
 {
   "resume": "A",
-  "reason": "Mock response: the post is about web development, which fits the Web resume."
+  "reason": "Mock response: the post asks for Java and Spring Boot, and resume A has both in its projects.",
+  "evidence": ["Mock evidence: resume A lists a Spring Boot REST API project"]
 }

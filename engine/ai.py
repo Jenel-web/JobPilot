@@ -79,10 +79,15 @@ class FormAnswers(BaseModel):
 
 
 class ResumePick(BaseModel):
-    """Task ``resume_pick``: choose resume A (Web) or B (Mobile) from the job post."""
+    """Task ``resume_pick``: choose resume A or B by comparing the job post with what each resume
+    actually contains (skills, projects, experience), not by its file name or label.
+
+    ``evidence`` lists the concrete resume content that matched the post, so you can check the pick.
+    """
 
     resume: Literal["A", "B"]
     reason: str = Field(min_length=1)
+    evidence: list[str] = Field(min_length=1)
 
 
 # The task whitelist. A task not listed here is rejected, which also means a
