@@ -58,11 +58,40 @@ class EmailDraft(BaseModel):
     facts_used: list[str]
 
 
+class FormAnswer(BaseModel):
+    """One drafted answer for one form field."""
+
+    field: str = Field(min_length=1)
+    answer: str  # empty string = "the provided facts do not answer this"
+    confidence: float = Field(ge=0.0, le=1.0)
+    source: str  # which provided fact/chunk the answer came from (shown to you in review)
+
+
+class FormAnswers(BaseModel):
+    """Task ``form_answer``: drafts for new open questions, from retrieved facts only.
+
+    Wrapped in an object (not a bare list) because Ollama's JSON mode returns
+    objects. Code, not the AI, decides which fields reach this task: personal
+    fields and legal/eligibility questions never do.
+    """
+
+    answers: list[FormAnswer]
+
+
+class ResumePick(BaseModel):
+    """Task ``resume_pick``: choose resume A (Web) or B (Mobile) from the job post."""
+
+    resume: Literal["A", "B"]
+    reason: str = Field(min_length=1)
+
+
 # The task whitelist. A task not listed here is rejected, which also means a
 # task name can never be used to read an arbitrary file (e.g. "../secrets").
 # The ``form_answer`` and ``resume_pick`` tasks are added in v0 Phase 0/3 (form filler);
 # ``match`` and ``email`` are used from v1 and v2.
 TASK_MODELS: dict[str, type[BaseModel]] = {
+    "form_answer": FormAnswers,
+    "resume_pick": ResumePick,
     "match": MatchResult,
     "email": EmailDraft,
 }

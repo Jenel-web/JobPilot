@@ -16,10 +16,10 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | Area | State | Notes |
 | --- | --- | --- |
 | Repo, git, `.gitignore`, CLAUDE.md, SPEC.md, `design/` | Done | 3 commits, working tree clean |
-| `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Only tasks `match` and `email` exist. The v0 tasks (`form_answer`, `resume_pick`) are not there yet |
+| `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
-| `fixtures/ai/` | Partial | `match.json`, `email.json` only |
-| Tests | 29 pass | `test_ai.py` (ai + settings). The old-plan matcher tests were removed |
+| `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
+| Tests | 40 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
 | `engine/db.py`, `profile.py`, `rag.py`, `safety.py`, `secrets.py`, `api.py` | Empty stubs | One comment line each |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
@@ -36,9 +36,16 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 6. `.gitignore` now allows `data/*.example.json`, so `profile.example.json` can be committed (it was being ignored by `data/*`).
 7. The dashboard is untouched. Home, Applications and Review are v1 screens built early. Phase 4 adds the controls page beside them and reuses the existing components.
 
-**Still open in Phase 0:** add the `form_answer` and `resume_pick` AI tasks and their fixtures (step 2 below), then commit.
+**Still open in Phase 0:** only the Ollama speed check below.
 
-**Current position:** v0, Phase 0 at about 95%. Only the two new AI tasks remain.
+**Current position:** v0, Phase 0 at about 98%. Next: run the Ollama speed check, commit, then start Phase 1.
+
+**Progress log** (newest last; Claude Code adds a line after every working step)
+
+- 2026-11-09: plan changed to RAG + form filler; SPEC.md, CLAUDE.md and this roadmap rewritten.
+- 2026-11-09: Phase 0 cleanup (Python 3.13 docs, old matcher removed, `engine/forms/`, `fixtures/forms/`, `prompts/` added).
+- 2026-11-09: `form_answer` and `resume_pick` AI tasks added with fixtures and mock-mode tests (40 tests pass).
+
 
 ---
 
@@ -78,7 +85,7 @@ bullets. Propose a plan for THIS session only (max 3 steps). Wait for my OK.
 **Prompt Claude Code**
 
 1. ~~Housekeeping prompt~~ — done.
-2. New AI tasks (small step, explain first):
+2. ~~New AI tasks~~ — done (kept for reference):
    ```text
    Add two tasks to ask_ai: form_answer and resume_pick, each with a Pydantic model
    and a canned fixtures/ai/<task>.json. form_answer returns a list of
@@ -95,7 +102,7 @@ python -c "from engine.ai import ask_ai; print(ask_ai('resume_pick', 'x'))"
 git status
 ```
 
-**Done when:** tests pass, both new tasks answer in mock mode, `git status` is clean after your commit, and Python versions match everywhere.
+**Done when:** tests pass, both new tasks answer in mock mode, `git status` is clean after your commit, and Python versions match everywhere. (Everything is met except your commit and the Ollama speed check.)
 
 ---
 

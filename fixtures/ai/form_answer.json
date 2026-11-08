@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "field": "Why do you want to work here?",
+      "answer": "Mock answer: I enjoy building web apps and this role uses React, which I used in my projects.",
+      "confidence": 0.82,
+      "source": "Mock source: project EconLens PH"
+    },
+    {
+      "field": "Describe a project you are proud of",
+      "answer": "",
+      "confidence": 0.0,
+      "source": "none"
+    }
+  ]
+}

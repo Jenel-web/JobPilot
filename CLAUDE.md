@@ -11,6 +11,7 @@ The full spec is in SPEC.md (Part 1: spec, Part 2: UI screens, Part 3: roadmap).
 - Work on **one stage at a time** (see "Current stage" below). Don't build features from later stages.
 - Keep changes small. After each working step, tell me to commit and suggest a commit message.
 - Don't add a new dependency without asking me first and saying why.
+- **Keep ROADMAP.md current so we never lose our place.** At the end of every working step: tick the finished checkboxes in the current phase of `ROADMAP.md`, update its "Where the project is today" table and "Current position" line, and add a line to its Progress log. Do this in the same commit as the work. When a phase is done, also update "Current stage" below. Dependencies still go in `requirements.txt` (after I approve them).
 - If something in this file or the spec seems wrong or unclear, ask. Don't guess.
 
 ## Current stage
@@ -122,4 +123,4 @@ The dashboard must follow the design system in `design/`. Don't invent a new loo
 
 - It works in mock mode and has passing tests.
 - I can explain how it works.
-- The "Current stage" line above has been updated, and the work is committed.
+- The "Current stage" line above and ROADMAP.md (checkboxes, current position, progress log) have been updated, and the work is committed.

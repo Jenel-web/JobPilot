@@ -182,3 +182,44 @@ def test_mock_is_an_accepted_ai_provider(tmp_path: Path) -> None:
 def test_committed_settings_file_is_mock_mode() -> None:
     """The committed settings.json must stay in the safe mode (CLAUDE.md: default = mock)."""
     assert load_settings().run_mode == "mock"
+
+
+# ---- v0 form-filler tasks ---------------------------------------------------
+
+
+def test_mock_form_answer_returns_validated_answers() -> None:
+    result = ask_ai("form_answer", "ignored", settings=MOCK)
+    assert result["answers"][0]["field"]
+    assert 0.0 <= result["answers"][0]["confidence"] <= 1.0
+
+
+def test_mock_resume_pick_returns_a_or_b() -> None:
+    assert ask_ai("resume_pick", "ignored", settings=MOCK)["resume"] in ("A", "B")
+
+
+def test_a_test_can_choose_the_resume() -> None:
+    chosen = {"resume": "B", "reason": "mobile app post"}
+    assert ask_ai("resume_pick", "x", settings=MOCK, mock_response=chosen)["resume"] == "B"
+
+
+@pytest.mark.parametrize(
+    ("task", "bad"),
+    [
+        ("resume_pick", {"resume": "C", "reason": "nope"}),
+        ("resume_pick", {"resume": "A", "reason": ""}),
+        ("form_answer", {"answers": [{"field": "q", "answer": "a", "confidence": 1.5, "source": "s"}]}),
+        ("form_answer", {"answers": [{"field": "", "answer": "a", "confidence": 0.5, "source": "s"}]}),
+        ("form_answer", [{"field": "q"}]),
+    ],
+)
+def test_invalid_form_task_answers_raise_aierror(task: str, bad: Any) -> None:
+    with pytest.raises(AIError):
+        ask_ai(task, "x", settings=MOCK, mock_response=bad)
+
+
+def test_ollama_form_answer_retries_once_on_bad_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    good = json.dumps({"answers": [{"field": "q", "answer": "a", "confidence": 0.9, "source": "s"}]})
+    seen = fake_ollama(monkeypatch, "not json", good)
+    result = ask_ai("form_answer", "prompt", settings=DRY_RUN_OLLAMA)
+    assert result["answers"][0]["answer"] == "a"
+    assert len(seen) == 2
