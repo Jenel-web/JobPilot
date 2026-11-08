@@ -18,9 +18,9 @@ The full spec is in SPEC.md (Part 1: spec, Part 2: UI screens, Part 3: roadmap).
 
 > Update this line at the end of every stage.
 
-**v0 · Phase 0: setup and foundations** (see Part 3 of the spec: v0 = Phases 0–4, the form filler; then v1 batch mode, v2 cold email, v3 hands-off).
+**v0 · Phase 2: form reader** (Phases 0 and 1 are done) (see Part 3 of the spec: v0 = Phases 0–4, the form filler; then v1 batch mode, v2 cold email, v3 hands-off).
 
-v0 scope only (the form filler): profile + 2 resumes (A and B; the picker judges by what each resume actually contains, never by its file name or label), answer bank with location scope and a `kind` per answer (fixed / open / legal / consent / personal), RAG (Ollama `nomic-embed-text` + `sqlite-vec`), form reader (Playwright), answer engine, resume picker, fill + review (stops before Submit), unknown questions list, filled pages history (`filled` → `submitted` / `abandoned`, with passive submit detection in Phase 4), a small local controls page in the existing dashboard (Fill this page, unknown questions, answer bank editor, filled pages history), mock mode and action log. **Not in v0:** job discovery, ranking, batch mode, emails, scheduling, kill switch, encryption. Rules below that mention later features apply once we reach them.
+v0 scope only (the form filler): profile + 2 resumes (A and B; the picker judges by what each resume actually contains, never by its file name or label), answer bank with location scope and a `kind` per answer (fixed / open / protected), RAG (Ollama `nomic-embed-text` + `sqlite-vec`), form reader (Playwright), answer engine, resume picker, fill + review (stops before Submit), unknown questions list, filled pages history (`filled` → `submitted` / `abandoned`, with passive submit detection in Phase 4), a small local controls page in the existing dashboard (Fill this page, unknown questions, answer bank editor, filled pages history), mock mode and action log. **Not in v0:** job discovery, ranking, batch mode, emails, scheduling, kill switch, encryption. Rules below that mention later features apply once we reach them.
 
 ## Stack
 

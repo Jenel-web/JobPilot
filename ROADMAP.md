@@ -19,9 +19,10 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
 | `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
-| Tests | 40 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
+| Tests | 83 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
-| `engine/db.py`, `profile.py`, `rag.py`, `safety.py`, `secrets.py`, `api.py` | Empty stubs | One comment line each |
+| `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
+| `rag.py`, `api.py` | Empty stubs | Phases 3 and 4 |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
 | `requirements.txt` | Incomplete | Has `ollama`, `pydantic`, `pytest`. Playwright, FastAPI, uvicorn, pdfplumber, keyring, sqlite-vec still to add, one at a time with your OK |
 | Dashboard (`dashboard/`) | Built ahead of schedule | Shell, 25 shared UI components, Home, Applications and Review pages, all on mock data. None of the 4 v0 controls-page sections exist yet |
@@ -38,7 +39,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 0 done once committed. Next: start Phase 1.
+**Current position:** v0, Phase 1 done (only your look at the database in a viewer is left). Next: Phase 2, the form reader.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -46,7 +47,10 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-09: Phase 0 cleanup (Python 3.13 docs, old matcher removed, `engine/forms/`, `fixtures/forms/`, `prompts/` added).
 - 2026-11-09: `form_answer` and `resume_pick` AI tasks added with fixtures and mock-mode tests (40 tests pass).
 - 2026-11-09: data folders and templates created (`data/resumes/`, `screenshots/`, `browser_profile/`, `answers.json`, new `profile.example.json`); resumes are now "A and B with your own label and target", not Web/Mobile.
-- 2026-11-09: reviewed `answers.json` (96 answers): added `kind` per answer (fixed/open/legal/consent/personal), fixed typos in 2 answers and the GPA wording; resume picker now returns `evidence` and judges by resume content; upload uses a formal file name.
+- 2026-11-09: reviewed `answers.json` (96 answers): added `kind` per answer (fixed/open/protected; simplified from 5 kinds the same day), fixed typos in 2 answers and the GPA wording; resume picker now returns `evidence` and judges by resume content; upload uses a formal file name.
+- 2026-11-09: `pdfplumber` and `keyring` approved and installed (`requirements.txt` updated); profile.json updated to the new shape; both resume PDFs have readable text.
+- 2026-11-09: Phase 1 step 1: `engine/db.py` (6 tables, safe defaults, constraints) + `tests/test_db.py` (52 tests pass).
+- 2026-11-09: Phase 1 complete: `engine/profile.py` (loads profile, resumes via pdfplumber, 96 answers; scoped `lookup_answer`; masked `profile_summary`), `engine/secrets.py` (keyring), `engine/safety.py` (`check()` refuses submit/send in v0, `log_action`), `engine/cli.py` (`load`, `profile show`, `answers list`). 83 tests pass. Real data loaded into `data/jobpilot.db`. Removed the real phone number that had slipped into a docstring and a test.
 - 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
 
 
@@ -115,11 +119,11 @@ git status
 
 **You do** (the part that takes real thought, so start before the session)
 
-- [ ] Fill `data/profile.json` (the file exists but uses the old format; copy the new shape from `data/profile.example.json`) with your real details: name, email, phone, address, school, year level, graduation year, location, links (GitHub, LinkedIn, portfolio), job preferences, and a short blurb per project. `data/` is git-ignored, so it stays local.
-- [ ] Your 2 resume PDFs are in `data/resumes/` (`java dev.pdf`, `startup.pdf`; the file names don't matter). In `data/profile.json` list them under `resumes` with an `id` (A/B), a display `label` and the `file`. The resume picker ignores names and labels and judges by what each resume says. The employer sees a formal name like `Your Name.pdf`, set once as `upload_name`.
-- [ ] Write 20+ starter answers in `data/answers.json` (it exists with 6 fake examples; replace them. Format: `question`, `answer`, `location_scope`, `city`, `kind` = `normal` or `legal`), because only you know them: expected salary (Metro Manila vs remote vs abroad), relocation, availability and start date, work authorization, notice period, why you want to work here (generic), strengths, GPA if asked, and so on. Give each a location scope (any / city / remote / abroad).
-- [x] Mark each answer's `kind` in `answers.json` (done, reviewed Nov 9): `fixed` (use as written), `open` (AI may rewrite it to fit the job, from your facts only), `legal` (bank only, AI never touches), `consent` (bank only, always highlighted for you), `personal` (code fills it from the profile; never sent to AI).
-- [ ] Approve adding `pdfplumber` (reads resume text from the PDFs) and `keyring` (stores secrets in Windows Credential Manager). Just reply "yes"; Claude installs them and updates `requirements.txt`.
+- [x] Fill `data/profile.json` (the file exists but uses the old format; copy the new shape from `data/profile.example.json`) with your real details: name, email, phone, address, school, year level, graduation year, location, links (GitHub, LinkedIn, portfolio), job preferences, and a short blurb per project. `data/` is git-ignored, so it stays local.
+- [x] Your 2 resume PDFs are in `data/resumes/` (`java dev.pdf`, `startup.pdf`; the file names don't matter). In `data/profile.json` list them under `resumes` with an `id` (A/B), a display `label` and the `file`. The resume picker ignores names and labels and judges by what each resume says. The employer sees a formal name like `Your Name.pdf`, set once as `upload_name`.
+- [x] Write 20+ starter answers in `data/answers.json` (it exists with 6 fake examples; replace them. Format: `question`, `answer`, `location_scope`, `city`, `kind` = `fixed`, `open` or `protected`), because only you know them: expected salary (Metro Manila vs remote vs abroad), relocation, availability and start date, work authorization, notice period, why you want to work here (generic), strengths, GPA if asked, and so on. Give each a location scope (any / city / remote / abroad).
+- [x] Mark each answer's `kind` in `answers.json` (done, simplified Nov 9): `fixed` (use as written), `open` (AI may rewrite it to fit the job, from your facts only), `protected` (AI never sees or changes it; legal, consent and personal answers). A forgotten tag only makes the bot more careful, never riskier.
+- [x] Approve adding `pdfplumber` (reads resume text from the PDFs) and `keyring` (stores secrets in Windows Credential Manager). Just reply "yes"; Claude installs them and updates `requirements.txt`.
 
 **Prompt Claude Code**
 
@@ -139,8 +143,10 @@ git ls-files | Select-String "data/"   # only .gitkeep and *.example.json
 
 Manual:
 - [ ] Open the DB in any SQLite viewer; confirm both resume texts look right (not garbled).
-- [ ] `profile show` output contains no raw phone or address.
-- [ ] Search the repo for your phone number and email. It should appear only in git-ignored `data/`.
+- [x] `profile show` output contains no raw phone or address.
+- [x] Search the repo for your phone number and email. It should appear only in git-ignored `data/`.
+
+**Status: code and data done Nov 9. Only your visual check in a SQLite viewer is left.**
 
 **Done when:** profile, both resumes and 20+ answers load into SQLite, scoped lookup returns the right answer for "Makati" vs "remote", and tests pass with fake data only.
 
@@ -199,8 +205,8 @@ Manual: compare the printed field list with what you see on screen for each of t
 
 1. Teach-first: "Teach me RAG with 5 sentences: embed them with Ollama, ask a question, show the similarity scores."
 2. "Implement `engine/rag.py`: chunking (profile, resumes, projects, answers), embeddings with `nomic-embed-text`, sqlite-vec storage, `retrieve(question, k=5)`, a re-index command. Show the top 5 chunks for each question in my eval set."
-3. "Write `engine/forms/answers.py` with the rule order: personal field → code; legal/eligibility → answer bank only, else unknown list; known question → bank via RAG with scope; new open question → Ollama draft from retrieved facts only, flagged. Add `prompts/form.md`. Mock-mode tests for each rule."
-4. "Add the resume picker (job post text → A or B) and the test that **no prompt ever contains phone, address, email or ID numbers**."
+3. "Write `engine/forms/answers.py` with the rule order: by each answer's kind: protected → used exactly as saved, never sent to the AI, highlighted for review (and questions containing sensitive words are treated as protected even with no saved match); fixed → bank via RAG with scope, used as written; open and new non-sensitive questions → Ollama rewrites from retrieved facts only, flagged. Also add elaboration: a short saved \"Yes\" in a free-text box becomes \"Yes\" plus 1–2 sentences of real reasons from my answers, projects and resumes, flagged; radios and dropdowns get the plain answer; protected is never expanded. Add `prompts/form.md`. Mock-mode tests for each rule."
+4. "Add the resume picker (job post + the most similar chunks of each resume → A or B with evidence, never by file name) and the test that **no prompt ever contains phone, address, email or ID numbers**."
 5. "Run the answer engine against the 3 form fixtures with real Ollama in `dry_run` and print a table: field, answer, source, confidence."
 
 **Check**

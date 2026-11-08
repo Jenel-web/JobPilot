@@ -141,7 +141,7 @@ Eleven SQLite tables hold everything. Columns marked (enc) are encrypted from v3
 | `profile` | name, email (enc), phone (enc), address (enc), school, year_level, grad_year, location, links, preferred_locations, job_types |
 | `resumes` | id (A/B), label (your own name, display only), file_path, upload_name (the formal name the employer sees, default `<Full Name>.pdf`), extracted_text |
 | `chunks` | source (profile/resume/answer), text, embedding |
-| `answers` | question, answer, location_scope (any / city / remote / abroad), kind (fixed / open / legal / consent / personal), times_used |
+| `answers` | question, answer, location_scope (any / city / remote / abroad), kind (fixed / open / protected), times_used |
 | `unknown_questions` | question_text, job_id, first_seen, status (open/answered) |
 | `fills` | url, job_title, company, resume_id, filled_fields, flagged_fields, screenshot_path, status (filled → submitted / abandoned), filled_at, submitted_at (v0 filled pages history; v1 extends it into `applications`) |
 | `jobs` | source, url, title, company, location, job_type, posted_at, text, fingerprint (for duplicates), apply_type (native/external) |
@@ -886,11 +886,10 @@ Goal: for each field, the right source answers it: code, answer bank, or Ollama 
 - [ ] `retrieve(question, k=5)` returns chunks with a similarity score
 - [ ] Re-index command; answer bank edits re-index their rows
 - [ ] `engine/forms/answers.py`: the rules per field, in this order:
-  - `personal` (name, email, phone, address, gender, ethnicity, marital status, disability, veteran, pronouns) → code from the profile; never embedded, never sent to AI
-  - `legal` (work authorization, visa, "have you ever", convictions, relatives) → answer bank only; otherwise unknown-questions list
-  - `consent` (background check, drug test, terms, data processing) → answer bank only, always highlighted so you read it before submitting
+  - `protected` (name, email, phone, work authorization, visa, "have you ever", convictions, consent to checks or terms, gender, ethnicity, disability) → the answer text is used exactly as saved and the AI never sees or changes it; highlighted for your review. Questions with sensitive words (visa, authorized, convicted, citizen, consent, relative, disability…) are treated as `protected` even if nothing saved matches, and then go to the unknown-questions list. A new answer defaults to `protected`
   - `fixed` → answer bank via RAG, used as written, using the scope that matches the job's location
   - `open` (about you, why this company, strengths, projects) and any new open question → Ollama rewrites the saved answer to fit this job, using only your saved answers, projects and resume facts; always flagged
+- [ ] **Elaboration:** when a `fixed` answer is a short yes/no but the field is a free-text box (e.g. "Do you have Docker experience? Please explain"), Ollama expands it into 1–2 sentences using only related facts from your answers, projects and resumes, and flags it. Yes/no radios and dropdowns get the plain answer. `protected` answers are never expanded
 - [ ] `prompts/form.md`: field labels + allowed facts → `{field, answer, confidence, source}`; "use only the provided facts"
 - [ ] Pydantic validation of Ollama JSON; retry once, then log and skip that field
 - [ ] Resume picker: job post text from the page + the most similar chunks of each resume (RAG) → `{resume: "A"|"B", reason, evidence}`. It never decides from the file name or label

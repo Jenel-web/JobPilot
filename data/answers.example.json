@@ -32,13 +32,13 @@
     "answer": "Yes",
     "location_scope": "any",
     "city": "",
-    "kind": "legal"
+    "kind": "protected"
   },
   {
     "question": "Do you now or in the future require visa sponsorship?",
     "answer": "No (for roles in the Philippines)",
     "location_scope": "city",
     "city": "Metro Manila",
-    "kind": "legal"
+    "kind": "protected"
   }
 ]
