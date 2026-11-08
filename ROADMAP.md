@@ -36,15 +36,16 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 6. `.gitignore` now allows `data/*.example.json`, so `profile.example.json` can be committed (it was being ignored by `data/*`).
 7. The dashboard is untouched. Home, Applications and Review are v1 screens built early. Phase 4 adds the controls page beside them and reuses the existing components.
 
-**Still open in Phase 0:** only the Ollama speed check below.
+**Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 0 at about 98%. Next: run the Ollama speed check, commit, then start Phase 1.
+**Current position:** v0, Phase 0 done once committed. Next: start Phase 1.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
 - 2026-11-09: plan changed to RAG + form filler; SPEC.md, CLAUDE.md and this roadmap rewritten.
 - 2026-11-09: Phase 0 cleanup (Python 3.13 docs, old matcher removed, `engine/forms/`, `fixtures/forms/`, `prompts/` added).
 - 2026-11-09: `form_answer` and `resume_pick` AI tasks added with fixtures and mock-mode tests (40 tests pass).
+- 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
 
 
 ---
@@ -79,7 +80,7 @@ bullets. Propose a plan for THIS session only (max 3 steps). Wait for my OK.
 
 - [x] Python version: 3.13 everywhere (docs updated).
 - [x] Stray `.next/` deleted.
-- [ ] Run `ollama run llama3.1:8b "hi"` once to confirm it answers on your GPU or CPU, and note how long it takes. This sets your expectations for Phase 3 speed.
+- [x] Ollama speed check: first call about 20 s (model loading), later calls quick. Idle models unload after about 5 min, so consider `keep_alive` or a warm-up call in Phase 4.
 - [x] Old `jobpilot/` code removed (still in git history).
 
 **Prompt Claude Code**
@@ -102,7 +103,7 @@ python -c "from engine.ai import ask_ai; print(ask_ai('resume_pick', 'x'))"
 git status
 ```
 
-**Done when:** tests pass, both new tasks answer in mock mode, `git status` is clean after your commit, and Python versions match everywhere. (Everything is met except your commit and the Ollama speed check.)
+**Done when:** tests pass, both new tasks answer in mock mode, `git status` is clean after your commit, and Python versions match everywhere. (Everything is met except your commit.)
 
 ---
 
