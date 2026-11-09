@@ -19,9 +19,11 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
 | `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
-| Tests | 83 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
+| Tests | 86 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
+| `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
+| `engine/forms/reader.py` | Not started | Next |
 | `rag.py`, `api.py` | Empty stubs | Phases 3 and 4 |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
 | `requirements.txt` | Incomplete | Has `ollama`, `pydantic`, `pytest`. Playwright, FastAPI, uvicorn, pdfplumber, keyring, sqlite-vec still to add, one at a time with your OK |
@@ -39,7 +41,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 1 done (only your look at the database in a viewer is left). Next: Phase 2, the form reader.
+**Current position:** v0, Phase 2 started: browser launcher built (`browser open`), not yet tried by you. Next: you log in and open your company career page, then I build `reader.py`.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -51,6 +53,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-09: `pdfplumber` and `keyring` approved and installed (`requirements.txt` updated); profile.json updated to the new shape; both resume PDFs have readable text.
 - 2026-11-09: Phase 1 step 1: `engine/db.py` (6 tables, safe defaults, constraints) + `tests/test_db.py` (52 tests pass).
 - 2026-11-09: Phase 1 complete: `engine/profile.py` (loads profile, resumes via pdfplumber, 96 answers; scoped `lookup_answer`; masked `profile_summary`), `engine/secrets.py` (keyring), `engine/safety.py` (`check()` refuses submit/send in v0, `log_action`), `engine/cli.py` (`load`, `profile show`, `answers list`). 83 tests pass. Real data loaded into `data/jobpilot.db`. Removed the real phone number that had slipped into a docstring and a test.
+- 2026-11-09: Phase 2 step 1: `playwright` 1.64.1 + Chromium installed; `engine/forms/browser.py` (own persistent profile, visible window, debugging port on 127.0.0.1 only) and `python -m engine.cli browser open`; 86 tests pass. Decision: the bot uses its OWN browser profile, never your everyday Chrome.
 - 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
 
 
@@ -142,7 +145,7 @@ git ls-files | Select-String "data/"   # only .gitkeep and *.example.json
 ```
 
 Manual:
-- [ ] Open the DB in any SQLite viewer; confirm both resume texts look right (not garbled).
+- [x] Open the DB in any SQLite viewer; confirm both resume texts look right (not garbled).
 - [x] `profile show` output contains no raw phone or address.
 - [x] Search the repo for your phone number and email. It should appear only in git-ignored `data/`.
 
@@ -158,7 +161,7 @@ Manual:
 
 **You do**
 
-- [ ] Approve adding `playwright`, then run `playwright install chromium`.
+- [x] Approve adding `playwright`, then run `playwright install chromium` (done Nov 9).
 - [ ] Pick your **3 target forms** and keep them stable for the whole project:
   1. A real Prosple application form (log in by hand in the bot browser).
   2. A Google Form. Make your own test one with text, long text, dropdown, radio, checkbox and file upload fields.
@@ -170,7 +173,7 @@ Manual:
 **Prompt Claude Code**
 
 1. Explain-first: "How does Playwright find elements, why prefer role/label/text selectors, and how does a persistent browser profile keep me logged in? Don't code."
-2. "Create the bot browser launcher in `engine/forms/` (persistent profile in `data/browser_profile/`, headed). One command opens it so I can log in and navigate."
+2. ~~"Create the bot browser launcher in `engine/forms/` (persistent profile in `data/browser_profile/`, headed). One command opens it so I can log in and navigate."~~ Done: `engine/forms/browser.py`.
 3. "Write `engine/forms/reader.py` and a `FormField` Pydantic model. Read label (from label, aria-label, placeholder, nearby text), type, required, options. Wrap every read in `safety.check()` and log it."
 4. "Add a command that saves the current page's HTML to `fixtures/forms/` and sanitizes personal data. Then write offline tests against the 3 saved forms."
 
