@@ -3,7 +3,10 @@
     python -m engine.cli load              copy profile.json, resumes and answers.json into the database
     python -m engine.cli profile show      print your profile (email and phone masked)
     python -m engine.cli answers list      print the answer bank (optionally --kind fixed|open|protected)
-    python -m engine.cli forms read        list the fields of the page open in the bot's browser (read-only)
+    python -m engine.cli rag reindex       rebuild the search index (run after `load` or any data change)
+    python -m engine.cli rag ask "..."     show the 5 chunks closest to a question (--source, -k)
+    python -m engine.cli rag eval          top 5 chunks for every question in tests/fixtures/eval_questions.json
+    python -m engine.cli forms read       list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
@@ -32,6 +35,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     answers = sub.add_parser("answers", help="answer bank commands").add_subparsers(dest="action", required=True)
     listing = answers.add_parser("list", help="print the answer bank")
     listing.add_argument("--kind", choices=ANSWER_KINDS, help="only this kind")
+    rag = sub.add_parser("rag", help="search index commands").add_subparsers(dest="action", required=True)
+    rag.add_parser("reindex", help="rebuild the index from the database")
+    asking = rag.add_parser("ask", help="show the chunks closest to a question")
+    asking.add_argument("question")
+    asking.add_argument("-k", type=int, default=5, help="how many chunks (default 5)")
+    asking.add_argument("--source", choices=("profile", "project", "resume", "answer"), action="append")
+    evaluating = rag.add_parser("eval", help="run every eval question and show the top chunks")
+    evaluating.add_argument("--file", default="tests/fixtures/eval_questions.json")
     browser = sub.add_parser("browser", help="the bot's browser").add_subparsers(dest="action", required=True)
     opener = browser.add_parser("open", help="open the bot's browser window")
     opener.add_argument("--url", help="optional page to start on")
@@ -51,6 +62,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "load":
             counts = load_all(conn)
             print(f"Loaded profile, {counts['resumes']} resumes and {counts['answers']} answers.")
+        elif args.command == "rag":
+            return _rag(conn, args)
         elif args.command == "forms":
             return _capture_form(conn, args.name) if args.action == "capture" else _read_forms(conn, args.json)
         elif args.command == "profile":
@@ -63,6 +76,63 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         conn.close()
     return 0
+
+
+def _rag(conn, args) -> int:  # type: ignore[no-untyped-def]
+    """Run a ``rag`` command. Errors are printed, not raised."""
+    from pathlib import Path
+
+    from engine import rag
+    from engine.ai import AIError
+    from engine.settings import ROOT
+
+    try:
+        mode = rag.embedder_label()
+        if args.action == "reindex":
+            counts = rag.reindex(conn)
+            print(f"Embedder: {mode}" + ("  (FAKE vectors: set run_mode to dry_run for real ones)" if mode == "mock" else ""))
+            print("Indexed " + ", ".join(f"{n} {source}" for source, n in counts.items()) + " chunks.")
+        elif args.action == "ask":
+            print(f"Embedder: {mode}\n")
+            _print_hits(conn, rag.retrieve(conn, args.question, args.k, sources=tuple(args.source or ()) or None))
+        else:
+            path = Path(args.file) if Path(args.file).is_absolute() else ROOT / args.file
+            _run_eval(conn, path, rag, mode)
+    except (rag.RagError, AIError, OSError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _print_hits(conn, hits) -> None:  # type: ignore[no-untyped-def]
+    """Print search results. A saved answer is shown unless it is protected (then only its kind)."""
+    for rank, hit in enumerate(hits, start=1):
+        text = _shorten(hit.text, 150)
+        if hit.source == "answer":
+            rows = conn.execute("SELECT kind FROM answers WHERE question = ?", (hit.ref,)).fetchall()
+            kinds = sorted({r["kind"] for r in rows})
+            text = f"{text}   [saved: {'/'.join(kinds)}, {len(rows)} variant(s)]"
+        print(f"{rank}. {hit.score:.3f}  {hit.source}:{_shorten(hit.ref, 30)}\n      {text}")
+
+
+def _run_eval(conn, path, rag, mode: str) -> None:  # type: ignore[no-untyped-def]
+    """Print the top 5 chunks for every eval question, and where the expected saved question ranked."""
+    questions = json.loads(path.read_text(encoding="utf-8-sig"))["questions"]
+    print(f"Embedder: {mode}   {len(questions)} questions from {path.name}\n")
+    ranks: list[int | None] = []
+    for q in questions:
+        hits = rag.retrieve(conn, q["form_question"], 5)
+        print(f"[{q['id']}] {q['form_question']}   (expects: {q['expect_source']})")
+        _print_hits(conn, hits)
+        expected = q.get("expect_saved_question")
+        if expected and not expected.startswith("<"):
+            rank = next((i for i, h in enumerate(hits, 1) if h.source == "answer" and h.ref == expected), None)
+            ranks.append(rank)
+            print(f"   expected saved question: {'rank ' + str(rank) if rank else 'NOT in top 5'}")
+        print()
+    if ranks:
+        print(f"Saved question found: first {sum(r == 1 for r in ranks)}/{len(ranks)}, "
+              f"top 5 {sum(r is not None for r in ranks)}/{len(ranks)}")
 
 
 def _shorten(text: str, limit: int = 110) -> str:

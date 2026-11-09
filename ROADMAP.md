@@ -24,7 +24,8 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
 | `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
 | `engine/forms/reader.py`, `capture.py` | Done (Phase 2) | Reader + capture; 1 real form saved, 2 more wanted (Google Form, Prosple) |
-| `rag.py`, `api.py` | Empty stubs | Phases 3 and 4 |
+| `engine/rag.py` | Built (Phase 3 step 2) | Chunks, `sqlite-vec` index, `retrieve()`, `rag reindex/ask/eval`; tested with mock vectors only. Not yet judged on real Ollama vectors |
+| `api.py` | Empty stub | Phase 4 |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
 | `requirements.txt` | Incomplete | Has `ollama`, `pydantic`, `pytest`. Playwright, FastAPI, uvicorn, pdfplumber, keyring, sqlite-vec still to add, one at a time with your OK |
 | Dashboard (`dashboard/`) | Built ahead of schedule | Shell, 25 shared UI components, Home, Applications and Review pages, all on mock data. None of the 4 v0 controls-page sections exist yet |
@@ -60,6 +61,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-10: Phase 2 closed after codebase review (109 tests pass, tree clean, no personal data or hardcoded paths in code/fixtures). Browser launcher now uses installed Chrome with the automation flag off (your change); you still solve any bot check by hand.
 - 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
 - 2026-11-10: Phase 3 prep: `sqlite-vec` 0.1.9 approved and pinned; `ai.embed()` added (the only place that calls the embedding model; deterministic mock vectors; `embed_model` setting); `tests/fixtures/eval_questions.sample.json` format added. 120 tests pass. Next: `engine/rag.py`.
+- 2026-11-10: Phase 3 step 2: `engine/rag.py` (chunker with email/phone/ID scrubbing, answer chunks hold the question only, `sqlite-vec` cosine index, `retrieve(question, k, sources)`, index remembers its embedder and refuses a mismatched search) + `rag reindex`, `rag ask`, `rag eval` commands. 136 tests pass. Real data indexed in mock mode: 121 chunks, none contains email, phone, address or GPA. Next: re-index with real Ollama vectors (needs `run_mode` set to `dry_run` by you) and judge the top 5 per eval question.
 
 
 ---
