@@ -95,6 +95,7 @@ def _rag(conn, args) -> int:  # type: ignore[no-untyped-def]
         elif args.action == "ask":
             print(f"Embedder: {mode}\n")
             _print_hits(conn, rag.retrieve(conn, args.question, args.k, sources=tuple(args.source or ()) or None))
+            print(_verdict(rag.match_saved_question(conn, args.question)))
         else:
             path = Path(args.file) if Path(args.file).is_absolute() else ROOT / args.file
             _run_eval(conn, path, rag, mode)
@@ -111,25 +112,51 @@ def _print_hits(conn, hits) -> None:  # type: ignore[no-untyped-def]
         if hit.source == "answer":
             rows = conn.execute("SELECT kind FROM answers WHERE question = ?", (hit.ref,)).fetchall()
             kinds = sorted({r["kind"] for r in rows})
-            text = f"{text}   [saved: {'/'.join(kinds)}, {len(rows)} variant(s)]"
+            via = f"   (via wording: {_shorten(hit.text, 60)})" if hit.text != hit.ref else ""
+            text = f"{_shorten(hit.ref, 150)}   [saved: {'/'.join(kinds)}, {len(rows)} variant(s)]{via}"
         print(f"{rank}. {hit.score:.3f}  {hit.source}:{_shorten(hit.ref, 30)}\n      {text}")
 
 
+def _verdict(m) -> str:  # type: ignore[no-untyped-def]
+    """One line telling you whether the closest saved question is trusted."""
+    if m.matched:
+        return f"   => MATCH ({m.hit.score:.3f} >= {m.threshold}): recommended"
+    best = f"best {m.hit.score:.3f}" if m.hit else "nothing saved"
+    action = "fill allowed but NOT recommended" if m.fill_allowed else "nothing to fill"
+    return f"   => NO MATCH ({best} < {m.threshold}): goes to unknown questions; {action}"
+
+
 def _run_eval(conn, path, rag, mode: str) -> None:  # type: ignore[no-untyped-def]
-    """Print the top 5 chunks for every eval question, and where the expected saved question ranked."""
+    """Print the top 5 chunks for every eval question, the match verdict, and where the expected question ranked."""
     questions = json.loads(path.read_text(encoding="utf-8-sig"))["questions"]
-    print(f"Embedder: {mode}   {len(questions)} questions from {path.name}\n")
+    print(f"Embedder: {mode}   {len(questions)} questions from {path.name}")
+    # An eval question copied word for word into also_asked_as would make the test meaningless.
+    stored = {" ".join(r["alias"].lower().split()) for r in conn.execute("SELECT alias FROM answer_aliases")}
+    copied = [q["id"] for q in questions if " ".join(q["form_question"].lower().split()) in stored]
+    if copied:
+        print(f"WARNING: these eval questions are copied into also_asked_as, so they test nothing: {copied}")
+    print()
     ranks: list[int | None] = []
+    agree: list[bool] = []
     for q in questions:
         hits = rag.retrieve(conn, q["form_question"], 5)
         print(f"[{q['id']}] {q['form_question']}   (expects: {q['expect_source']})")
         _print_hits(conn, hits)
+        verdict = rag.match_saved_question(conn, q["form_question"])
+        print(_verdict(verdict))
+        if q["expect_source"] in ("answer_bank", "ai_draft"):  # profile_code fields never use the bank
+            ok = verdict.matched == (q["expect_source"] == "answer_bank")
+            agree.append(ok)
+            if not ok:
+                print("   !! verdict differs from what you expected for this question")
         expected = q.get("expect_saved_question")
         if expected and not expected.startswith("<"):
             rank = next((i for i, h in enumerate(hits, 1) if h.source == "answer" and h.ref == expected), None)
             ranks.append(rank)
             print(f"   expected saved question: {'rank ' + str(rank) if rank else 'NOT in top 5'}")
         print()
+    if agree:
+        print(f"Match verdict agrees with your expectation: {sum(agree)}/{len(agree)} (threshold {rag.MATCH_THRESHOLD})")
     if ranks:
         print(f"Saved question found: first {sum(r == 1 for r in ranks)}/{len(ranks)}, "
               f"top 5 {sum(r is not None for r in ranks)}/{len(ranks)}")

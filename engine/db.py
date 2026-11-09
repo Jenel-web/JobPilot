@@ -8,6 +8,7 @@ Tables
 ``profile``            one row: your fixed details (code fills forms from here)
 ``resumes``            two rows (A and B): file path and the text extracted from the PDF
 ``answers``            your answer bank: question, answer, location scope, kind
+``answer_aliases``     other wordings of a saved question (helps RAG find it)
 ``unknown_questions``  questions the bot could not answer; you answer each once
 ``fills``              history: one row per "Fill this page"
 ``action_log``         every step the bot took
@@ -87,6 +88,14 @@ CREATE TABLE IF NOT EXISTS answers (
     UNIQUE (question, location_scope, city)
 );
 
+-- Other ways a form may word a saved question (``also_asked_as`` in answers.json).
+-- Shared by every location variant of that question. Rebuilt from the file on each load.
+CREATE TABLE IF NOT EXISTS answer_aliases (
+    question TEXT NOT NULL,
+    alias    TEXT NOT NULL,
+    UNIQUE (question, alias)
+);
+
 CREATE TABLE IF NOT EXISTS unknown_questions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     question_text TEXT NOT NULL,
@@ -132,7 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_fills_status ON fills(status);
 CREATE INDEX IF NOT EXISTS idx_log_fill ON action_log(fill_id);
 """
 
-TABLES = ("profile", "resumes", "answers", "unknown_questions", "fills", "action_log")
+TABLES = ("profile", "resumes", "answers", "answer_aliases", "unknown_questions", "fills", "action_log")
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:

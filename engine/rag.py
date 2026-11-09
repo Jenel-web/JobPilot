@@ -15,12 +15,14 @@ Privacy by design (CLAUDE.md rules 3, 4 and 5b)
 * Phone, email, address and ID numbers never become chunks: the profile chunks
   leave them out, and resume text is scrubbed before it is cut.
 * The GPA is never a chunk (it is answered only from the answer bank).
-* An **answer chunk holds only the QUESTION**, never the answer. The answer
+* An **answer chunk holds only a QUESTION wording**, never the answer. The answer
   stays in the ``answers`` table and is looked up by question text, so even a
   ``protected`` answer is never embedded or placed in a prompt.
-* Answers that differ only by location (Metro Manila vs remote) share one
-  chunk, so they do not crowd the top 5. The caller picks the right one with
-  ``profile.lookup_answer(question, job_scope=..., job_city=...)``.
+* Each saved question gets one chunk for itself and one per alternate wording
+  (``also_asked_as`` in answers.json). Search returns each saved question at
+  most once (its best wording), and answers that differ only by location
+  (Metro Manila vs remote) share those chunks. The caller picks the right
+  variant with ``profile.lookup_answer(question, job_scope=..., job_city=...)``.
 """
 
 from __future__ import annotations
@@ -36,9 +38,35 @@ from engine.settings import Settings, load_settings
 
 SOURCES = ("profile", "project", "resume", "answer")
 
-# nomic-embed-text works best when the text says what role it plays.
+FACT_SOURCES = ("profile", "project", "resume")
+
+# nomic-embed-text works best when the text says what role it plays:
+# * question vs saved question is a SYMMETRIC comparison (two texts of the same
+#   kind), so both sides get "clustering: ". Tested on the eval set: 10/11 saved
+#   questions ranked first, against 7/11 with the search prefixes.
+# * question vs facts (projects, resumes) is a SEARCH (short query, longer
+#   documents), so those use "search_query: " and "search_document: ".
+_ANSWER_PREFIX = "clustering: "
 _DOC_PREFIX = "search_document: "
 _QUERY_PREFIX = "search_query: "
+
+# Bump when the way chunks are embedded changes, so an old index is rebuilt.
+INDEX_VERSION = 2
+
+
+def _doc_prefix(source: str) -> str:
+    return _ANSWER_PREFIX if source == "answer" else _DOC_PREFIX
+
+
+def _query_prefix(source: str) -> str:
+    return _ANSWER_PREFIX if source == "answer" else _QUERY_PREFIX
+
+# A saved question counts as "the same question" only at or above this similarity.
+# Below it the question is flagged NO MATCH and goes to the unknown questions list.
+# Was 0.7 with the old search prefixes. The symmetric "clustering:" prefix shifts every
+# score up (unrelated questions now land around 0.72-0.80), so 0.7 would accept everything.
+# 0.85 on the Nov 10 eval: 29/34 real matches accepted, 9/10 non-matches rejected.
+MATCH_THRESHOLD = 0.85
 
 MAX_CHUNK_CHARS = 700  # a resume chunk is cut before it grows past this
 MIN_CHUNK_CHARS = 25  # shorter pieces (page numbers, stray bullets) are dropped
@@ -60,6 +88,41 @@ class Chunk:
     source: str  # one of SOURCES
     ref: str  # profile section, project name, resume id (+ part number) or answer question
     text: str
+
+
+@dataclass(frozen=True)
+class SavedMatch:
+    """Does a form question match one of your saved answers well enough to trust?
+
+    ``matched`` is False when the best saved question scored under the threshold
+    (or there is none). Then the question belongs on the unknown questions list
+    (``add_to_unknown``). It may still be filled, but only as a flagged,
+    NOT recommended guess (``recommended`` is False), and only if ``fill_allowed``.
+    """
+
+    hit: Hit | None  # the closest saved question, even when it is too weak
+    matched: bool
+    kinds: tuple[str, ...]  # kind(s) of the closest saved question: fixed / open / protected
+    threshold: float
+
+    @property
+    def recommended(self) -> bool:
+        """True only for a real match; a weak one must be shown as 'not recommended'."""
+        return self.matched
+
+    @property
+    def add_to_unknown(self) -> bool:
+        return not self.matched
+
+    @property
+    def fill_allowed(self) -> bool:
+        """May the closest saved answer be filled in anyway (flagged)?
+
+        Yes for every kind, protected included (your decision). The answer still
+        comes only from your answer bank, never from the AI, and a weak match must
+        always be shown as NOT recommended so you check it before you submit.
+        """
+        return self.hit is not None
 
 
 @dataclass(frozen=True)
@@ -178,9 +241,21 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
         pieces = split_resume(scrub(resume["extracted_text"], private))
         chunks += [Chunk("resume", f"{resume['id']}#{n}", piece) for n, piece in enumerate(pieces, start=1)]
 
-    # Only the QUESTION is embedded; one chunk per distinct question.
+    # Only QUESTIONS are embedded: each saved question plus its alternate wordings
+    # (``also_asked_as``), all pointing (``ref``) at the saved question.
+    wordings: dict[str, list[str]] = {}
     for row in conn.execute("SELECT DISTINCT question FROM answers ORDER BY question"):
-        chunks.append(Chunk("answer", row["question"], row["question"]))
+        wordings[row["question"]] = [row["question"]]
+    for row in conn.execute("SELECT question, alias FROM answer_aliases ORDER BY question, alias"):
+        if row["question"] in wordings:
+            wordings[row["question"]].append(row["alias"])
+    for question, texts in wordings.items():
+        seen: set[str] = set()
+        for text in texts:
+            key = " ".join(text.lower().split())
+            if key and key not in seen:
+                seen.add(key)
+                chunks.append(Chunk("answer", question, text.strip()))
     return chunks
 
 
@@ -220,7 +295,8 @@ def embedder_label(settings: Settings | None = None) -> str:
     its label and refuses to be searched by a different one.
     """
     settings = settings or load_settings()
-    return "mock" if settings.run_mode == "mock" or settings.ai_provider == "mock" else settings.embed_model
+    model = "mock" if settings.run_mode == "mock" or settings.ai_provider == "mock" else settings.embed_model
+    return f"{model}/v{INDEX_VERSION}"
 
 
 def _unit(vector: list[float]) -> list[float]:
@@ -250,7 +326,7 @@ def reindex(conn: sqlite3.Connection, settings: Settings | None = None) -> dict[
     init_rag(conn)
     settings = settings or load_settings()
     chunks = build_chunks(conn)
-    vectors = _embed_checked([_DOC_PREFIX + c.text for c in chunks], settings)
+    vectors = _embed_checked([_doc_prefix(c.source) + c.text for c in chunks], settings)
     with conn:
         conn.execute(
             "INSERT INTO rag_meta (key, value) VALUES ('embedder', ?) "
@@ -271,6 +347,25 @@ def reindex(conn: sqlite3.Connection, settings: Settings | None = None) -> dict[
     for chunk in chunks:
         counts[chunk.source] += 1
     return counts
+
+
+def match_saved_question(
+    conn: sqlite3.Connection,
+    question: str,
+    *,
+    threshold: float = MATCH_THRESHOLD,
+    settings: Settings | None = None,
+) -> SavedMatch:
+    """Find the closest saved question and say whether it is a real match (score >= threshold).
+
+    This is the rule the answer engine uses before trusting the answer bank.
+    """
+    hits = retrieve(conn, question, 1, sources=("answer",), settings=settings)
+    if not hits:
+        return SavedMatch(None, False, (), threshold)
+    best = hits[0]
+    rows = conn.execute("SELECT DISTINCT kind FROM answers WHERE question = ?", (best.ref,)).fetchall()
+    return SavedMatch(best, best.score >= threshold, tuple(sorted(r["kind"] for r in rows)), threshold)
 
 
 def retrieve(
@@ -305,20 +400,33 @@ def retrieve(
             f"with {embedder_label(settings)!r}. Run: python -m engine.cli rag reindex"
         )
 
-    [vector] = _embed_checked([_QUERY_PREFIX + question.strip()], settings)
-    # A source filter is applied after the search, so search wider and trim to k.
-    limit = total if sources else min(k, total)
-    rows = conn.execute(
-        "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
-        (sqlite_vec.serialize_float32(vector), limit),
-    ).fetchall()
-
+    wanted = set(sources or SOURCES)
     hits: list[Hit] = []
-    for row in rows:
-        chunk = conn.execute("SELECT id, source, ref, text FROM chunks WHERE id = ?", (row["rowid"],)).fetchone()
-        if chunk is None or (sources and chunk["source"] not in sources):
+    # Saved questions and facts were embedded with different prefixes, so each
+    # group is searched with a query embedded the matching way.
+    for group in (("answer",), FACT_SOURCES):
+        if not wanted & set(group):
             continue
-        hits.append(Hit(chunk["id"], chunk["source"], chunk["ref"], chunk["text"], round(1.0 - row["distance"], 4)))
-        if len(hits) == k:
+        [vector] = _embed_checked([_query_prefix(group[0]) + question.strip()], settings)
+        rows = conn.execute(
+            "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+            (sqlite_vec.serialize_float32(vector), min(total, 4096)),  # small index: rank all, filter below
+        ).fetchall()
+        for row in rows:
+            chunk = conn.execute("SELECT id, source, ref, text FROM chunks WHERE id = ?", (row["rowid"],)).fetchone()
+            if chunk is not None and chunk["source"] in wanted and chunk["source"] in group:
+                hits.append(Hit(chunk["id"], chunk["source"], chunk["ref"], chunk["text"], round(1.0 - row["distance"], 4)))
+
+    hits.sort(key=lambda h: -h.score)
+    # One saved question may have several wordings; keep only its best-scoring one.
+    best: list[Hit] = []
+    seen_questions: set[str] = set()
+    for hit in hits:
+        if hit.source == "answer":
+            if hit.ref in seen_questions:
+                continue
+            seen_questions.add(hit.ref)
+        best.append(hit)
+        if len(best) == k:
             break
-    return hits
+    return best

@@ -204,7 +204,122 @@ def test_real_ollama_path_sends_prefixed_text_in_batches(conn: sqlite3.Connectio
     rag.reindex(conn, real)
     rag.retrieve(conn, "When can you start?", 3, settings=real)
     assert max(sizes) <= 32
-    assert all(t.startswith(("search_document: ", "search_query: ")) for t in seen)
+    assert all(t.startswith(("search_document: ", "search_query: ", "clustering: ")) for t in seen)
     assert seen[-1] == "search_query: When can you start?"
     for secret in (FAKE_EMAIL, "900 123 4567", PROTECTED_ANSWER):
         assert not any(secret in t for t in seen)
+
+
+# ---- the "no match" rule ------------------------------------------------------------
+
+
+def test_exact_saved_question_is_a_recommended_match(conn: sqlite3.Connection) -> None:
+    rag.reindex(conn, MOCK)
+    m = rag.match_saved_question(conn, "When can you start?", settings=MOCK)
+    assert m.matched and m.recommended and m.fill_allowed and not m.add_to_unknown
+    assert m.hit is not None and m.hit.ref == "When can you start?"
+
+
+def test_unrelated_question_is_no_match_and_goes_to_unknown(conn: sqlite3.Connection) -> None:
+    rag.reindex(conn, MOCK)
+    m = rag.match_saved_question(conn, "How do you handle critical feedback on your work?", settings=MOCK)
+    assert not m.matched and not m.recommended and m.add_to_unknown
+    assert m.hit is not None  # the closest one is still reported, so you can see it was weak
+
+
+def test_weak_match_may_fill_a_non_protected_answer_but_not_recommended(conn: sqlite3.Connection) -> None:
+    rag.reindex(conn, MOCK)
+    m = rag.match_saved_question(conn, "When can you start?", threshold=1.01, settings=MOCK)
+    assert not m.matched and not m.recommended and m.add_to_unknown
+    assert m.kinds == ("fixed",) and m.fill_allowed
+
+
+def test_weak_match_may_fill_a_protected_answer_but_not_recommended(conn: sqlite3.Connection) -> None:
+    rag.reindex(conn, MOCK)
+    m = rag.match_saved_question(conn, "Have you ever been convicted of a crime?", threshold=1.01, settings=MOCK)
+    assert not m.matched and "protected" in m.kinds
+    assert m.fill_allowed and not m.recommended and m.add_to_unknown
+
+
+def test_nothing_saved_means_nothing_to_fill() -> None:
+    m = rag.SavedMatch(hit=None, matched=False, kinds=(), threshold=0.7)
+    assert not m.fill_allowed and m.add_to_unknown
+
+
+def test_default_threshold_is_calibrated_for_the_clustering_prefix() -> None:
+    assert rag.MATCH_THRESHOLD == 0.85
+
+
+# ---- alternate wordings and prefixes ------------------------------------------------
+
+
+def add_alias(conn: sqlite3.Connection, question: str, alias: str) -> None:
+    conn.execute("INSERT INTO answer_aliases (question, alias) VALUES (?, ?)", (question, alias))
+    conn.commit()
+
+
+def test_alias_becomes_a_chunk_pointing_at_the_saved_question(conn: sqlite3.Connection) -> None:
+    add_alias(conn, "When can you start?", "Earliest possible start date")
+    rag.reindex(conn, MOCK)
+    rows = conn.execute("SELECT ref FROM chunks WHERE text = 'Earliest possible start date'").fetchall()
+    assert [r["ref"] for r in rows] == ["When can you start?"]
+
+
+def test_alias_lets_a_reworded_question_match(conn: sqlite3.Connection) -> None:
+    question = "Earliest possible start date please"
+    rag.reindex(conn, MOCK)
+    before = rag.match_saved_question(conn, question, settings=MOCK)
+    add_alias(conn, "When can you start?", "Earliest possible start date")
+    rag.reindex(conn, MOCK)
+    after = rag.match_saved_question(conn, question, settings=MOCK)
+    assert after.hit is not None and after.hit.ref == "When can you start?"
+    assert after.hit.text == "Earliest possible start date"  # which wording matched
+    assert before.hit is None or after.hit.score > before.hit.score
+
+
+def test_each_saved_question_appears_once_in_results(conn: sqlite3.Connection) -> None:
+    for alias in ("start date", "start date availability", "when start"):
+        add_alias(conn, "When can you start?", alias)
+    rag.reindex(conn, MOCK)
+    hits = rag.retrieve(conn, "start date", 5, sources=("answer",), settings=MOCK)
+    refs = [h.ref for h in hits]
+    assert len(refs) == len(set(refs))
+
+
+def test_alias_for_an_unknown_question_is_ignored(conn: sqlite3.Connection) -> None:
+    add_alias(conn, "A question that is not saved", "orphan wording")
+    rag.reindex(conn, MOCK)
+    assert conn.execute("SELECT count(*) FROM chunks WHERE text = 'orphan wording'").fetchone()[0] == 0
+
+
+def test_alias_text_never_includes_answers(conn: sqlite3.Connection) -> None:
+    add_alias(conn, "Have you ever been convicted of a crime?", "Any criminal record?")
+    rag.reindex(conn, MOCK)
+    assert PROTECTED_ANSWER not in all_chunk_text(conn)
+
+
+def test_saved_questions_use_the_symmetric_prefix(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def fake(model: str, texts: list[str]) -> list[list[float]]:
+        seen.extend(texts)
+        return [ai._mock_vector(t) for t in texts]
+
+    monkeypatch.setattr(ai, "_call_ollama_embed", fake)
+    real = Settings(run_mode="dry_run", ai_provider="ollama")
+    rag.reindex(conn, real)
+    assert "clustering: When can you start?" in seen
+    assert any(t.startswith("search_document: Project: PetTracker") for t in seen)
+    seen.clear()
+    rag.match_saved_question(conn, "Start date?", settings=real)
+    assert seen == ["clustering: Start date?"]
+    seen.clear()
+    rag.retrieve(conn, "Android", 3, sources=("project",), settings=real)
+    assert seen == ["search_query: Android"]
+
+
+def test_old_index_version_must_be_rebuilt(conn: sqlite3.Connection) -> None:
+    rag.reindex(conn, MOCK)
+    conn.execute("UPDATE rag_meta SET value = 'mock' WHERE key = 'embedder'")
+    with pytest.raises(rag.RagError, match="rag reindex"):
+        rag.retrieve(conn, "salary", settings=MOCK)

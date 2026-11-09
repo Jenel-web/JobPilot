@@ -99,6 +99,9 @@ class AnswerEntry(BaseModel):
     location_scope: Literal["any", "city", "remote", "abroad"] = "any"
     city: str = ""
     kind: Literal["fixed", "open", "protected"] = "protected"  # safest default
+    # Other ways a form may word this question. They only help RAG find it;
+    # the answer above is used for all of them.
+    also_asked_as: list[str] = []
 
 
 # ---- reading files ----------------------------------------------------------
@@ -212,6 +215,9 @@ def load_answers(conn: sqlite3.Connection, answers_path: Path = ANSWERS_PATH) ->
 
     Existing answers (same question + scope + city) are updated in place and keep
     their ``times_used``. Answers missing from the file are NOT deleted.
+
+    Alternate wordings (``also_asked_as``) are rebuilt from the file every time,
+    so the file stays the only place you edit them. Run ``rag reindex`` after.
     """
     raw = _read_json(answers_path)
     if not isinstance(raw, list):
@@ -237,6 +243,14 @@ def load_answers(conn: sqlite3.Connection, answers_path: Path = ANSWERS_PATH) ->
                 """,
                 (e.question.strip(), e.answer, e.location_scope, e.city.strip(), e.kind),
             )
+        conn.execute("DELETE FROM answer_aliases")
+        for e in entries:
+            for alias in e.also_asked_as:
+                if alias.strip() and alias.strip().lower() != e.question.strip().lower():
+                    conn.execute(
+                        "INSERT OR IGNORE INTO answer_aliases (question, alias) VALUES (?, ?)",
+                        (e.question.strip(), alias.strip()),
+                    )
     return len(entries)
 
 

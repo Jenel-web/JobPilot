@@ -301,3 +301,20 @@ def test_log_action_writes_a_row(conn: sqlite3.Connection) -> None:
     row_id = safety.log_action(conn, "fill", "Expected salary", "answer from bank #1")
     row = conn.execute("SELECT * FROM action_log WHERE id = ?", (row_id,)).fetchone()
     assert (row["kind"], row["target"]) == ("fill", "Expected salary")
+
+
+def test_also_asked_as_loads_into_aliases_and_is_rebuilt(tmp_path: Path) -> None:
+    conn = connect(":memory:")
+    init_db(conn)
+    path = tmp_path / "answers.json"
+    path.write_text(json.dumps([
+        {"question": "When can you start?", "answer": "Now", "kind": "fixed",
+         "also_asked_as": ["Earliest start date", "  ", "when can you start?"]},
+    ]), encoding="utf-8")
+    load_answers(conn, path)
+    rows = conn.execute("SELECT question, alias FROM answer_aliases").fetchall()
+    assert [(r["question"], r["alias"]) for r in rows] == [("When can you start?", "Earliest start date")]
+
+    path.write_text(json.dumps([{"question": "When can you start?", "answer": "Now", "kind": "fixed"}]), encoding="utf-8")
+    load_answers(conn, path)
+    assert conn.execute("SELECT count(*) FROM answer_aliases").fetchone()[0] == 0
