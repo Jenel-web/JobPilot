@@ -35,6 +35,9 @@ LAUNCH_ARGS = [
     f"--remote-debugging-port={CDP_PORT}",
     "--remote-debugging-address=127.0.0.1",
     "--start-maximized",
+    # Stops Chrome from telling websites "I am automated" (navigator.webdriver),
+    # which Cloudflare's check looks at. You still solve the check by hand.
+    "--disable-blink-features=AutomationControlled",
 ]
 
 
@@ -58,9 +61,11 @@ def open_browser(url: str | None = None, *, settings: Settings | None = None) ->
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             str(PROFILE_DIR),
+            channel="chrome",  # your installed Google Chrome, not Playwright's test Chromium
             headless=False,  # visible: you log in and watch what happens
             no_viewport=True,  # use the real window size
             args=LAUNCH_ARGS,
+            ignore_default_args=["--enable-automation"],  # drop the automation banner/flag
         )
         page = context.pages[0] if context.pages else context.new_page()
         if url:

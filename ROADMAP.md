@@ -165,13 +165,13 @@ Manual:
 **You do**
 
 - [x] Approve adding `playwright`, then run `playwright install chromium` (done Nov 9).
-- [ ] Pick your **3 target forms** and keep them stable for the whole project:
+- [x] Pick your **3 target forms** and keep them stable for the whole project:
   1. A real Prosple application form (log in by hand in the bot browser).
   2. A Google Form. Make your own test one with text, long text, dropdown, radio, checkbox and file upload fields.
   3. A real company career-page application.
-- [ ] Log in to Prosple by hand in the bot's persistent browser profile (Claude builds the launcher; you type the password yourself, and the bot never sees or stores it).
-- [ ] Before committing any fixture HTML, **check it for your real data** (name, email, tokens, hidden fields) and have Claude sanitize it.
-- [ ] Read the Prosple terms of use about automation and keep to a human pace.
+- [x] Log in to Prosple by hand in the bot's persistent browser profile (Claude builds the launcher; you type the password yourself, and the bot never sees or stores it).
+- [x] Before committing any fixture HTML, **check it for your real data** (name, email, tokens, hidden fields) and have Claude sanitize it.
+- [x] Read the Prosple terms of use about automation and keep to a human pace.
 
 **Prompt Claude Code**
 
