@@ -91,3 +91,72 @@ def test_empty_label_falls_through_to_aria_labelledby() -> None:
         result = read_fields(page)
         browser.close()
     assert [f.label for f in result] == ["Photo"]
+
+
+def test_real_company_page_saved_offline_reads_the_same_as_live() -> None:
+    """fixtures/forms/angkas_workable.html: a real Workable application, captured and sanitized."""
+    html = (ROOT / "fixtures" / "forms" / "angkas_workable.html").read_text(encoding="utf-8")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+        result = read_fields(page)
+        browser.close()
+    by_label = {f.label: f for f in result}
+    assert len(result) == 20
+    assert by_label["Resume"].type == "file" and by_label["Resume"].required
+    assert by_label["Photo"].type == "file" and not by_label["Photo"].required
+    hybrid = by_label["Are you open to working on a hybrid setup? (minimum 3 days onsite)"]
+    assert hybrid.type == "radio" and hybrid.options == ["YES", "NO"] and hybrid.required
+    assert by_label["Email"].type == "email" and by_label["Phone"].type == "tel"
+    assert sum(1 for f in result if f.needs_you) == 3  # three unlabelled address-part boxes
+
+
+def _read_html(html: str) -> list[FormField]:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+        page.wait_for_timeout(300)  # let embedded frames load
+        result = read_fields(page)
+        browser.close()
+    return result
+
+
+def test_form_inside_an_iframe_is_found() -> None:
+    """Regression: indiecampers.com shows its own page and embeds the Greenhouse form in an iframe."""
+    inner = '<label for=a>First Name*</label><input id=a required><label for=b>Email*</label><input id=b type=email required>'
+    outer = f'<label for=n>Newsletter e-mail</label><input id=n><iframe srcdoc="{inner}"></iframe>'
+    result = _read_html(outer)
+    labels = {f.label: f for f in result}
+    assert set(labels) == {"Newsletter e-mail", "First Name", "Email"}
+    assert labels["Newsletter e-mail"].frame == "" and labels["First Name"].frame != ""
+
+
+def test_custom_dropdown_is_one_dropdown_not_two_fields() -> None:
+    """Regression: react-select style dropdowns are a labelled role=combobox input plus a bare helper box."""
+    html = (
+        '<label id=c-label for=c>Country*</label><div><input id=c role=combobox aria-labelledby=c-label required>'
+        '<div>Select...</div><input type=text></div>'
+        '<label for=p>Phone*</label><input id=p type=tel required>'
+    )
+    result = _read_html(html)
+    assert [(f.label, f.type) for f in result] == [("Country", "dropdown"), ("Phone", "tel")]
+
+
+def test_invisible_search_boxes_are_ignored() -> None:
+    html = '<input id=s type=search role=combobox style="width:0;height:0;padding:0;border:0" aria-label=Search><label for=x>Name</label><input id=x>'
+    assert [f.label for f in _read_html(html)] == ["Name"]
+
+
+def test_greenhouse_form_embedded_in_a_company_site_reads_cleanly() -> None:
+    """fixtures/forms/indiecampers_greenhouse.html: the outer site plus an embedded Greenhouse form."""
+    html = (ROOT / "fixtures" / "forms" / "indiecampers_greenhouse.html").read_text(encoding="utf-8")
+    result = _read_html(html)
+    inside = [f for f in result if f.frame]
+    labels = [f.label for f in inside]
+    assert [f.label for f in inside if f.type == "dropdown"][:2] == ["Country", "Location (City)"]
+    assert "First Name" in labels and "Email" in labels and "Phone" in labels
+    assert len(labels) == len(set(labels))  # no duplicates from helper boxes
+    assert not any(label == "Select..." for label in labels)
+    assert any(f.label == "Attach" and f.type == "file" for f in inside)  # the resume upload

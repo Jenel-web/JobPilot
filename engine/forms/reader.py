@@ -30,7 +30,7 @@ from engine import safety
 from engine.forms.browser import CDP_URL
 from engine.settings import Settings
 
-FieldType = Literal["text", "email", "tel", "url", "number", "date", "textarea", "select", "radio", "checkbox", "file"]
+FieldType = Literal["text", "email", "tel", "url", "number", "date", "textarea", "select", "dropdown", "radio", "checkbox", "file"]
 
 # Runs inside the page. Returns raw facts about each input; Python groups and cleans them.
 # ``index`` is the element's position in this exact query, so the Phase 4 filler can find it again.
@@ -60,14 +60,15 @@ _EXTRACT_JS = r"""
     const lg = g.querySelector('legend'); if (lg) return clean(lg.innerText);
     return byIds(g.getAttribute('aria-labelledby')) || clean(g.getAttribute('aria-label'));
   };
-  const SKIP = new Set(['hidden', 'submit', 'button', 'image', 'reset', 'password']);
+  const SKIP = new Set(['hidden', 'submit', 'button', 'image', 'reset', 'password', 'search']);
   const shown = e => {
     if (e.type === 'file' || e.type === 'radio' || e.type === 'checkbox') return true;  // often visually hidden
     const st = getComputedStyle(e), r = e.getBoundingClientRect();
-    return st.display !== 'none' && st.visibility !== 'hidden' && (r.width > 0 || r.height > 0);
+    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   };
   return [...document.querySelectorAll('input, textarea, select')].map((e, index) => ({
-    index, tag: e.tagName.toLowerCase(), type: (e.type || '').toLowerCase(), name: e.name || '',
+    index, tag: e.tagName.toLowerCase(), type: (e.type || '').toLowerCase(), name: e.name || '', role: e.getAttribute('role') || '',
+    bare: !(e.id || e.name || e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.getAttribute('placeholder')),
     label: labelOf(e), group: groupOf(e),
     required: !!(e.required || e.getAttribute('aria-required') === 'true'),
     options: e.tagName === 'SELECT' ? [...e.options].filter(o => o.value !== '').map(o => clean(o.text)).filter(t => t) : [],
@@ -85,7 +86,8 @@ class FormField(BaseModel):
     required: bool = False
     options: list[str] = []  # choices for select / radio / checkbox groups
     name: str = ""  # the input's name attribute, if any
-    indexes: list[int] = []  # positions of its input(s) on the page (the filler uses these)
+    indexes: list[int] = []  # positions of its input(s) in its frame (the filler uses these)
+    frame: str = ""  # address of the embedded frame it lives in; empty = the outer page
 
     @property
     def needs_you(self) -> bool:
@@ -99,10 +101,34 @@ def clean_label(raw: str) -> str:
     return re.sub(r"\s+", " ", text).strip(" *\t")
 
 
+# Embedded frames that are never application forms (cookie banners, CAPTCHA, ad and analytics widgets).
+_NOISE_FRAME_HOSTS = (
+    "recaptcha", "hcaptcha", "usercentrics", "cookiebot", "onetrust", "doubleclick",
+    "googletagmanager", "facebook.com", "googleapis.com/static", "youtube.com", "stripe.com",
+)
+
+
 def read_fields(page: Page) -> list[FormField]:
-    """Read every field on ``page``. Pure reading: nothing on the page is changed."""
-    raw: list[dict[str, Any]] = page.evaluate(_EXTRACT_JS)
-    return build_fields(raw)
+    """Read every field on ``page``, including forms embedded in frames. Pure reading.
+
+    Many career sites show their own page and embed the real application form from
+    another site (Greenhouse, Lever, Workable...) in an ``<iframe>``. Looking only
+    at the outer page would miss the form, so every frame is read. Each field
+    remembers which frame it came from (``FormField.frame``; empty = the outer page).
+    """
+    fields: list[FormField] = []
+    for frame in page.frames:
+        is_main = frame == page.main_frame
+        if not is_main and any(host in frame.url.lower() for host in _NOISE_FRAME_HOSTS):
+            continue
+        try:
+            raw: list[dict[str, Any]] = frame.evaluate(_EXTRACT_JS)
+        except Exception:  # frame was removed or is still loading: skip it, keep the rest
+            continue
+        for field in build_fields(raw):
+            field.frame = "" if is_main else frame.url
+            fields.append(field)
+    return fields
 
 
 def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
@@ -110,8 +136,15 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
     fields: list[FormField] = []
     groups: dict[tuple[str, str, str], FormField] = {}
     same_name = Counter((i["type"], i["name"]) for i in raw if i["name"])
+    previous: dict[str, Any] | None = None
     for item in raw:
-        kind = "select" if item["tag"] == "select" else "textarea" if item["tag"] == "textarea" else item["type"] or "text"
+        # Custom dropdowns (react-select and similar) are two inputs: the real question
+        # (role=combobox) plus a bare helper box right after it. Keep only the real one.
+        helper = previous is not None and previous.get("role") == "combobox" and item.get("bare") and item["tag"] == "input"
+        previous = item
+        if helper:
+            continue
+        kind = "dropdown" if item.get("role") == "combobox" and item["tag"] == "input" else "select" if item["tag"] == "select" else "textarea" if item["tag"] == "textarea" else item["type"] or "text"
         if kind not in get_args(FieldType):
             kind = "text"
         label = clean_label(item["label"])
@@ -144,6 +177,27 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
     return fields
 
 
+def find_current_page(browser: Any) -> Page:
+    """Pick the page you are looking at in the bot's browser (the visible web page).
+
+    Raises:
+        RuntimeError: no web page is open.
+    """
+    pages = [pg for ctx in browser.contexts for pg in ctx.pages if pg.url.startswith(("http", "file"))]
+    if not pages:
+        raise RuntimeError("No web page is open in the bot's browser.")
+    visible = [pg for pg in pages if pg.evaluate("document.visibilityState") == "visible"]
+    return (visible or pages)[-1]
+
+
+def connect_to_bot_browser(playwright: Any) -> Any:
+    """Attach to the already-open bot browser (see ``browser.py``). Does not start a new one."""
+    try:
+        return playwright.chromium.connect_over_cdp(CDP_URL)
+    except Exception as exc:
+        raise RuntimeError("The bot's browser is not open. Run: python -m engine.cli browser open") from exc
+
+
 def read_current_page(
     *, settings: Settings | None = None, conn: sqlite3.Connection | None = None
 ) -> tuple[str, list[FormField]]:
@@ -156,15 +210,7 @@ def read_current_page(
         RuntimeError: the bot's browser is not running or has no web page open.
     """
     with sync_playwright() as p:
-        try:
-            browser = p.chromium.connect_over_cdp(CDP_URL)
-        except Exception as exc:
-            raise RuntimeError("The bot's browser is not open. Run: python -m engine.cli browser open") from exc
-        pages = [pg for ctx in browser.contexts for pg in ctx.pages if pg.url.startswith(("http", "file"))]
-        if not pages:
-            raise RuntimeError("No web page is open in the bot's browser.")
-        visible = [pg for pg in pages if pg.evaluate("document.visibilityState") == "visible"]
-        page = (visible or pages)[-1]
+        page = find_current_page(connect_to_bot_browser(p))
         safety.check("read", page.url, settings=settings)
         fields = read_fields(page)
         if conn is not None:

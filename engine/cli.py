@@ -4,6 +4,7 @@
     python -m engine.cli profile show      print your profile (email and phone masked)
     python -m engine.cli answers list      print the answer bank (optionally --kind fixed|open|protected)
     python -m engine.cli forms read        list the fields of the page open in the bot's browser (read-only)
+    python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
 
@@ -37,6 +38,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     forms = sub.add_parser("forms", help="form commands").add_subparsers(dest="action", required=True)
     reading = forms.add_parser("read", help="list the fields of the open page")
     reading.add_argument("--json", action="store_true", help="print JSON instead of a table")
+    capturing = forms.add_parser("capture", help="save the open page as an offline test file")
+    capturing.add_argument("name", help="file name, e.g. angkas_workable")
     args = parser.parse_args(argv)
 
     if args.command == "browser":
@@ -49,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             counts = load_all(conn)
             print(f"Loaded profile, {counts['resumes']} resumes and {counts['answers']} answers.")
         elif args.command == "forms":
-            return _read_forms(conn, args.json)
+            return _capture_form(conn, args.name) if args.action == "capture" else _read_forms(conn, args.json)
         elif args.command == "profile":
             print(json.dumps(profile_summary(conn), indent=2, ensure_ascii=False))
         else:
@@ -60,6 +63,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         conn.close()
     return 0
+
+
+def _shorten(text: str, limit: int = 110) -> str:
+    """Long labels (legal notices) are cut for display only; the full text is kept."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _read_forms(conn, as_json: bool) -> int:  # type: ignore[no-untyped-def]
@@ -79,7 +87,22 @@ def _read_forms(conn, as_json: bool) -> int:  # type: ignore[no-untyped-def]
     for number, f in enumerate(fields, start=1):
         flags = ("required " if f.required else "") + ("NEEDS YOU" if f.needs_you else "")
         options = f"  options: {', '.join(f.options)}" if f.options else ""
-        print(f"{number:>2}. [{f.type:<8}] {f.label or '(no label)'} {flags}{options}")
+        where = f"  (in frame: {f.frame.split('/')[2]})" if f.frame.startswith("http") else ""
+        print(f"{number:>2}. [{f.type:<8}] {_shorten(f.label) or '(no label)'} {flags}{options}{where}")
+    return 0
+
+
+def _capture_form(conn, name: str) -> int:  # type: ignore[no-untyped-def]
+    """Save the open page as an offline test file (personal data removed)."""
+    from engine.forms.capture import capture_current_page
+    from engine.safety import SafetyError
+
+    try:
+        path = capture_current_page(name, conn=conn)
+    except (RuntimeError, ValueError, SafetyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Saved {path}\nOpen it in an editor and check it has no personal data before committing.")
     return 0
 
 
