@@ -3,6 +3,7 @@
     python -m engine.cli load              copy profile.json, resumes and answers.json into the database
     python -m engine.cli profile show      print your profile (email and phone masked)
     python -m engine.cli answers list      print the answer bank (optionally --kind fixed|open|protected)
+    python -m engine.cli forms read        list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
 
@@ -33,6 +34,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     browser = sub.add_parser("browser", help="the bot's browser").add_subparsers(dest="action", required=True)
     opener = browser.add_parser("open", help="open the bot's browser window")
     opener.add_argument("--url", help="optional page to start on")
+    forms = sub.add_parser("forms", help="form commands").add_subparsers(dest="action", required=True)
+    reading = forms.add_parser("read", help="list the fields of the open page")
+    reading.add_argument("--json", action="store_true", help="print JSON instead of a table")
     args = parser.parse_args(argv)
 
     if args.command == "browser":
@@ -44,6 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "load":
             counts = load_all(conn)
             print(f"Loaded profile, {counts['resumes']} resumes and {counts['answers']} answers.")
+        elif args.command == "forms":
+            return _read_forms(conn, args.json)
         elif args.command == "profile":
             print(json.dumps(profile_summary(conn), indent=2, ensure_ascii=False))
         else:
@@ -53,6 +59,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     finally:
         conn.close()
+    return 0
+
+
+def _read_forms(conn, as_json: bool) -> int:  # type: ignore[no-untyped-def]
+    """Print the fields of the page open in the bot's browser. Changes nothing on the page."""
+    from engine.forms.reader import read_current_page
+    from engine.safety import SafetyError
+
+    try:
+        url, fields = read_current_page(conn=conn)
+    except (RuntimeError, SafetyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps([f.model_dump() for f in fields], indent=2, ensure_ascii=False))
+        return 0
+    print(f"{url}\n{len(fields)} fields\n")
+    for number, f in enumerate(fields, start=1):
+        flags = ("required " if f.required else "") + ("NEEDS YOU" if f.needs_you else "")
+        options = f"  options: {', '.join(f.options)}" if f.options else ""
+        print(f"{number:>2}. [{f.type:<8}] {f.label or '(no label)'} {flags}{options}")
     return 0
 
 

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sample application (synthetic test form)</title></head>
+<body>
+<!-- Made-up form with the awkward cases real sites have. No personal data. -->
+<form>
+  <label for="fn">* First name</label>
+  <input id="fn" name="first_name" type="text" required>
+
+  <label for="em">Email</label>
+  <input id="em" name="email" type="email" required>
+
+  <label for="ph">Phone</label>
+  <input id="ph" name="phone" type="tel" aria-required="true">
+
+  <label for="hl">Headline (Optional)</label>
+  <input id="hl" name="headline" type="text">
+
+  <div>Preferred city</div>
+  <div><input name="city" type="text"></div>
+
+  <input name="mystery" type="text">
+
+  <input name="nick" type="text" placeholder="Nickname (Optional)">
+
+  <label for="sum">Summary (Optional)</label>
+  <textarea id="sum" name="summary"></textarea>
+
+  <label for="cv">Resume</label>
+  <input id="cv" name="resume" type="file" required style="display:none">
+
+  <label for="lvl">Year level</label>
+  <select id="lvl" name="year_level">
+    <option value="">Select...</option>
+    <option>2nd year</option>
+    <option>3rd year</option>
+    <option>4th year</option>
+  </select>
+
+  <fieldset>
+    <legend>Are you open to a hybrid setup? *</legend>
+    <label><input type="radio" name="hybrid" value="y" required> YES</label>
+    <label><input type="radio" name="hybrid" value="n" required> NO</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Which tools do you use?</legend>
+    <label><input type="checkbox" name="tools" value="git"> Git</label>
+    <label><input type="checkbox" name="tools" value="docker"> Docker</label>
+  </fieldset>
+
+  <label><input type="checkbox" name="terms" required> I agree to the terms</label>
+
+  <input type="hidden" name="token" value="abc">
+  <input type="text" name="secret_trap" style="display:none">
+  <button type="submit">Submit application</button>
+</form>
+</body>
+</html>
