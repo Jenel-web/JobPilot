@@ -41,7 +41,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 essentially done: 2 real forms saved offline (Angkas/Workable, Indie Campers/Greenhouse iframe) plus a synthetic one. Reader handles iframes and custom dropdowns. Left: a Google Form or Prosple form, then Phase 3.
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Next: Phase 3, RAG + answer engine + resume picker. Starts with a 5-sentence RAG teaching demo, then you approve `sqlite-vec`.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -57,7 +57,9 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-09: Phase 2 step 3: `engine/forms/reader.py` (`FormField`, `read_fields`, `read_current_page`) + `python -m engine.cli forms read`; synthetic `fixtures/forms/sample_form.html`; 97 tests pass. Tried on a real company page: 28 raw elements became 20 fields, radio pairs merged into 4 questions. Fixed: nearby-text label search climbing too high, lone checkboxes, empty `<label for>`, select placeholder options.
 - 2026-11-09: Phase 2 step 4: `engine/forms/capture.py` + `python -m engine.cli forms capture NAME` (removes scripts, typed values, hidden inputs, your name/email/phone/address); captured `fixtures/forms/angkas_workable.html`, checked it for leaks (none); offline test reads it as 20 fields. 103 tests pass.
 - 2026-11-09: Phase 2 bug-fix round after a third real site (Indie Campers) read only "Enter your e-mail": the application form was inside an iframe. Fixed: reader now reads every frame (`FormField.frame`), skips cookie/CAPTCHA frames; custom dropdowns (`role=combobox` + bare helper box) become one `dropdown` field; invisible and `type=search` boxes ignored; capture embeds iframes as `srcdoc`; sanitizer no longer rewrites digits inside ids. Saved `fixtures/forms/indiecampers_greenhouse.html`. 109 tests pass.
+- 2026-11-10: Phase 2 closed after codebase review (109 tests pass, tree clean, no personal data or hardcoded paths in code/fixtures). Browser launcher now uses installed Chrome with the automation flag off (your change); you still solve any bot check by hand.
 - 2026-11-09: Ollama speed check done (about 20 s cold start, then quick). Phase 0 complete pending commit.
+- 2026-11-10: Phase 3 prep: `sqlite-vec` 0.1.9 approved and pinned; `ai.embed()` added (the only place that calls the embedding model; deterministic mock vectors; `embed_model` setting); `tests/fixtures/eval_questions.sample.json` format added. 120 tests pass. Next: `engine/rag.py`.
 
 
 ---
@@ -173,6 +175,8 @@ Manual:
 - [x] Before committing any fixture HTML, **check it for your real data** (name, email, tokens, hidden fields) and have Claude sanitize it.
 - [x] Read the Prosple terms of use about automation and keep to a human pace.
 
+**Status: done Nov 10.** Known gaps carried forward: custom dropdown options are not read until opened (Phase 4), main-page extras are returned with the form (Phase 3 filters), and no Google Form was tested.
+
 **Prompt Claude Code**
 
 1. Explain-first: "How does Playwright find elements, why prefer role/label/text selectors, and how does a persistent browser profile keep me logged in? Don't code."
@@ -205,7 +209,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 - [ ] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
 - [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
 - [ ] Decide the confidence cutoff for "flagged" (start at 0.7).
-- [ ] Approve adding `sqlite-vec`.
+- [x] Approve adding `sqlite-vec` (approved and installed Nov 10, 2026).
 
 **Prompt Claude Code**
 

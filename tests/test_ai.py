@@ -33,6 +33,11 @@ def no_real_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(ai, "_call_ollama", boom)
 
+    def boom_embed(model: str, texts: list[str]) -> list[list[float]]:
+        raise AssertionError("A test tried to call the real Ollama embeddings")
+
+    monkeypatch.setattr(ai, "_call_ollama_embed", boom_embed)
+
 
 def fake_ollama(monkeypatch: pytest.MonkeyPatch, *replies: str) -> list[str]:
     """Make Ollama return ``replies`` in order; returns a list of the prompts it received."""
@@ -225,3 +230,67 @@ def test_ollama_form_answer_retries_once_on_bad_json(monkeypatch: pytest.MonkeyP
     result = ask_ai("form_answer", "prompt", settings=DRY_RUN_OLLAMA)
     assert result["answers"][0]["answer"] == "a"
     assert len(seen) == 2
+
+
+# ---- embeddings ------------------------------------------------------------
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))  # vectors are already unit length
+
+
+def test_embed_mock_is_deterministic_and_right_size() -> None:
+    first = ai.embed(["expected monthly salary"], settings=MOCK)
+    second = ai.embed(["expected monthly salary"], settings=MOCK)
+    assert first == second
+    assert len(first) == 1 and len(first[0]) == ai.EMBED_DIM
+
+
+def test_embed_mock_similar_texts_score_higher() -> None:
+    query, close, far = ai.embed(
+        ["expected monthly salary", "what is your expected monthly salary", "favourite programming language"],
+        settings=MOCK,
+    )
+    assert _cosine(query, close) > _cosine(query, far)
+
+
+def test_embed_empty_list_and_empty_text() -> None:
+    assert ai.embed([], settings=MOCK) == []
+    assert len(ai.embed([""], settings=MOCK)[0]) == ai.EMBED_DIM
+
+
+def test_embed_ollama_returns_vectors_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, list[str]]] = []
+
+    def fake(model: str, texts: list[str]) -> list[list[float]]:
+        seen.append((model, texts))
+        return [[1, 0.5], [0, 1]]
+
+    monkeypatch.setattr(ai, "_call_ollama_embed", fake)
+    result = ai.embed(["a", "b"], settings=DRY_RUN_OLLAMA)
+    assert result == [[1.0, 0.5], [0.0, 1.0]]
+    assert seen == [("nomic-embed-text", ["a", "b"])]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [[[1.0]], [[1.0], [1.0, 2.0]], [[], []], [["x"], ["y"]], "nope"],
+)
+def test_embed_ollama_bad_reply_raises(monkeypatch: pytest.MonkeyPatch, bad: Any) -> None:
+    monkeypatch.setattr(ai, "_call_ollama_embed", lambda model, texts: bad)
+    with pytest.raises(AIError):
+        ai.embed(["a", "b"], settings=DRY_RUN_OLLAMA)
+
+
+def test_embed_ollama_failure_becomes_aierror(monkeypatch: pytest.MonkeyPatch) -> None:
+    def down(model: str, texts: list[str]) -> list[list[float]]:
+        raise ConnectionError("server down")
+
+    monkeypatch.setattr(ai, "_call_ollama_embed", down)
+    with pytest.raises(AIError):
+        ai.embed(["a"], settings=DRY_RUN_OLLAMA)
+
+
+def test_embed_gemini_not_built() -> None:
+    with pytest.raises(NotImplementedError):
+        ai.embed(["a"], settings=Settings(run_mode="dry_run", ai_provider="gemini"))

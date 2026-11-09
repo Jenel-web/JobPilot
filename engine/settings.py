@@ -28,6 +28,7 @@ class Settings:
     run_mode: str = "mock"
     ai_provider: str = "ollama"
     ollama_model: str = "llama3.1:8b"
+    embed_model: str = "nomic-embed-text"
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> Settings:
@@ -47,8 +48,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     run_mode = raw.get("run_mode")
     ai_provider = raw.get("ai_provider")
     ollama_model = raw.get("ollama_model")
+    embed_model = raw.get("embed_model")
     return Settings(
         run_mode=run_mode if run_mode in RUN_MODES else defaults.run_mode,
         ai_provider=ai_provider if ai_provider in AI_PROVIDERS else defaults.ai_provider,
         ollama_model=ollama_model if isinstance(ollama_model, str) and ollama_model else defaults.ollama_model,
+        embed_model=embed_model if isinstance(embed_model, str) and embed_model else defaults.embed_model,
     )

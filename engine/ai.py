@@ -17,8 +17,11 @@ bad answer gets exactly ONE retry, then an AIError (callers log it and skip).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -100,6 +103,11 @@ TASK_MODELS: dict[str, type[BaseModel]] = {
     "match": MatchResult,
     "email": EmailDraft,
 }
+
+
+# nomic-embed-text returns 768 numbers per text. The mock uses the same size so
+# code written against mock vectors also works with the real ones.
+EMBED_DIM = 768
 
 
 class AIError(Exception):
@@ -209,3 +217,79 @@ def _call_ollama(model: str, prompt: str) -> str:
         format="json",
     )
     return response["message"]["content"]
+
+
+# ---- embeddings -------------------------------------------------------------
+
+
+def embed(texts: list[str], *, settings: Settings | None = None) -> list[list[float]]:
+    """Turn each text into a vector (a list of numbers) so similar meanings are close.
+
+    This is a sibling of :func:`ask_ai`. It lives here because this file is the
+    ONLY one allowed to talk to a model (CLAUDE.md rule 2). It is a separate
+    function, not a task, because it returns numbers, not a JSON object.
+
+    Args:
+        texts: What to embed. Callers keep phone, address, email and ID numbers
+            out of these (rule 3); this function does not filter them.
+        settings: Override settings (used by tests).
+
+    Returns:
+        One vector per text, in the same order, all the same length.
+
+    Raises:
+        AIError: Ollama failed or returned something unusable.
+        NotImplementedError: the Gemini provider is selected (not built yet).
+    """
+    if not texts:
+        return []
+    settings = settings or load_settings()
+
+    if settings.run_mode == "mock" or settings.ai_provider == "mock":
+        return [_mock_vector(t) for t in texts]
+    if settings.ai_provider == "ollama":
+        try:
+            vectors = _call_ollama_embed(settings.embed_model, texts)
+        except Exception as exc:  # server down, model not pulled, timeout...
+            raise AIError(f"Ollama embedding call failed: {exc}") from exc
+        return _check_vectors(vectors, len(texts))
+    raise NotImplementedError(f"AI provider {settings.ai_provider!r} is not built yet")
+
+
+def _check_vectors(vectors: object, expected: int) -> list[list[float]]:
+    """Make sure Ollama returned one equal-length list of numbers per text."""
+    if not isinstance(vectors, list) or len(vectors) != expected:
+        raise AIError("Ollama returned the wrong number of embeddings")
+    clean: list[list[float]] = []
+    for vec in vectors:
+        if not isinstance(vec, list) or not vec or not all(isinstance(x, (int, float)) for x in vec):
+            raise AIError("Ollama returned an invalid embedding")
+        clean.append([float(x) for x in vec])
+    if len({len(v) for v in clean}) != 1:
+        raise AIError("Ollama returned embeddings of different sizes")
+    return clean
+
+
+def _mock_vector(text: str) -> list[float]:
+    """Deterministic fake embedding: hash each word into one of 768 slots, then normalise.
+
+    Texts that share words get similar vectors, so tests can check retrieval
+    order without Ollama. It is NOT meaningful like a real embedding (it cannot
+    tell "salary" from "pay"), which is why real quality is judged in dry_run.
+    """
+    vec = [0.0] * EMBED_DIM
+    for word in re.findall(r"[a-z0-9]+", text.lower()):
+        slot = int.from_bytes(hashlib.sha256(word.encode()).digest()[:4], "big") % EMBED_DIM
+        vec[slot] += 1.0
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm == 0:  # empty text: use a fixed unit vector rather than dividing by zero
+        vec[0] = 1.0
+        return vec
+    return [x / norm for x in vec]
+
+
+def _call_ollama_embed(model: str, texts: list[str]) -> list[list[float]]:
+    """Ask the local Ollama server for embeddings. Kept tiny so tests can replace it."""
+    import ollama  # imported here so mock mode works even if Ollama isn't installed
+
+    return ollama.embed(model=model, input=texts)["embeddings"]

@@ -1,0 +1,51 @@
+{
+  "_help": "Copy this file to eval_questions.json and write 20 entries: 8 reworded, 4 legal, 4 personal, 4 new_open. Use placeholders, never real phone/email/address here (this file is committed).",
+  "questions": [
+    {
+      "id": "reworded-1",
+      "category": "reworded",
+      "form_question": "What salary range are you looking for per month?",
+      "location": "Metro Manila",
+      "expect_source": "answer_bank",
+      "expect_saved_question": "What is your expected monthly salary?",
+      "note": "Different wording, same meaning. Location picks the Metro Manila answer, not the remote one."
+    },
+    {
+      "id": "reworded-2",
+      "category": "reworded",
+      "form_question": "Would you be able to move for this role?",
+      "location": "any",
+      "expect_source": "answer_bank",
+      "expect_saved_question": "Are you willing to relocate?"
+    },
+    {
+      "id": "legal-1",
+      "category": "legal",
+      "form_question": "Are you legally authorized to work in this country?",
+      "location": "any",
+      "expect_source": "answer_bank",
+      "expect_saved_question": "<your saved work authorization question>",
+      "expect_ai_used": false,
+      "note": "Protected: must never be drafted by AI. If nothing is saved, it must land in unknown questions."
+    },
+    {
+      "id": "personal-1",
+      "category": "personal",
+      "form_question": "Phone number",
+      "location": "any",
+      "expect_source": "profile_code",
+      "expect_ai_used": false,
+      "note": "Filled by code straight from the profile. Must never appear in any prompt."
+    },
+    {
+      "id": "open-1",
+      "category": "new_open",
+      "form_question": "Why do you want to join us?",
+      "location": "any",
+      "expect_source": "ai_draft",
+      "expect_chunks_from": ["project", "resume"],
+      "expect_flagged": true,
+      "note": "No saved answer. Draft from retrieved facts only, flagged for your review."
+    }
+  ]
+}
