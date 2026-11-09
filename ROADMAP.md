@@ -42,7 +42,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). Next: compare stronger embedding models, then the personal-field detector and `engine/forms/answers.py`.
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Next: the personal-field detector, then `engine/forms/answers.py`.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -64,6 +64,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-10: Phase 3 step 2: `engine/rag.py` (chunker with email/phone/ID scrubbing, answer chunks hold the question only, `sqlite-vec` cosine index, `retrieve(question, k, sources)`, index remembers its embedder and refuses a mismatched search) + `rag reindex`, `rag ask`, `rag eval` commands. 136 tests pass. Real data indexed in mock mode: 121 chunks, none contains email, phone, address or GPA. Next: re-index with real Ollama vectors (needs `run_mode` set to `dry_run` by you) and judge the top 5 per eval question.
 - 2026-11-10: first real-vector eval was poor (right saved question first 7/11; every score 0.5-0.65). Fixes: (1) saved questions and incoming questions now both use nomic's symmetric `clustering:` prefix (facts keep `search_document`/`search_query`); index version bumped to v2; (2) new `also_asked_as` field in answers.json + `answer_aliases` table: 312 alternate wordings for all 95 questions, modelled on Greenhouse/Lever/Workday/LinkedIn/Indeed/JobStreet/EEO forms. Result: right saved question first 25/26. Scores shifted up, so `MATCH_THRESHOLD` recalibrated 0.7 -> 0.85. Caveat: the wordings were written after seeing the eval set, so the eval is now optimistic; a fresh held-out set is needed. Backup: `data/answers.backup-2026-11-10.json`.
 - 2026-11-10: Step 1 timing check of `llama3.1:8b` as a match judge (no project code changed): CPU only, 5.6 GB RAM, about 5 s per question warm (much slower when RAM runs out), but only 3/6 right and inconsistent; it confused visa sponsorship with work authorization. AI judge on hold; next is an embedding-model comparison. Details under Phase 3 "Matching decisions".
+- 2026-11-10: `mxbai-embed-large` pulled (669 MB) and compared with `nomic-embed-text` on your 10 held-out questions: nomic 6/6 right first, mxbai 4-5/6 and slower. Keeping nomic; no code changed. Next: personal-field detector by code, then `engine/forms/answers.py`.
 
 
 ---
@@ -239,6 +240,18 @@ Manual: compare the printed field list with what you see on screen for each of t
 - **Speed:** 100% CPU (the Radeon iGPU isn't used), 5.6 GB RAM. Cold start 23–55 s; warm about 5 s per question when RAM is free, 15–45 s when Windows runs short of RAM (free RAM fell to 0.7 GB with other apps open).
 - **Quality: not good enough.** With a loose prompt it picked related-but-wrong questions, including "Will you need visa sponsorship?" → "Are you legally authorized to work?" (dangerous for a protected answer). With a strict prompt (temperature 0, JSON schema) it answered "none" to everything, missing begin = start and the hybrid question: 3/6, and the 3 "right" answers were all "none". Answers also changed between runs.
 - **Decision:** don't build the AI judge on `llama3.1:8b` for now. Next, test a stronger **embedding** model (light on RAM, fast). Keep `llama3.1:8b` for its planned job, drafting open answers. Personal-field detection by code (step 2 of the plan) goes ahead regardless.
+
+**Embedding model comparison (Nov 10)**. Run on your 10 held-out questions (written without looking at `also_asked_as`); 6 should match a saved question, 2 should not:
+
+| Setup | Right question first (no wordings) | Right question first (with wordings) | Speed |
+| --- | --- | --- | --- |
+| `nomic-embed-text`, `clustering:` both sides (current) | **6/6** | **6/6** | fastest |
+| `mxbai-embed-large`, no prefix | 4/6 | 4/6 | about 2x slower |
+| `mxbai-embed-large`, query instruction both sides | 5/6 | 5/6 | about 3x slower |
+
+- **Decision: keep `nomic-embed-text`.** `mxbai-embed-large` was not better on your questions (it sent "most at ease using at work" to "working asynchronously"). Small sample, so this says "no reason to switch", not "nomic is best".
+- With the current 0.85 cutoff on the held-out set: 4/6 correct matches accepted, the other 2 (scores 0.80 and 0.82) still pointed at the right saved question but were flagged NO MATCH (filled, marked not recommended); 2/2 open questions rejected. Personal questions found the right field (phone, city), but these must still be caught by code first.
+- Roles stay split: the **embedding model** finds things (RAG); **`llama3.1:8b`** writes open answers.
 
 **Check**
 

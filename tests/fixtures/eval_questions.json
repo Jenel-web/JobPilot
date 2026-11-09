@@ -96,6 +96,372 @@
       "expect_chunks_from": [],
       "expect_flagged": true,
       "note": "The facts contain no feedback example. The draft must not invent one; flag for review."
+    },
+    {
+      "questions": [
+        {
+          "id": "rw2-01",
+          "category": "reworded",
+          "form_question": "What compensation figure would you want per month if you were based in Metro Manila?",
+          "location": "Metro Manila",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "What is your expected monthly salary?",
+          "note": "Must pick the Metro Manila answer (PHP 20,000), not the remote one."
+        },
+        {
+          "id": "rw2-02",
+          "category": "reworded",
+          "form_question": "What monthly pay would you need for a position you do entirely from home?",
+          "location": "remote",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "What is your expected monthly salary?",
+          "note": "Must pick the remote answer (USD 600), not the Metro Manila one."
+        },
+        {
+          "id": "rw2-03",
+          "category": "reworded",
+          "form_question": "Would you accept a stipend-based pay structure during your training period?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you open to a lower starting salary for an internship or training period?"
+        },
+        {
+          "id": "rw2-04",
+          "category": "reworded",
+          "form_question": "Is there any room to move on the pay figure you listed?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Is your salary expectation negotiable?"
+        },
+        {
+          "id": "rw2-05",
+          "category": "reworded",
+          "form_question": "How much do you currently earn?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "What is your current salary?",
+          "note": "Should return the student answer, not a number."
+        },
+        {
+          "id": "rw2-06",
+          "category": "reworded",
+          "form_question": "Are you able to move to a different province or city for this position?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to relocate?"
+        },
+        {
+          "id": "rw2-07",
+          "category": "reworded",
+          "form_question": "What is the soonest date you could join our team?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "When can you start?"
+        },
+        {
+          "id": "rw2-08",
+          "category": "reworded",
+          "form_question": "Would you need to serve any notice before you could resign from your current job?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "What is your notice period?",
+          "note": "Tests whether the bank answer is chosen even though the candidate has no current job."
+        },
+        {
+          "id": "rw2-09",
+          "category": "reworded",
+          "form_question": "Which days of the week can you realistically work?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "What days and hours are you available to work?"
+        },
+        {
+          "id": "rw2-10",
+          "category": "reworded",
+          "form_question": "Would a standard eight-hour daily schedule fit your situation?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you available for full-time work?"
+        },
+        {
+          "id": "rw2-11",
+          "category": "reworded",
+          "form_question": "Would a reduced-hours arrangement suit you right now?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you available for part-time work?"
+        },
+        {
+          "id": "rw2-12",
+          "category": "reworded",
+          "form_question": "Would you be fine staying late when the workload peaks?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work overtime when needed?"
+        },
+        {
+          "id": "rw2-13",
+          "category": "reworded",
+          "form_question": "How do you feel about coming in on Saturdays?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work weekends?"
+        },
+        {
+          "id": "rw2-14",
+          "category": "reworded",
+          "form_question": "Could you cover a shift that runs past midnight?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work night shifts?"
+        },
+        {
+          "id": "rw2-15",
+          "category": "reworded",
+          "form_question": "Can you physically be at our premises during regular business hours?",
+          "location": "Metro Manila",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work on-site?"
+        },
+        {
+          "id": "rw2-16",
+          "category": "reworded",
+          "form_question": "Some days in the office and some days from home: is that workable for you?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work hybrid?"
+        },
+        {
+          "id": "rw2-17",
+          "category": "reworded",
+          "form_question": "How would you feel about working from home permanently?",
+          "location": "remote",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you willing to work fully remote?"
+        },
+        {
+          "id": "rw2-18",
+          "category": "reworded",
+          "form_question": "Which setup do you lean toward: in-house, split, or home-based?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Do you have a preferred work arrangement?"
+        },
+        {
+          "id": "rw2-19",
+          "category": "reworded",
+          "form_question": "Is getting to our headquarters manageable from where you live?",
+          "location": "Metro Manila",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Can you commute to our office?"
+        },
+        {
+          "id": "rw2-20",
+          "category": "reworded",
+          "form_question": "Which UTC offset do your working hours follow?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Which time zone do you work in?"
+        },
+
+        {
+          "id": "lg2-01",
+          "category": "legal",
+          "form_question": "Do you have the right to take up employment in the Philippines without restrictions?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you legally authorized to work in the Philippines?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank, never AI."
+        },
+        {
+          "id": "lg2-02",
+          "category": "legal",
+          "form_question": "Will you need us to file paperwork to keep you employed here, such as a work visa?",
+          "location": "Metro Manila",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Do you now or in the future require visa sponsorship?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-03",
+          "category": "legal",
+          "form_question": "Do you hold Philippine nationality?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you a citizen of the Philippines?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-04",
+          "category": "legal",
+          "form_question": "Are you of age to enter into an employment contract?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you 18 years of age or older?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-05",
+          "category": "legal",
+          "form_question": "Are you okay with us checking your history through a third-party screening firm?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Do you consent to a background check?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-06",
+          "category": "legal",
+          "form_question": "Would you submit to a urinalysis as part of onboarding?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Do you consent to a drug test?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-07",
+          "category": "legal",
+          "form_question": "Have you ever been found guilty of a crime in any court?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Have you ever been convicted of a crime?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+        {
+          "id": "lg2-08",
+          "category": "legal",
+          "form_question": "Are you under any contract that prevents you from joining a competitor?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Are you subject to a non-compete or non-solicitation agreement?",
+          "expect_ai_used": false,
+          "note": "Protected: must come from the bank."
+        },
+
+        {
+          "id": "pe2-01",
+          "category": "personal",
+          "form_question": "What is the best email address to reach you at?",
+          "location": "any",
+          "expect_source": "profile_code",
+          "expect_ai_used": false,
+          "note": "Filled by code from the profile. Must never appear in any prompt."
+        },
+        {
+          "id": "pe2-02",
+          "category": "personal",
+          "form_question": "Which number should recruiters call you on?",
+          "location": "any",
+          "expect_source": "profile_code",
+          "expect_ai_used": false,
+          "note": "Filled by code from the profile. Must never appear in any prompt."
+        },
+        {
+          "id": "pe2-03",
+          "category": "personal",
+          "form_question": "What city and country are you living in right now?",
+          "location": "any",
+          "expect_source": "profile_code",
+          "expect_ai_used": false,
+          "note": "Filled by code from the profile. Must never appear in any prompt."
+        },
+        {
+          "id": "pe2-04",
+          "category": "personal",
+          "form_question": "Please share the URL to your professional networking profile.",
+          "location": "any",
+          "expect_source": "profile_code",
+          "expect_ai_used": false,
+          "note": "Filled by code from the profile. Must never appear in any prompt."
+        },
+        {
+          "id": "pe2-05",
+          "category": "personal",
+          "form_question": "Please write your name exactly as it appears on your government ID.",
+          "location": "any",
+          "expect_source": "profile_code",
+          "expect_ai_used": false,
+          "note": "Filled by code from the profile. Must never appear in any prompt."
+        },
+        {
+          "id": "pe2-06",
+          "category": "personal",
+          "form_question": "How should we refer to you, in terms of pronouns?",
+          "location": "any",
+          "expect_source": "answer_bank",
+          "expect_saved_question": "Pronouns",
+          "expect_ai_used": false,
+          "note": "Protected field: answer must come from the bank, never AI."
+        },
+
+        {
+          "id": "op2-01",
+          "category": "new_open",
+          "form_question": "Describe a skill you picked up outside of the classroom.",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": ["project", "resume"],
+          "expect_flagged": true,
+          "note": "No saved answer. Draft only from real projects and tools in the facts, then flag for review."
+        },
+        {
+          "id": "op2-02",
+          "category": "new_open",
+          "form_question": "What would you focus on during your first 90 days with us?",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": ["resume"],
+          "expect_flagged": true,
+          "note": "No saved answer. Must not invent company details; flag for review."
+        },
+        {
+          "id": "op2-03",
+          "category": "new_open",
+          "form_question": "Tell us about a time you received criticism from a reviewer.",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": ["project", "resume"],
+          "expect_flagged": true,
+          "note": "No saved answer. Must not invent a criticism that is not in the facts; flag for review."
+        },
+        {
+          "id": "op2-04",
+          "category": "new_open",
+          "form_question": "How do you keep up with new technologies?",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": ["project", "resume"],
+          "expect_flagged": true,
+          "note": "No saved answer. Draw only on tools actually used in the facts; flag for review."
+        },
+        {
+          "id": "op2-05",
+          "category": "new_open",
+          "form_question": "Describe a technical decision you would make differently today.",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": ["project"],
+          "expect_flagged": true,
+          "note": "No saved answer. Must not invent a decision; flag for review."
+        },
+        {
+          "id": "op2-06",
+          "category": "new_open",
+          "form_question": "What is your experience with test-driven development?",
+          "location": "any",
+          "expect_source": "ai_draft",
+          "expect_chunks_from": [],
+          "expect_flagged": true,
+          "note": "The facts do not mention TDD. The draft must not claim experience with it; flag for review."
+        }
+      ]
     }
   ]
 }
