@@ -42,7 +42,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Next: Phase 3, RAG + answer engine + resume picker. Starts with a 5-sentence RAG teaching demo, then you approve `sqlite-vec`.
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). Next: compare stronger embedding models, then the personal-field detector and `engine/forms/answers.py`.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -63,6 +63,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-10: Phase 3 prep: `sqlite-vec` 0.1.9 approved and pinned; `ai.embed()` added (the only place that calls the embedding model; deterministic mock vectors; `embed_model` setting); `tests/fixtures/eval_questions.sample.json` format added. 120 tests pass. Next: `engine/rag.py`.
 - 2026-11-10: Phase 3 step 2: `engine/rag.py` (chunker with email/phone/ID scrubbing, answer chunks hold the question only, `sqlite-vec` cosine index, `retrieve(question, k, sources)`, index remembers its embedder and refuses a mismatched search) + `rag reindex`, `rag ask`, `rag eval` commands. 136 tests pass. Real data indexed in mock mode: 121 chunks, none contains email, phone, address or GPA. Next: re-index with real Ollama vectors (needs `run_mode` set to `dry_run` by you) and judge the top 5 per eval question.
 - 2026-11-10: first real-vector eval was poor (right saved question first 7/11; every score 0.5-0.65). Fixes: (1) saved questions and incoming questions now both use nomic's symmetric `clustering:` prefix (facts keep `search_document`/`search_query`); index version bumped to v2; (2) new `also_asked_as` field in answers.json + `answer_aliases` table: 312 alternate wordings for all 95 questions, modelled on Greenhouse/Lever/Workday/LinkedIn/Indeed/JobStreet/EEO forms. Result: right saved question first 25/26. Scores shifted up, so `MATCH_THRESHOLD` recalibrated 0.7 -> 0.85. Caveat: the wordings were written after seeing the eval set, so the eval is now optimistic; a fresh held-out set is needed. Backup: `data/answers.backup-2026-11-10.json`.
+- 2026-11-10: Step 1 timing check of `llama3.1:8b` as a match judge (no project code changed): CPU only, 5.6 GB RAM, about 5 s per question warm (much slower when RAM runs out), but only 3/6 right and inconsistent; it confused visa sponsorship with work authorization. AI judge on hold; next is an embedding-model comparison. Details under Phase 3 "Matching decisions".
 
 
 ---
@@ -207,11 +208,12 @@ Manual: compare the printed field list with what you see on screen for each of t
 
 **You do**
 
-- [ ] Write a **test set** of 20 questions in `tests/fixtures/eval_questions.json`: for each, the question as a form would word it and which saved answer or source should answer it. Include 8 reworded versions of your saved questions, 4 legal/eligibility, 4 personal fields, and 4 brand-new open questions ("Why do you want to join us?"). This is how you'll judge quality.
+- [x] Write a **test set** of 20 questions in `tests/fixtures/eval_questions.json`: for each, the question as a form would word it and which saved answer or source should answer it. Include 8 reworded versions of your saved questions, 4 legal/eligibility, 4 personal fields, and 4 brand-new open questions ("Why do you want to join us?"). This is how you'll judge quality. (Done: 45 questions.)
+- [ ] Write about 10 **held-out** questions without looking at `also_asked_as`, so the eval measures understanding, not memorised wordings.
 - [ ] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these.
 - [ ] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
 - [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
-- [ ] Decide the confidence cutoff for "flagged" (start at 0.7).
+- [x] Decide the confidence cutoff for "flagged" (started at 0.7; now 0.85 after the prefix change, see "Matching decisions" below).
 - [x] Approve adding `sqlite-vec` (approved and installed Nov 10, 2026).
 
 **Prompt Claude Code**
@@ -221,6 +223,22 @@ Manual: compare the printed field list with what you see on screen for each of t
 3. "Write `engine/forms/answers.py` with the rule order: by each answer's kind: protected → used exactly as saved, never sent to the AI, highlighted for review (and questions containing sensitive words are treated as protected even with no saved match); fixed → bank via RAG with scope, used as written; open and new non-sensitive questions → Ollama rewrites from retrieved facts only, flagged. Also add elaboration: a short saved \"Yes\" in a free-text box becomes \"Yes\" plus 1–2 sentences of real reasons from my answers, projects and resumes, flagged; radios and dropdowns get the plain answer; protected is never expanded. Add `prompts/form.md`. Mock-mode tests for each rule."
 4. "Add the resume picker (job post + the most similar chunks of each resume → A or B with evidence, never by file name) and the test that **no prompt ever contains phone, address, email or ID numbers**."
 5. "Run the answer engine against the 3 form fixtures with real Ollama in `dry_run` and print a table: field, answer, source, confidence."
+
+**Matching decisions (Nov 10, 2026)**: how a form question finds its saved answer. Kept here so we don't re-argue them.
+
+| Decision | Why |
+| --- | --- |
+| Saved questions and form questions are both embedded with nomic's `clustering:` prefix; facts keep `search_document:`/`search_query:` | Same-kind comparison. Eval: right question first went from 7/11 to 10/11 before any other change |
+| `also_asked_as` alternate wordings in `answers.json` (312 written from real ATS forms) | Gives retrieval more ways in. Right question first: 25/26. Not a long-term fix for synonyms on its own |
+| `MATCH_THRESHOLD` = 0.85 (was 0.7) | The new prefix lifts all scores; 0.7 accepted everything |
+| Below the cutoff: NO MATCH → unknown questions list; may still be filled, flagged **not recommended**, any kind (including protected) | Your rule |
+| Approved design for an AI check: personal fields by code first; skip the AI only at score ≥ 0.95 and ≥ 0.05 ahead of #2; protected answers need the AI to agree **and** score ≥ 0.80; fallback to the cutoff if the AI fails | Your choices, Nov 10 |
+
+**Step 1 result: `llama3.1:8b` as a "same question?" judge (Nov 10)**. Tested on 6 hard questions (start/begin, hybrid, feedback, visa, address, industry):
+
+- **Speed:** 100% CPU (the Radeon iGPU isn't used), 5.6 GB RAM. Cold start 23–55 s; warm about 5 s per question when RAM is free, 15–45 s when Windows runs short of RAM (free RAM fell to 0.7 GB with other apps open).
+- **Quality: not good enough.** With a loose prompt it picked related-but-wrong questions, including "Will you need visa sponsorship?" → "Are you legally authorized to work?" (dangerous for a protected answer). With a strict prompt (temperature 0, JSON schema) it answered "none" to everything, missing begin = start and the hybrid question: 3/6, and the 3 "right" answers were all "none". Answers also changed between runs.
+- **Decision:** don't build the AI judge on `llama3.1:8b` for now. Next, test a stronger **embedding** model (light on RAM, fast). Keep `llama3.1:8b` for its planned job, drafting open answers. Personal-field detection by code (step 2 of the plan) goes ahead regardless.
 
 **Check**
 
