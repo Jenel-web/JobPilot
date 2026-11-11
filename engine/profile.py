@@ -61,9 +61,17 @@ class JobPreferences(BaseModel):
 
 
 class Project(BaseModel):
+    """One project. Only ``name`` is required; the detail fields help the AI answer open questions
+    ("tell us about a challenge you faced") from TRUE facts. Leave a field empty rather than guess."""
+
     name: str = Field(min_length=1)
     tech: list[str] = []
     blurb: str = ""
+    status: str = ""  # e.g. "ongoing"
+    result: str = ""  # measurable outcome
+    problem: str = ""
+    solution: str = ""
+    hardest_part: str = ""
 
 
 class ResumeEntry(BaseModel):

@@ -19,7 +19,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
 | `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
-| Tests | 233 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
+| Tests | 236 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
 | `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
@@ -70,6 +70,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-11: decisions: matching frozen at good enough; protected answers on a weak match are filled and flagged for review (kept). Coverage check on the 2 saved real forms: general questions covered; you added 6 internship questions (OJT hours, academic internship, MOA, own laptop, headline, duration). Fixed `answers.json` (the 6 were pasted as one nested list; backup `data/answers.backup-2026-11-11.json`).
 - 2026-11-11: personal-field detector. Step A: `profile.json` takes `first_name`, `middle_name`, `last_name` (full name built from them; old `name` still loads), new DB columns added to existing databases by `init_db`. Step B: reader captures `autocomplete`, `placeholder`, `max_length`, `pattern`. Step C: `engine/forms/answers.py` with `detect_personal` (autocomplete → type → name attribute → short label; skips long questions and other people's details), `format_phone` (one stored number → +63 / 09 / bare from the field's hints), dropdown option matching, blank + flagged when a value is missing. Both real forms read correctly (Address no longer mistaken for Email). 215 tests pass.
 - 2026-11-11: learning rules. New `engine/learning.py`: questions below the cutoff go to `unknown_questions` (same question seen again only raises `times_seen`); a matched question in new words is queued in `suggested_wordings` and only written into `answers.json` after `questions approve` (timestamped backup, atomic write, `load` keeps it). Protected answers need `--yes-protected`; rejected wordings never return. New CLI `questions list/approve/reject`. DB: new table and 2 columns, old databases upgraded by `init_db`. 18 new tests (233 pass). Also fixed: nested eval file, venv hint, run instructions in `cli.py`, Chrome launch for Cloudflare.
+- 2026-11-11: portfolio facts for form answers. Scraped markjenelcortas-portfolio.vercel.app with headless Playwright (raw text in git-ignored `data/portfolio_scrape.json`). `Project` now takes optional `status`, `result`, `problem`, `solution`, `hardest_part`; `rag.build_chunks` makes an overview chunk and a separate `(story)` chunk per project (10 project chunks for 5 projects). `profile.json` gained EconLens, richer text for the other 4 and 7 skills (backup: `data/profile.backup-2026-11-11.json`). Real-vector check on a temp DB: challenge, WebSocket and Spring Boot questions find the right story chunks; "led a team" does not rank Pag-IBIG first (the AI sees the top few chunks anyway). 3 new tests (236 pass).
 
 
 ---
@@ -216,7 +217,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 
 - [x] Write a **test set** of 20 questions in `tests/fixtures/eval_questions.json`: for each, the question as a form would word it and which saved answer or source should answer it. Include 8 reworded versions of your saved questions, 4 legal/eligibility, 4 personal fields, and 4 brand-new open questions ("Why do you want to join us?"). This is how you'll judge quality. (Done: 45 questions.)
 - [ ] Write about 10 **held-out** questions without looking at `also_asked_as`, so the eval measures understanding, not memorised wordings.
-- [ ] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these.
+- [x] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these. (Done Nov 11: taken from your portfolio, 5 projects with result, problem, solution and hardest part in `profile.json`. Check them once and fix anything that is not exactly true.)
 - [ ] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
 - [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
 - [x] Decide the confidence cutoff for "flagged" (started at 0.7; now 0.85 after the prefix change, see "Matching decisions" below).

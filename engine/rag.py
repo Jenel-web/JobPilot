@@ -237,7 +237,20 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
         for project in json.loads(profile["projects"]):
             tech = ", ".join(project.get("tech", []))
             parts = [f"Project: {project['name']}.", f"Technologies: {tech}." if tech else "", project.get("blurb", "")]
+            if project.get("status"):
+                parts.append(f"Status: {project['status']}.")
+            if project.get("result"):
+                parts.append(f"Result: {project['result']}")
             chunks.append(Chunk("project", project["name"], " ".join(p for p in parts if p).strip()))
+            # The story (problem, solution, hardest part) is its own chunk, so a question about a
+            # challenge finds it without the overview text diluting the match.
+            story = [
+                f"{label}: {project[key]}"
+                for key, label in (("problem", "Problem"), ("solution", "Solution"), ("hardest_part", "Hardest part"))
+                if project.get(key)
+            ]
+            if story:
+                chunks.append(Chunk("project", f"{project['name']} (story)", " ".join([f"Project: {project['name']}.", *story])))
 
     for resume in conn.execute("SELECT id, extracted_text FROM resumes ORDER BY id"):
         pieces = split_resume(scrub(resume["extracted_text"], private))

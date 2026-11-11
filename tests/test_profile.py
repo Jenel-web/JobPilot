@@ -356,3 +356,12 @@ def test_name_parts_are_saved_to_the_database(tmp_path: Path) -> None:
     load_profile(conn, path, tmp_path)
     row = conn.execute("SELECT full_name, first_name, middle_name, last_name, upload_name FROM profile").fetchone()
     assert tuple(row) == ("Juan Santos Dela Cruz", "Juan", "Santos", "Dela Cruz", "Juan Santos Dela Cruz.pdf")
+
+
+def test_project_detail_fields_are_optional_and_default_empty() -> None:
+    from engine.profile import Project
+
+    project = Project(name="Fake App")
+    assert (project.status, project.result, project.problem, project.solution, project.hardest_part) == ("",) * 5
+    detailed = Project(name="Fake App", hardest_part="Learning WebSockets")
+    assert detailed.hardest_part == "Learning WebSockets"

@@ -323,3 +323,38 @@ def test_old_index_version_must_be_rebuilt(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE rag_meta SET value = 'mock' WHERE key = 'embedder'")
     with pytest.raises(rag.RagError, match="rag reindex"):
         rag.retrieve(conn, "salary", settings=MOCK)
+
+
+# ---- project details (scraped portfolio facts) ---------------------------------------------
+
+
+def test_project_with_details_gets_an_overview_and_a_story_chunk(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "UPDATE profile SET projects = ?",
+        (
+            json.dumps(
+                [
+                    {
+                        "name": "PetTracker",
+                        "tech": ["Kotlin"],
+                        "blurb": "Android app to track pet vaccines",
+                        "status": "ongoing",
+                        "result": "Used by 20 pet owners.",
+                        "problem": "Owners forget vaccine dates.",
+                        "solution": "Reminders by notification.",
+                        "hardest_part": "Scheduling alarms reliably.",
+                    }
+                ]
+            ),
+        ),
+    )
+    chunks = [c for c in rag.build_chunks(conn) if c.source == "project"]
+    assert [c.ref for c in chunks] == ["PetTracker", "PetTracker (story)"]
+    overview, story = chunks[0].text, chunks[1].text
+    assert "Status: ongoing." in overview and "Result: Used by 20 pet owners." in overview
+    assert "Problem: Owners forget" in story and "Hardest part: Scheduling alarms" in story
+    assert "Problem:" not in overview  # the story stays out of the overview chunk
+
+
+def test_project_without_details_stays_one_chunk(conn: sqlite3.Connection) -> None:
+    assert len([c for c in rag.build_chunks(conn) if c.source == "project"]) == 1
