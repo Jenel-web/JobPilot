@@ -1,4 +1,4 @@
-﻿"""SQLite database: connection and schema (the 6 tables of v0 Phase 1).
+"""SQLite database: connection and schema (the 6 tables of v0 Phase 1).
 
 SQLite is just a file (``data/jobpilot.db``) that Python can read and write
 with the built-in ``sqlite3`` module. There is no server and no password.
@@ -44,7 +44,10 @@ QUESTION_STATUSES = ("open", "answered")
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS profile (
     id                  INTEGER PRIMARY KEY CHECK (id = 1),   -- always exactly one row
-    full_name           TEXT NOT NULL,
+    full_name           TEXT NOT NULL,                        -- built from the parts below
+    first_name          TEXT NOT NULL DEFAULT '',
+    middle_name         TEXT NOT NULL DEFAULT '',
+    last_name           TEXT NOT NULL DEFAULT '',
     email               TEXT,
     phone               TEXT,
     address             TEXT,
@@ -159,9 +162,25 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after a table was first created. ``CREATE TABLE IF NOT EXISTS`` never
+# changes an existing table, so ``init_db`` adds these to older databases itself.
+ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "profile": [
+        ("first_name", "TEXT NOT NULL DEFAULT ''"),
+        ("middle_name", "TEXT NOT NULL DEFAULT ''"),
+        ("last_name", "TEXT NOT NULL DEFAULT ''"),
+    ],
+}
+
+
 def init_db(conn: sqlite3.Connection) -> None:
-    """Create every table that does not exist yet. Safe to run many times."""
+    """Create every table that does not exist yet, and add any newer columns. Safe to run many times."""
     conn.executescript(SCHEMA)
+    for table, columns in ADDED_COLUMNS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for column, definition in columns:
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     conn.commit()
 
 

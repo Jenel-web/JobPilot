@@ -66,3 +66,14 @@ def test_profile_holds_only_one_row(conn: sqlite3.Connection) -> None:
 def test_foreign_keys_are_enforced(conn: sqlite3.Connection) -> None:
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO fills (url, resume_id) VALUES ('http://x', 'A')")  # no resume A yet
+
+
+def test_init_db_adds_new_columns_to_an_older_database() -> None:
+    """A database made before the name-part columns existed gets them, and keeps its data."""
+    conn = connect(":memory:")
+    conn.execute("CREATE TABLE profile (id INTEGER PRIMARY KEY CHECK (id = 1), full_name TEXT NOT NULL)")
+    conn.execute("INSERT INTO profile (id, full_name) VALUES (1, 'Old Person')")
+    init_db(conn)
+    init_db(conn)  # running twice must not fail
+    row = conn.execute("SELECT full_name, first_name, middle_name, last_name FROM profile").fetchone()
+    assert tuple(row) == ("Old Person", "", "", "")

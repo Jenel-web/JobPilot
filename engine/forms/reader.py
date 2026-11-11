@@ -72,6 +72,8 @@ _EXTRACT_JS = r"""
     label: labelOf(e), group: groupOf(e),
     required: !!(e.required || e.getAttribute('aria-required') === 'true'),
     options: e.tagName === 'SELECT' ? [...e.options].filter(o => o.value !== '').map(o => clean(o.text)).filter(t => t) : [],
+    autocomplete: clean(e.getAttribute('autocomplete')).toLowerCase(), placeholder: clean(e.getAttribute('placeholder')),
+    maxLength: e.maxLength > 0 ? e.maxLength : 0, pattern: e.getAttribute('pattern') || '',
     skip: SKIP.has((e.type || '').toLowerCase()) || e.disabled || !shown(e),
   })).filter(r => !r.skip);
 }
@@ -88,6 +90,12 @@ class FormField(BaseModel):
     name: str = ""  # the input's name attribute, if any
     indexes: list[int] = []  # positions of its input(s) in its frame (the filler uses these)
     frame: str = ""  # address of the embedded frame it lives in; empty = the outer page
+    # Hints the page gives about the expected value (used to recognise personal fields
+    # and to pick a phone number format). Empty / 0 when the page gives none.
+    autocomplete: str = ""  # e.g. "given-name", "email", "tel-national", "address-level2"
+    placeholder: str = ""  # grey example text, e.g. "09XX XXX XXXX"
+    max_length: int = 0
+    pattern: str = ""  # a regular expression the page checks the value against
 
     @property
     def needs_you(self) -> bool:
@@ -172,6 +180,10 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
                 options=item["options"],
                 name=item["name"],
                 indexes=[item["index"]],
+                autocomplete=item.get("autocomplete", ""),
+                placeholder=item.get("placeholder", ""),
+                max_length=item.get("maxLength", 0) or 0,
+                pattern=item.get("pattern", ""),
             )
         )
     return fields

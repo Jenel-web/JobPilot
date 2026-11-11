@@ -318,3 +318,41 @@ def test_also_asked_as_loads_into_aliases_and_is_rebuilt(tmp_path: Path) -> None
     path.write_text(json.dumps([{"question": "When can you start?", "answer": "Now", "kind": "fixed"}]), encoding="utf-8")
     load_answers(conn, path)
     assert conn.execute("SELECT count(*) FROM answer_aliases").fetchone()[0] == 0
+
+
+# ---- name parts (first / middle / last) ---------------------------------------------
+
+
+def test_name_parts_build_the_full_name() -> None:
+    from engine.profile import ProfileFile
+
+    p = ProfileFile(first_name="Juan", middle_name="Santos", last_name="Dela Cruz")
+    assert p.full_name == "Juan Santos Dela Cruz"
+    assert ProfileFile(first_name="Juan", last_name="Dela Cruz").full_name == "Juan Dela Cruz"
+
+
+def test_older_single_name_still_loads() -> None:
+    from engine.profile import ProfileFile
+
+    assert ProfileFile(name="Fake Person").full_name == "Fake Person"
+    # once first and last are set, the old field is ignored
+    assert ProfileFile(name="Old", first_name="New", last_name="Name").full_name == "New Name"
+
+
+def test_profile_without_any_name_is_rejected() -> None:
+    from pydantic import ValidationError
+
+    from engine.profile import ProfileFile
+
+    with pytest.raises(ValidationError, match="first_name and last_name"):
+        ProfileFile(first_name="Only")
+
+
+def test_name_parts_are_saved_to_the_database(tmp_path: Path) -> None:
+    conn = connect(":memory:")
+    init_db(conn)
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps({"first_name": "Juan", "middle_name": "Santos", "last_name": "Dela Cruz"}), encoding="utf-8")
+    load_profile(conn, path, tmp_path)
+    row = conn.execute("SELECT full_name, first_name, middle_name, last_name, upload_name FROM profile").fetchone()
+    assert tuple(row) == ("Juan Santos Dela Cruz", "Juan", "Santos", "Dela Cruz", "Juan Santos Dela Cruz.pdf")

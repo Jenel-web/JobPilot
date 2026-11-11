@@ -1,5 +1,7 @@
 {
-  "name": "Your Name",
+  "first_name": "Juan",
+  "middle_name": "Santos",
+  "last_name": "Dela Cruz",
   "email": "you@example.com",
   "phone": "+63 900 000 0000",
   "address": "123 Example St, Sample City, Metro Manila, Philippines",
@@ -59,5 +61,5 @@
       "file": "your resume b.pdf"
     }
   ],
-  "upload_name": "Your Name.pdf"
+  "upload_name": "Juan Dela Cruz.pdf"
 }

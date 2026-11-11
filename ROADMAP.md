@@ -24,7 +24,8 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
 | `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
 | `engine/forms/reader.py`, `capture.py` | Done (Phase 2) | Reader + capture; 1 real form saved, 2 more wanted (Google Form, Prosple) |
-| `engine/rag.py` | Built (Phase 3 step 2) | Chunks, `sqlite-vec` index, `retrieve()`, `rag reindex/ask/eval`; tested with mock vectors only. Not yet judged on real Ollama vectors |
+| `engine/rag.py` | Built (Phase 3 step 2) | Chunks, `sqlite-vec` index, `retrieve()`, `rag reindex/ask/eval`; tuned on real `nomic-embed-text` vectors (same `clustering:` prefix both sides, `also_asked_as` wordings, cutoff 0.85). Matching frozen at good enough |
+| `engine/forms/answers.py` | Started (Phase 3 step 3) | Personal-field detector: name parts, email, phone (format from one stored number), address, city, country, links; by code, never AI. Rest of the answer engine still to do |
 | `api.py` | Empty stub | Phase 4 |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
 | `requirements.txt` | Incomplete | Has `ollama`, `pydantic`, `pytest`. Playwright, FastAPI, uvicorn, pdfplumber, keyring, sqlite-vec still to add, one at a time with your OK |
@@ -42,7 +43,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Next: the personal-field detector, then `engine/forms/answers.py`.
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Next: the rest of `engine/forms/answers.py` (answer bank and AI-draft rules).
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -65,6 +66,8 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-10: first real-vector eval was poor (right saved question first 7/11; every score 0.5-0.65). Fixes: (1) saved questions and incoming questions now both use nomic's symmetric `clustering:` prefix (facts keep `search_document`/`search_query`); index version bumped to v2; (2) new `also_asked_as` field in answers.json + `answer_aliases` table: 312 alternate wordings for all 95 questions, modelled on Greenhouse/Lever/Workday/LinkedIn/Indeed/JobStreet/EEO forms. Result: right saved question first 25/26. Scores shifted up, so `MATCH_THRESHOLD` recalibrated 0.7 -> 0.85. Caveat: the wordings were written after seeing the eval set, so the eval is now optimistic; a fresh held-out set is needed. Backup: `data/answers.backup-2026-11-10.json`.
 - 2026-11-10: Step 1 timing check of `llama3.1:8b` as a match judge (no project code changed): CPU only, 5.6 GB RAM, about 5 s per question warm (much slower when RAM runs out), but only 3/6 right and inconsistent; it confused visa sponsorship with work authorization. AI judge on hold; next is an embedding-model comparison. Details under Phase 3 "Matching decisions".
 - 2026-11-10: `mxbai-embed-large` pulled (669 MB) and compared with `nomic-embed-text` on your 10 held-out questions: nomic 6/6 right first, mxbai 4-5/6 and slower. Keeping nomic; no code changed. Next: personal-field detector by code, then `engine/forms/answers.py`.
+- 2026-11-11: decisions: matching frozen at good enough; protected answers on a weak match are filled and flagged for review (kept). Coverage check on the 2 saved real forms: general questions covered; you added 6 internship questions (OJT hours, academic internship, MOA, own laptop, headline, duration). Fixed `answers.json` (the 6 were pasted as one nested list; backup `data/answers.backup-2026-11-11.json`).
+- 2026-11-11: personal-field detector. Step A: `profile.json` takes `first_name`, `middle_name`, `last_name` (full name built from them; old `name` still loads), new DB columns added to existing databases by `init_db`. Step B: reader captures `autocomplete`, `placeholder`, `max_length`, `pattern`. Step C: `engine/forms/answers.py` with `detect_personal` (autocomplete → type → name attribute → short label; skips long questions and other people's details), `format_phone` (one stored number → +63 / 09 / bare from the field's hints), dropdown option matching, blank + flagged when a value is missing. Both real forms read correctly (Address no longer mistaken for Email). 215 tests pass.
 
 
 ---

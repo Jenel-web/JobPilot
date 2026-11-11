@@ -1,4 +1,4 @@
-﻿"""Profile, resumes and the answer bank: load them from files into SQLite, read them back.
+"""Profile, resumes and the answer bank: load them from files into SQLite, read them back.
 
 Your files are the source of truth in v0:
 
@@ -22,7 +22,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from engine.db import ANSWER_KINDS, LOCATION_SCOPES
 from engine.settings import ROOT
@@ -73,9 +73,18 @@ class ResumeEntry(BaseModel):
 
 
 class ProfileFile(BaseModel):
-    """Shape of ``data/profile.json``."""
+    """Shape of ``data/profile.json``.
 
-    name: str = Field(min_length=1)
+    Your name is stored in parts so forms that ask for "First name" or "Last name"
+    get exactly the right part, never a guess. ``full_name`` is built from them.
+    An older file with only ``name`` still loads (the parts stay empty, so those
+    form fields are left blank and flagged until you add them).
+    """
+
+    first_name: str = ""
+    middle_name: str = ""  # optional
+    last_name: str = ""
+    name: str = ""  # older single-field form; ignored once first and last name are set
     email: str = ""
     phone: str = ""
     address: str = ""
@@ -89,6 +98,20 @@ class ProfileFile(BaseModel):
     projects: list[Project] = []
     resumes: list[ResumeEntry] = []
     upload_name: str = ""
+
+    @model_validator(mode="after")
+    def _needs_a_name(self) -> "ProfileFile":
+        if not self.full_name:
+            raise ValueError("needs first_name and last_name (or the older 'name')")
+        return self
+
+    @property
+    def full_name(self) -> str:
+        """``first middle last`` when the parts are set, otherwise the older ``name``."""
+        if self.first_name.strip() and self.last_name.strip():
+            parts = (self.first_name, self.middle_name, self.last_name)
+            return " ".join(part.strip() for part in parts if part.strip())
+        return self.name.strip()
 
 
 class AnswerEntry(BaseModel):
@@ -156,15 +179,16 @@ def load_profile(
     with conn:  # one transaction: all or nothing
         conn.execute(
             """
-            INSERT INTO profile (id, full_name, email, phone, address, school, degree, year_level,
+            INSERT INTO profile (id, full_name, first_name, middle_name, last_name, email, phone, address, school, degree, year_level,
                 grad_year, gpa, location, open_to_remote, github, linkedin, portfolio, job_types,
                 target_roles, preferred_locations, skills, summary, projects, upload_name)
-            VALUES (1, :full_name, :email, :phone, :address, :school, :degree, :year_level,
+            VALUES (1, :full_name, :first_name, :middle_name, :last_name, :email, :phone, :address, :school, :degree, :year_level,
                 :grad_year, :gpa, :location, :open_to_remote, :github, :linkedin, :portfolio,
                 :job_types, :target_roles, :preferred_locations, :skills, :summary, :projects,
                 :upload_name)
             ON CONFLICT(id) DO UPDATE SET
-                full_name=excluded.full_name, email=excluded.email, phone=excluded.phone,
+                full_name=excluded.full_name, first_name=excluded.first_name,
+                middle_name=excluded.middle_name, last_name=excluded.last_name, email=excluded.email, phone=excluded.phone,
                 address=excluded.address, school=excluded.school, degree=excluded.degree,
                 year_level=excluded.year_level, grad_year=excluded.grad_year, gpa=excluded.gpa,
                 location=excluded.location, open_to_remote=excluded.open_to_remote,
@@ -175,7 +199,10 @@ def load_profile(
                 upload_name=excluded.upload_name
             """,
             {
-                "full_name": data.name,
+                "full_name": data.full_name,
+                "first_name": data.first_name.strip(),
+                "middle_name": data.middle_name.strip(),
+                "last_name": data.last_name.strip(),
                 "email": data.email,
                 "phone": data.phone,
                 "address": data.address,
@@ -195,7 +222,7 @@ def load_profile(
                 "skills": json.dumps(data.skills),
                 "summary": data.summary,
                 "projects": json.dumps([p.model_dump() for p in data.projects]),
-                "upload_name": data.upload_name or f"{data.name}.pdf",
+                "upload_name": data.upload_name or f"{data.full_name}.pdf",
             },
         )
         for r in data.resumes:
@@ -322,6 +349,7 @@ def profile_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     resumes = conn.execute("SELECT id, label, file_path, length(extracted_text) AS chars FROM resumes ORDER BY id")
     return {
         "name": row["full_name"],
+        "name_parts": "set" if row["first_name"] and row["last_name"] else "MISSING: add first_name and last_name",
         "email": mask_email(row["email"] or ""),
         "phone": mask_phone(row["phone"] or ""),
         "address": "(hidden)" if row["address"] else "",

@@ -160,3 +160,25 @@ def test_greenhouse_form_embedded_in_a_company_site_reads_cleanly() -> None:
     assert len(labels) == len(set(labels))  # no duplicates from helper boxes
     assert not any(label == "Select..." for label in labels)
     assert any(f.label == "Attach" and f.type == "file" for f in inside)  # the resume upload
+
+
+def test_reader_captures_value_hints() -> None:
+    """autocomplete, placeholder, maxlength and pattern are read so personal fields can be recognised."""
+    html = """
+    <form>
+      <label for="fn">First name</label><input id="fn" autocomplete="given-name">
+      <label for="ph">Mobile</label><input id="ph" type="tel" autocomplete="tel-national"
+             placeholder="09XX XXX XXXX" maxlength="11" pattern="09[0-9]{9}">
+      <label for="c">Comments</label><textarea id="c"></textarea>
+    </form>
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.set_content(html)
+        first, phone, comments = read_fields(page)
+        browser.close()
+    assert first.autocomplete == "given-name"
+    assert (phone.autocomplete, phone.placeholder, phone.max_length, phone.pattern) == (
+        "tel-national", "09XX XXX XXXX", 11, "09[0-9]{9}")
+    assert (comments.autocomplete, comments.placeholder, comments.max_length, comments.pattern) == ("", "", 0, "")
