@@ -33,7 +33,8 @@ HOW TO RUN (every time you open a new terminal)
        python -m engine.cli rag ask "What is your expected salary?"   # 5. try a search
        python -m engine.cli rag eval        # 6. run all the test questions
 
-   Run `load` again, then `rag reindex`, after you edit profile.json or answers.json.
+   Run `load` again, then `rag reindex`, after you edit profile.json or answers.json
+   (and after `questions approve`).
 
 5. Run the tests before every commit:
 
@@ -51,6 +52,9 @@ All commands
     python -m engine.cli rag reindex       rebuild the search index (run after `load` or any data change)
     python -m engine.cli rag ask "..."     show the 5 chunks closest to a question (--source, -k)
     python -m engine.cli rag eval          top 5 chunks for every question in tests/fixtures/eval_questions.json
+    python -m engine.cli questions list    show unknown questions and new wordings waiting for your OK
+    python -m engine.cli questions approve ID [--yes-protected]   write a wording into answers.json (backup first)
+    python -m engine.cli questions reject ID                      throw a wording away for good
     python -m engine.cli forms read       list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
@@ -96,6 +100,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     reading.add_argument("--json", action="store_true", help="print JSON instead of a table")
     capturing = forms.add_parser("capture", help="save the open page as an offline test file")
     capturing.add_argument("name", help="file name, e.g. angkas_workable")
+    questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
+        dest="action", required=True
+    )
+    questions.add_parser("list", help="show unknown questions and wordings waiting for your OK")
+    approving = questions.add_parser("approve", help="add a suggested wording to answers.json")
+    approving.add_argument("id", type=int)
+    approving.add_argument("--yes-protected", action="store_true", help="needed when the saved answer is protected")
+    rejecting = questions.add_parser("reject", help="throw a suggested wording away for good")
+    rejecting.add_argument("id", type=int)
     args = parser.parse_args(argv)
 
     if args.command == "browser":
@@ -109,6 +122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Loaded profile, {counts['resumes']} resumes and {counts['answers']} answers.")
         elif args.command == "rag":
             return _rag(conn, args)
+        elif args.command == "questions":
+            return _questions(conn, args)
         elif args.command == "forms":
             return _capture_form(conn, args.name) if args.action == "capture" else _read_forms(conn, args.json)
         elif args.command == "profile":
@@ -121,6 +136,44 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         conn.close()
     return 0
+
+
+def _questions(conn, args) -> int:  # type: ignore[no-untyped-def]
+    """Run a ``questions`` command: list, approve or reject. Errors are printed, not raised."""
+    from engine import learning
+
+    try:
+        if args.action == "approve":
+            backup = learning.approve_wording(conn, args.id, confirm_protected=args.yes_protected)
+            print("Added to answers.json." + (f" Backup: {backup.name}" if backup else " (it was already there)"))
+            print("Now run: python -m engine.cli load   then   python -m engine.cli rag reindex")
+        elif args.action == "reject":
+            learning.reject_wording(conn, args.id)
+            print(f"Suggestion {args.id} rejected; it will not be suggested again.")
+        else:
+            _print_learning(conn)
+    except learning.LearningError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _print_learning(conn) -> None:  # type: ignore[no-untyped-def]
+    """Print both waiting lists."""
+    from engine import learning
+
+    unknown = learning.open_unknowns(conn)
+    print(f"UNKNOWN QUESTIONS ({len(unknown)}): add each to answers.json, then `load` and `rag reindex`")
+    for row in unknown:
+        print(f"  #{row['id']}  seen {row['times_seen']}x  {_shorten(row['question_text'], 100)}")
+    wordings = learning.pending_wordings(conn)
+    print(f"\nSUGGESTED WORDINGS ({len(wordings)}): same meaning as a saved question?")
+    for row in wordings:
+        flag = "  [PROTECTED: needs --yes-protected]" if row["protected"] else ""
+        print(f"  #{row['id']}  score {row['score']:.2f}  seen {row['times_seen']}x{flag}")
+        print(f"      new:   {_shorten(row['wording'], 100)}\n      saved: {_shorten(row['matched_question'], 100)}")
+    if wordings:
+        print("\nApprove: python -m engine.cli questions approve ID      Reject: ... questions reject ID")
 
 
 def _rag(conn, args) -> int:  # type: ignore[no-untyped-def]

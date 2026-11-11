@@ -10,6 +10,7 @@ Tables
 ``answers``            your answer bank: question, answer, location scope, kind
 ``answer_aliases``     other wordings of a saved question (helps RAG find it)
 ``unknown_questions``  questions the bot could not answer; you answer each once
+``suggested_wordings`` new wordings of a saved question, waiting for your OK
 ``fills``              history: one row per "Fill this page"
 ``action_log``         every step the bot took
 
@@ -40,6 +41,7 @@ ANSWER_KINDS = ("fixed", "open", "protected")
 
 FILL_STATUSES = ("filled", "submitted", "abandoned")
 QUESTION_STATUSES = ("open", "answered")
+WORDING_STATUSES = ("pending", "approved", "rejected")
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS profile (
@@ -108,7 +110,26 @@ CREATE TABLE IF NOT EXISTS unknown_questions (
     first_seen    TEXT NOT NULL DEFAULT (datetime('now')),
     status        TEXT NOT NULL DEFAULT 'open'
                   CHECK (status IN {QUESTION_STATUSES!r}),
-    answer_id     INTEGER REFERENCES answers(id)              -- set once you answer it
+    answer_id     INTEGER REFERENCES answers(id),             -- set once you answer it
+    times_seen    INTEGER NOT NULL DEFAULT 1,                 -- same question met again on other pages
+    last_seen     TEXT
+);
+
+-- A form worded a saved question in a NEW way and RAG matched it. The wording waits
+-- here until you approve it; only then is it written into answers.json (also_asked_as).
+CREATE TABLE IF NOT EXISTS suggested_wordings (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    wording          TEXT NOT NULL,
+    wording_key      TEXT NOT NULL,                           -- lowercase, single spaces: for duplicate checks
+    matched_question TEXT NOT NULL,                           -- the saved question it matched
+    score            REAL NOT NULL,
+    page_url         TEXT,
+    protected        INTEGER NOT NULL DEFAULT 0,              -- 1 = the saved answer is protected
+    times_seen       INTEGER NOT NULL DEFAULT 1,
+    first_seen       TEXT NOT NULL DEFAULT (datetime('now')),
+    status           TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN {WORDING_STATUSES!r}),
+    UNIQUE (wording_key, matched_question)
 );
 
 CREATE TABLE IF NOT EXISTS fills (
@@ -144,7 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_fills_status ON fills(status);
 CREATE INDEX IF NOT EXISTS idx_log_fill ON action_log(fill_id);
 """
 
-TABLES = ("profile", "resumes", "answers", "answer_aliases", "unknown_questions", "fills", "action_log")
+TABLES = ("profile", "resumes", "answers", "answer_aliases", "unknown_questions", "suggested_wordings", "fills", "action_log")
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
@@ -165,6 +186,10 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
 # Columns added after a table was first created. ``CREATE TABLE IF NOT EXISTS`` never
 # changes an existing table, so ``init_db`` adds these to older databases itself.
 ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "unknown_questions": [
+        ("times_seen", "INTEGER NOT NULL DEFAULT 1"),
+        ("last_seen", "TEXT"),
+    ],
     "profile": [
         ("first_name", "TEXT NOT NULL DEFAULT ''"),
         ("middle_name", "TEXT NOT NULL DEFAULT ''"),

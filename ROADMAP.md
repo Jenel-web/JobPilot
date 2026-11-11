@@ -19,12 +19,13 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
 | `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
-| Tests | 109 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
+| Tests | 233 pass | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
 | `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
 | `engine/forms/reader.py`, `capture.py` | Done (Phase 2) | Reader + capture; 1 real form saved, 2 more wanted (Google Form, Prosple) |
 | `engine/rag.py` | Built (Phase 3 step 2) | Chunks, `sqlite-vec` index, `retrieve()`, `rag reindex/ask/eval`; tuned on real `nomic-embed-text` vectors (same `clustering:` prefix both sides, `also_asked_as` wordings, cutoff 0.85). Matching frozen at good enough |
+| `engine/learning.py` | Built (Phase 3 step 3b) | Unknown questions list (counted, not duplicated) and suggested wordings: a matched question in new words waits for your approval, then goes into `answers.json` `also_asked_as` (backup first; protected needs `--yes-protected`). CLI: `questions list/approve/reject`. Not yet called by the answer engine |
 | `engine/forms/answers.py` | Started (Phase 3 step 3) | Personal-field detector: name parts, email, phone (format from one stored number), address, city, country, links; by code, never AI. Rest of the answer engine still to do |
 | `api.py` | Empty stub | Phase 4 |
 | `engine/forms/`, `fixtures/forms/`, `prompts/` | Created (empty) | Filled from Phase 2 |
@@ -43,7 +44,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Next: the rest of `engine/forms/answers.py` (answer bank and AI-draft rules).
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Unknown-questions list and approved-wording learning are built (`engine/learning.py`). Next: the rest of `engine/forms/answers.py` (answer bank and AI-draft rules), which will call `learning.triage_question()` for every non-personal field.
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -68,6 +69,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-10: `mxbai-embed-large` pulled (669 MB) and compared with `nomic-embed-text` on your 10 held-out questions: nomic 6/6 right first, mxbai 4-5/6 and slower. Keeping nomic; no code changed. Next: personal-field detector by code, then `engine/forms/answers.py`.
 - 2026-11-11: decisions: matching frozen at good enough; protected answers on a weak match are filled and flagged for review (kept). Coverage check on the 2 saved real forms: general questions covered; you added 6 internship questions (OJT hours, academic internship, MOA, own laptop, headline, duration). Fixed `answers.json` (the 6 were pasted as one nested list; backup `data/answers.backup-2026-11-11.json`).
 - 2026-11-11: personal-field detector. Step A: `profile.json` takes `first_name`, `middle_name`, `last_name` (full name built from them; old `name` still loads), new DB columns added to existing databases by `init_db`. Step B: reader captures `autocomplete`, `placeholder`, `max_length`, `pattern`. Step C: `engine/forms/answers.py` with `detect_personal` (autocomplete → type → name attribute → short label; skips long questions and other people's details), `format_phone` (one stored number → +63 / 09 / bare from the field's hints), dropdown option matching, blank + flagged when a value is missing. Both real forms read correctly (Address no longer mistaken for Email). 215 tests pass.
+- 2026-11-11: learning rules. New `engine/learning.py`: questions below the cutoff go to `unknown_questions` (same question seen again only raises `times_seen`); a matched question in new words is queued in `suggested_wordings` and only written into `answers.json` after `questions approve` (timestamped backup, atomic write, `load` keeps it). Protected answers need `--yes-protected`; rejected wordings never return. New CLI `questions list/approve/reject`. DB: new table and 2 columns, old databases upgraded by `init_db`. 18 new tests (233 pass). Also fixed: nested eval file, venv hint, run instructions in `cli.py`, Chrome launch for Cloudflare.
 
 
 ---
@@ -236,6 +238,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 | `also_asked_as` alternate wordings in `answers.json` (312 written from real ATS forms) | Gives retrieval more ways in. Right question first: 25/26. Not a long-term fix for synonyms on its own |
 | `MATCH_THRESHOLD` = 0.85 (was 0.7) | The new prefix lifts all scores; 0.7 accepted everything |
 | Below the cutoff: NO MATCH → unknown questions list; may still be filled, flagged **not recommended**, any kind (including protected) | Your rule |
+| A match in NEW words → suggested wording, **never saved until you approve** (`questions approve ID`); protected answers also need `--yes-protected`; rejected wordings never return | Stops one wrong match from becoming a permanent 1.0 match (Nov 11) |
 | Approved design for an AI check: personal fields by code first; skip the AI only at score ≥ 0.95 and ≥ 0.05 ahead of #2; protected answers need the AI to agree **and** score ≥ 0.80; fallback to the cutoff if the AI fails | Your choices, Nov 10 |
 
 **Step 1 result: `llama3.1:8b` as a "same question?" judge (Nov 10)**. Tested on 6 hard questions (start/begin, hybrid, feedback, visa, address, industry):
