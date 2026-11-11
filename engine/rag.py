@@ -152,7 +152,9 @@ def init_rag(conn: sqlite3.Connection) -> None:
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
     except (ImportError, AttributeError, sqlite3.Error) as exc:
-        raise RagError(f"Cannot load sqlite-vec ({type(exc).__name__}). Run: pip install sqlite-vec") from exc
+        raise RagError(f"Cannot load sqlite-vec ({type(exc).__name__}). "
+                       "Wrong Python? Activate the project venv first: .venv\\Scripts\\Activate.ps1 "
+                       "(or run: pip install -r requirements.txt)") from exc
     conn.executescript(
         f"""
         CREATE TABLE IF NOT EXISTS chunks (
@@ -321,9 +323,9 @@ def reindex(conn: sqlite3.Connection, settings: Settings | None = None) -> dict[
     Embedding happens BEFORE anything is deleted, so if Ollama is down the old
     index stays intact. Run it again whenever your profile or answers change.
     """
+    init_rag(conn)  # first: gives a clear message if sqlite-vec is missing
     import sqlite_vec
 
-    init_rag(conn)
     settings = settings or load_settings()
     chunks = build_chunks(conn)
     vectors = _embed_checked([_doc_prefix(c.source) + c.text for c in chunks], settings)
@@ -382,13 +384,13 @@ def retrieve(
         sources: only these kinds of chunk (e.g. ``("answer",)`` to find a saved
             question, or ``("project", "resume", "profile")`` to find facts).
     """
-    import sqlite_vec
-
     if not question.strip():
         raise RagError("Cannot search for an empty question.")
     if k < 1:
         raise RagError("k must be at least 1.")
-    init_rag(conn)
+    init_rag(conn)  # first: gives a clear message if sqlite-vec is missing
+    import sqlite_vec
+
     total = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
     if total == 0:
         raise RagError("The index is empty. Run: python -m engine.cli rag reindex")

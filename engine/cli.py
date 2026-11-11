@@ -1,6 +1,51 @@
-"""Command line for JobPilot. Run from the project folder, with the venv active:
+"""Command line for JobPilot.
 
-    python -m engine.cli load              copy profile.json, resumes and answers.json into the database
+HOW TO RUN (every time you open a new terminal)
+================================================
+1. Open a terminal in the project folder (the one that contains `engine/`, `data/`
+   and `requirements.txt`). In VS Code: Terminal > New Terminal opens there already.
+   Or in PowerShell:
+
+       cd C:\\Users\\Administrator\\Downloads\\LearningOOP\\JobPilot
+
+2. Turn on the project's Python (the "venv"), which has all the libraries installed:
+
+       .venv\\Scripts\\Activate.ps1
+
+   (cmd.exe instead of PowerShell: `.venv\\Scripts\\activate.bat`.)
+   If PowerShell says "running scripts is disabled", run this ONCE, then retry:
+
+       Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+3. Check the terminal looks like this. `(.venv)` at the start and the JobPilot
+   folder before the `>` means you are set:
+
+       (.venv) PS C:\\Users\\Administrator\\Downloads\\LearningOOP\\JobPilot>
+
+   If `(.venv)` is missing you get "No module named 'sqlite_vec'" or similar.
+
+4. Run the commands below IN THIS ORDER the first time:
+
+       python -m engine.cli load            # 1. read profile.json, resumes, answers.json
+       python -m engine.cli profile show    # 2. check your profile looks right
+       python -m engine.cli answers list    # 3. check your answers look right
+       python -m engine.cli rag reindex     # 4. build the search index
+       python -m engine.cli rag ask "What is your expected salary?"   # 5. try a search
+       python -m engine.cli rag eval        # 6. run all the test questions
+
+   Run `load` again, then `rag reindex`, after you edit profile.json or answers.json.
+
+5. Run the tests before every commit:
+
+       python -m pytest -q
+
+Run mode: the default is `mock`, which uses FAKE search vectors, so scores are only
+a rough check. For real scores, start Ollama (with `nomic-embed-text` pulled), set
+run_mode to `dry_run` in settings, then run `rag reindex` again.
+
+All commands
+============
+    python -m engine.cli load            copy profile.json, resumes and answers.json into the database
     python -m engine.cli profile show      print your profile (email and phone masked)
     python -m engine.cli answers list      print the answer bank (optionally --kind fixed|open|protected)
     python -m engine.cli rag reindex       rebuild the search index (run after `load` or any data change)
@@ -129,6 +174,10 @@ def _verdict(m) -> str:  # type: ignore[no-untyped-def]
 def _run_eval(conn, path, rag, mode: str) -> None:  # type: ignore[no-untyped-def]
     """Print the top 5 chunks for every eval question, the match verdict, and where the expected question ranked."""
     questions = json.loads(path.read_text(encoding="utf-8-sig"))["questions"]
+    for number, q in enumerate(questions, start=1):
+        missing = [key for key in ("id", "form_question", "expect_source") if key not in q]
+        if missing:
+            raise ValueError(f"{path.name}, question #{number} is missing {missing} (a batch pasted inside the list?)")
     print(f"Embedder: {mode}   {len(questions)} questions from {path.name}")
     # An eval question copied word for word into also_asked_as would make the test meaningless.
     stored = {" ".join(r["alias"].lower().split()) for r in conn.execute("SELECT alias FROM answer_aliases")}
