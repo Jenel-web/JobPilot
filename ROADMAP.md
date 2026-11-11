@@ -287,6 +287,7 @@ Manual:
 
 - [ ] Approve adding `fastapi` and `uvicorn`.
 - [ ] Test on your own Google Form first, then Prosple, then a career page, always in `dry_run`. **You** click Submit.
+- [ ] **Design the Wordings screen first** (a third tab in `design/screens/Questions.html`: Waiting | Wordings | Answered), then build it. Requirements are in `SPEC.md` Part 2 "2b. Suggested wordings" and `design/DESIGN.md`: rows with new wording, matched saved question, score, times seen, kind chip; Approve / Reject; a ConfirmDialog for protected answers; Toast, Banner and EmptyState. Unknown question cards also show "seen N times, on N pages".
 - [ ] Look at the controls page next to the design mockups (`Questions.html`, `Applications.html`, `Components.html`) and tell Claude what differs. CLAUDE.md requires a side-by-side comparison, so don't skip it.
 - [ ] Use it for **a week of real applications**. Keep `notes/v0-misses.md`: for every wrong, missing or awkward fill, write the page URL, the field and what went wrong.
 - [ ] Review the screenshot of every filled page before you submit.
@@ -297,7 +298,7 @@ Manual:
 1. Explain-first: "Explain how the filler handles each field type, how we highlight guesses, and how passive submit detection works without ever clicking."
 2. "Implement `engine/forms/filler.py`: fill text, select, radio, checkbox, date; upload the resume; 1–4 s random delays; `safety.check()` and logging before each action. **Add a test that fails if any code path clicks a Submit or Apply button.** Test on saved HTML."
 3. "Save a `fills` row (URL, job and company, resume, flagged count, screenshot path, status `filled`) and an unknown-questions row for each unanswered question."
-4. "Add `engine/api.py` (FastAPI on 127.0.0.1 only): fill, unknown questions, answers CRUD, filled pages, mark status."
+4. "Add `engine/api.py` (FastAPI on 127.0.0.1 only): fill, unknown questions, answers CRUD, filled pages, mark status, and the wordings endpoints (`GET /wordings`, approve with `confirm_protected`, reject) plus answering an unknown question (writes `answers.json` with a backup, then re-indexes). Reuse `engine/learning.py`."
 5. "Build the controls page in the existing dashboard: Fill this page, Unknown questions, Answer bank editor, Filled pages history. Reuse the existing components. Compare with the mockups afterwards and list the differences."
 6. "Passive detection: after a fill, watch the page read-only for a confirmation (thank-you text, URL change) and offer 'Looks submitted. Mark it?'. Never clicks, never marks without confirmation."
 7. After the week: "Here are my notes from `notes/v0-misses.md`. Group them by cause and propose fixes, smallest first."

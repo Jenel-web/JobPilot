@@ -251,6 +251,37 @@ A single small page at `localhost:3000` that you keep open next to the bot's bro
 - A list of questions the engine could not answer, each with the page it came from. You type the answer once, pick a location scope (any / city / remote / abroad) and save. Next time that question, even worded differently, is answered from the bank.
 - Legal and eligibility questions show "You must answer this yourself" and never get an AI suggestion.
 
+**2b. Suggested wordings (the engine already exists: `engine/learning.py`; this is its screen)**
+
+The engine learns new ways a form asks a saved question, but **only you approve them**. A wrong match saved automatically would become a permanent 1.0 match, so the screen is the safety step. It is a tab or card next to Unknown questions (in the finished product, a third tab on Screen 4: Waiting | Wordings | Answered). Data from `suggested_wordings`; actions are the same as the CLI `questions approve / reject`.
+
+*What each row shows*
+
+- **New wording**, exactly as the form asked it, in bold: "How much pay do you want?"
+- **Matches saved question:** "What is your expected monthly salary?" with the saved answer shown (except protected ones, which show only the kind).
+- **Match score** (0.91) and **seen N times**, plus the page it came from (link).
+- A **kind chip**: fixed / open / protected. Protected rows get an amber **FlagMarker**: "Matches a protected answer. Check the two questions mean the same thing."
+- Buttons: **Approve** (primary) and **Reject** (secondary). Sort by most seen first.
+
+*Rules the screen must follow*
+
+- Approving a **protected** row opens a **ConfirmDialog** ("This answer is protected. Do you confirm both questions mean exactly the same?"). Only its confirm button sends `confirm_protected = true`.
+- After Approve: a **Toast** "Added to answers.json (backup made)", then the engine runs load and re-index by itself, with a status line "Re-indexing…" (CLI today: you run `load` and `rag reindex` by hand).
+- Reject is final: that wording never comes back. Show an "Undo" only if the engine adds one later; do not invent it.
+- Errors from the engine (saved question no longer in the file, file unreadable) show in a **Banner** with the engine's message, not a raw error.
+- Empty state (**EmptyState**): "No new wordings waiting. When a form words a question in a new way, it appears here."
+
+*Unknown questions additions (section 2)*
+
+- Show **seen N times** and **on N pages** (with links) on each card, most-seen first. This count comes from `unknown_questions.times_seen`.
+- Saving an answer adds it to the answer bank and re-indexes, so the same question, worded differently, matches next time.
+
+*Engine API still to write (Phase 4 `engine/api.py`)*
+
+`GET /wordings` (pending), `POST /wordings/{id}/approve` (body: `confirm_protected`), `POST /wordings/{id}/reject`, `GET /unknown`, `POST /unknown/{id}/answer` (answer, kind, scope, city; writes `answers.json` with a backup, then re-indexes). The functions to call already exist in `engine/learning.py`, except `answer` for unknown questions, which is new work.
+
+*Design work still to do:* `design/screens/Questions.html` has no Wordings tab yet. Make that mockup first and compare the built screen with it, as CLAUDE.md requires. Reuse the shared components only: DataTable, StatusChip, FlagMarker, Button, ConfirmDialog, Toast, Banner, EmptyState, Drawer. Anything the design system does not define (for example a "score" bar) must be asked about, not invented.
+
 **3. Answer bank editor**
 
 - A searchable table: question, answer, location scope, times used. Add, edit and delete rows. Changes trigger a quick re-index so RAG can find them.
@@ -949,6 +980,7 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 - [ ] Unknown questions saved to `unknown_questions` with their source page
 - [ ] `engine/api.py` (FastAPI, `127.0.0.1` only): endpoints for fill, unknown questions, answers, filled pages
 - [ ] Controls page in `dashboard/` (existing scaffold, design system, shared components first): Fill this page, Unknown questions, Answer bank editor, Filled pages history (see Part 2)
+- [ ] **Suggested wordings screen** (Approve / Reject, protected needs a ConfirmDialog) and the unknown-questions answer form, as described in "2b. Suggested wordings" in Part 2. Needs: the Wordings mockup in `design/screens/Questions.html`, the `/wordings` and `/unknown` endpoints, and re-index after approve or answer
 - [ ] **Mark as submitted** and **Abandoned** buttons on the history
 - [ ] **Passive submit detection:** after a fill, the engine watches the page read-only (confirmation text such as "thank you / application received", or a URL change after you click Submit) and offers "Looks submitted. Mark it?". It never clicks anything and never marks it without your confirmation
 - [ ] Run for a week of real applications; fix what breaks (log each miss in a notes file)

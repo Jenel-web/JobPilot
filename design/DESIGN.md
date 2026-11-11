@@ -63,6 +63,11 @@ Newsreader is only for page titles and large numbers. Numbers in tables use `fon
 | Drawer | 520 px from the right, overlay shadow, close X |
 | AI-guess field | Amber bg + amber border + "AI guess, check this" in amber text |
 
+## Screens still to design (reminder)
+
+- **Wordings tab / card** (suggested new wordings of a saved question: new wording, matched saved question, score, times seen, kind chip, Approve and Reject, ConfirmDialog for protected, Toast, Banner, EmptyState). The full requirements are in `SPEC.md`, Part 2, "2b. Suggested wordings". Add it to `screens/Questions.html` as a third tab (Waiting | Wordings | Answered) **before** building it in the dashboard.
+- **Unknown question cards** also need "seen N times" and "on N pages" with links.
+
 ## Not defined yet (ask before inventing)
 
 - Dark-mode values for tints, soft lines and amber.
