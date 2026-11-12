@@ -73,6 +73,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-11: portfolio facts for form answers. Scraped markjenelcortas-portfolio.vercel.app with headless Playwright (raw text in git-ignored `data/portfolio_scrape.json`). `Project` now takes optional `status`, `result`, `problem`, `solution`, `hardest_part`; `rag.build_chunks` makes an overview chunk and a separate `(story)` chunk per project (10 project chunks for 5 projects). `profile.json` gained EconLens, richer text for the other 4 and 7 skills (backup: `data/profile.backup-2026-11-11.json`). Real-vector check on a temp DB: challenge, WebSocket and Spring Boot questions find the right story chunks; "led a team" does not rank Pag-IBIG first (the AI sees the top few chunks anyway). 3 new tests (236 pass).
 - 2026-11-11: first `README.md` written (how it works, safety, honest limits, status). It describes the filler as not built yet; re-check and update it after Phase 4, which is when the README checkbox gets ticked.
 - 2026-11-12: decision: the job post is often in another tab, so a **job post finder** goes into Phase 4 (form page → opener tab → same-site tab → ask you; shows what it used with Change; no job post = no resume upload). The Phase 3 resume picker takes job post text as input. SPEC.md (features, flow, edge cases, controls page, Phase 3/4 checklists) and this roadmap updated. No code changed.
+- 2026-11-13: decision: an **on-page Fill button** (floating panel injected by Playwright into the bot's browser, wired to the engine with `expose_binding`) is added to Phase 4 next to the dashboard button; a mockup comes first. A Chrome extension for your everyday Chrome goes to SPEC "Later (optional)" (needs a JS rewrite of reader/filler, a token for the localhost API, and breaks the own-profile decision). SPEC.md and this roadmap updated. No code changed.
 
 
 ---
@@ -291,6 +292,7 @@ Manual:
 - [ ] Approve adding `fastapi` and `uvicorn`.
 - [ ] Test on your own Google Form first, then Prosple, then a career page, always in `dry_run`. **You** click Submit.
 - [ ] **Design the Wordings screen first** (a third tab in `design/screens/Questions.html`: Waiting | Wordings | Answered), then build it. Requirements are in `SPEC.md` Part 2 "2b. Suggested wordings" and `design/DESIGN.md`: rows with new wording, matched saved question, score, times seen, kind chip; Approve / Reject; a ConfirmDialog for protected answers; Toast, Banner and EmptyState. Unknown question cards also show "seen N times, on N pages".
+- [ ] **Mock up the on-page Fill panel** (new `design/screens/FillPanel.html`, using `tokens.css`): collapsed tab, ready, filling, done (summary + job post with Change), job post not found. Approve it before it's built.
 - [ ] Look at the controls page next to the design mockups (`Questions.html`, `Applications.html`, `Components.html`) and tell Claude what differs. CLAUDE.md requires a side-by-side comparison, so don't skip it.
 - [ ] Use it for **a week of real applications**. Keep `notes/v0-misses.md`: for every wrong, missing or awkward fill, write the page URL, the field and what went wrong.
 - [ ] Review the screenshot of every filled page before you submit.
@@ -304,8 +306,9 @@ Manual:
 4. "Save a `fills` row (URL, job and company, resume, flagged count, screenshot path, status `filled`) and an unknown-questions row for each unanswered question."
 5. "Add `engine/api.py` (FastAPI on 127.0.0.1 only): fill, unknown questions, answers CRUD, filled pages, mark status, and the wordings endpoints (`GET /wordings`, approve with `confirm_protected`, reject) plus answering an unknown question (writes `answers.json` with a backup, then re-indexes). Reuse `engine/learning.py`."
 6. "Build the controls page in the existing dashboard: Fill this page, Unknown questions, Answer bank editor, Filled pages history. Reuse the existing components. Compare with the mockups afterwards and list the differences."
-7. "Passive detection: after a fill, watch the page read-only for a confirmation (thank-you text, URL change) and offer 'Looks submitted. Mark it?'. Never clicks, never marks without confirmation."
-8. After the week: "Here are my notes from `notes/v0-misses.md`. Group them by cause and propose fixes, smallest first."
+7. "Add the **on-page Fill button** (SPEC Part 2 '1b'): explain `add_init_script`, shadow DOM and `expose_binding` first. Then inject a small floating JobPilot panel into every page of the bot's browser that calls the same fill steps as the dashboard button, shows the job post used (Change), progress and the result. It never clicks or covers Submit. Test on saved HTML in mock mode."
+8. "Passive detection: after a fill, watch the page read-only for a confirmation (thank-you text, URL change) and offer 'Looks submitted. Mark it?'. Never clicks, never marks without confirmation."
+9. After the week: "Here are my notes from `notes/v0-misses.md`. Group them by cause and propose fixes, smallest first."
 
 **Check**
 
@@ -318,6 +321,7 @@ python -m pytest -q
 Manual checklist (do all three sites):
 - [ ] Press Fill this page: fields fill, resume uploads, flagged answers are highlighted.
 - [ ] Job post finder: with the description on the form page, in the opener tab, and not open at all (it asks you), the controls page shows the right job post, and Change works.
+- [ ] On-page panel: it appears on the job page in the bot's browser, its Fill button gives the same result as the dashboard button, it doesn't cover Submit, and it collapses out of the way.
 - [ ] The Submit button was **not** clicked, and the form is still open.
 - [ ] A new row appears in Filled pages history with a screenshot.
 - [ ] A question you've never answered lands in Unknown questions. Answer it, re-fill, and see it filled.

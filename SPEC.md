@@ -46,6 +46,7 @@ JobPilot is a job-application copilot that runs on your Windows PC. Its core is 
 | v0 | Unknown questions list | Questions with no saved answer are saved so you answer each one once. |
 | v0 | Filled pages history | One row per "Fill this page": URL, job and company, resume used, flagged count, screenshot, status `filled` → `submitted` / `abandoned`. You mark it, or (Phase 4) passive detection offers to. |
 | v0 | Controls page | A small local dashboard: Fill this page, unknown questions, answer bank editor, filled pages history (see Part 2). |
+| v0 | On-page Fill button | A small floating JobPilot panel on every page in the bot's browser: Fill this page, the job post used, progress and result, without switching to the dashboard (Phase 4). |
 | v0 | Safety basics | Mock mode, action log, safety check before every action. |
 | **v1** | Batch mode | Prosple job discovery with filters and duplicate detection; BM25 pre-filter + Ollama match score; background filling with the v0 filler; Review batch screen; Submit approved with confirmation check (never resubmit); full Applications tracker with manual statuses, notes and a Needs manual apply tab; Home screen; kill switch; daily cap. |
 | **v2** | Cold email | Contact finder (search API + Hunter, verified emails, source link saved); email writer using only your real projects with `facts_used`; personal vs short tiers; Gmail API send-only with daily cap and spacing; review for the first 2 weeks, then an auto-send switch; Emails screen; blocklist. |
@@ -59,6 +60,7 @@ JobPilot is a job-application copilot that runs on your Windows PC. Its core is 
 - Gmail reply tracking that updates statuses automatically (needs read permission).
 - Follow-up emails after a few days without a reply.
 - LinkedIn note drafting that you send yourself (no LinkedIn automation).
+- A Chrome extension for your everyday Chrome (toolbar or side panel "Fill this page"). Not in v0 because it would need the reader and filler rewritten in JavaScript (extensions can't run Playwright), a secret token so websites can't call the `127.0.0.1` engine, and it breaks the Phase 2 decision that the bot never uses your everyday Chrome profile. Revisit after v0's week of real use. The v0 answer is the on-page Fill button in the bot's browser (Part 2, 1b).
 
 ## How it works
 
@@ -257,6 +259,24 @@ A single small page at `localhost:3000` that you keep open next to the bot's bro
 - A **Job post** line shows which page the resume picker read: "Job post: Junior Java Developer – Acme (tab 2)" with a **Change** button. If none was found, it says "Job post not found" and offers a list of open tabs to pick from, or a box to paste the text; the resume is not uploaded until one is chosen.
 - When it finishes, you see a result summary: "12 filled · 2 flagged (guessed) · 1 new question · resume A". Flagged answers are also highlighted in the page itself in the bot's browser, so you can fix them there.
 - It never clicks Submit. The page says "Review the form in the browser, then submit it yourself."
+
+**1b. On-page Fill button (in the bot's browser, Phase 4)**
+
+The same Fill control also appears on the job page itself, so you don't have to switch to the dashboard. The engine adds a small floating panel to every page the bot's Chrome window opens (Playwright `add_init_script`), inside a shadow DOM so the site's styles can't break it and it can't break the site:
+
+```
+┌───────────────────────────────┐
+│ JobPilot  [Fill this page]    │
+│ Job post: Java Dev – Acme  ✎  │
+│ 12 filled · 2 flagged · res A │
+└───────────────────────────────┘
+```
+
+- Clicking **Fill this page** calls the Python engine through Playwright `expose_binding`, which runs the same steps as the dashboard button: reader → job post finder → answer engine → resume picker → filler. No HTTP call is made from the page, so websites can never trigger a fill.
+- It shows the job post used (✎ = Change), progress, and the result summary. It can be collapsed to a small tab and dragged aside.
+- It never clicks Submit, and it is never placed over the site's Submit button.
+- It exists only in the bot's browser profile, never in your everyday Chrome. The dashboard keeps Unknown questions, Answer bank and Filled pages history.
+- It uses the design tokens (colours, fonts) from `design/tokens.css`; its look is mocked up before it's built.
 
 **2. Unknown questions**
 
@@ -986,6 +1006,7 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 
 - [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
 - [ ] **Job post finder** (see "Finding the job post" in Part 1): form page → opener tab → same-site tab → ask you (pick a tab or paste). Read-only; shows the job post used with a Change button; no job post = no resume upload, flagged. Mock-mode tests with saved pages
+- [ ] **On-page Fill button** (Part 2, 1b): floating panel injected into the bot's browser (`add_init_script`, shadow DOM), wired to the engine with `expose_binding`; shows job post (Change), progress and result; never clicks or covers Submit. Mockup first; test on saved HTML in mock mode
 - [ ] `safety.check()` before every fill; every fill logged to `action_log`
 - [ ] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
 - [ ] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked
