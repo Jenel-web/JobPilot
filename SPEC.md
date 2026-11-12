@@ -41,7 +41,7 @@ JobPilot is a job-application copilot that runs on your Windows PC. Its core is 
 | v0 | RAG | Profile, resumes, projects and answer bank are chunked and embedded (Ollama `nomic-embed-text` + `sqlite-vec`), so a differently worded question finds the right saved answer. |
 | v0 | Form reader | Playwright reads every field's label, type and options on the page you opened. |
 | v0 | Answer engine | Personal fields (name, phone, address) filled by code and never sent to AI. Known questions come from the answer bank. New open questions are drafted by Ollama from your real facts only and flagged. Legal and eligibility questions are never guessed. |
-| v0 | Resume picker | Reads the job post on the page, compares it with the content of both resumes (skills, projects, experience) and uploads the better one under a formal file name (e.g. `Your Name.pdf`). |
+| v0 | Resume picker | Finds the job post (on the form page, the tab that opened it, a same-site tab, or asks you; see "Finding the job post"), compares it with the content of both resumes (skills, projects, experience) and uploads the better one under a formal file name (e.g. `Your Name.pdf`). No job post found = no resume uploaded, flagged. |
 | v0 | Fill + review | Fills everything, highlights guessed answers, stops before Submit, never clicks Submit. |
 | v0 | Unknown questions list | Questions with no saved answer are saved so you answer each one once. |
 | v0 | Filled pages history | One row per "Fill this page": URL, job and company, resume used, flagged count, screenshot, status `filled` → `submitted` / `abandoned`. You mark it, or (Phase 4) passive detection offers to. |
@@ -74,13 +74,23 @@ You open an application page in the bot's browser and press "Fill this page"
        known question                           → answer bank (found with RAG, scope matches the job's location)
        new open question                        → Ollama drafts from retrieved real facts, flagged
        legal / eligibility question             → answer bank only; otherwise unknown-questions list
-  → Resume picker: reads the job post on the page, uploads resume A or B (AI, 1 call)
+  → Job post finder: form page → opener tab → same-site tab → ask you (see below)
+  → Resume picker: job post text vs. both resumes, uploads resume A or B (AI, 1 call)
   → Fill + review: fills the form, highlights guesses, STOPS before Submit
   → Filled pages history row + screenshot saved (status: filled)
   → YOU review and click Submit
   → You mark it submitted (or passive detection offers to, Phase 4)
 Every step logs to SQLite, and the controls page reads it.
 ```
+
+**Finding the job post (v0).** The application form is often on a different page or tab from the job description. The bot can see every tab in its own browser profile (never your everyday Chrome), so it looks in this order and stops at the first hit:
+
+1. **The form page itself.** Many sites (Workable, Greenhouse, Prosple) show the description beside or above the form: a long text block with headings like Responsibilities, Requirements or Qualifications.
+2. **The tab that opened the form.** Clicking Apply on a job post that opens a new tab makes the job post the form tab's opener (Playwright `page.opener()`).
+3. **Another open tab on the same site or company**, for example `careers.acme.com/job/123` next to `careers.acme.com/job/123/apply`.
+4. **Ask you.** The controls page lists your open tabs ("Which one is the job post?") and has a box to paste the text.
+
+Rules: the controls page always shows which job post was used (title + tab) with a **Change** button, before the resume is uploaded. If no job post is found, no resume is uploaded; the field is flagged and you are asked. The job post text (never your personal details) is also given to the AI when it drafts open answers such as "Why do you want to join us?".
 
 **Flow later (v1–v2):** find jobs → score + pick resume → fill in the background → Review batch (you approve) → submit approved → find contact → write cold email → send (capped).
 
@@ -193,6 +203,7 @@ Rows marked (v1+) apply once batch mode exists. Each risk has a planned response
 | --- | --- |
 | Field type the reader doesn't recognise, or a custom widget (v0) | Leaves it empty, adds it to the report as "needs you", logs a screenshot |
 | Multi-step form (v0) | Fills the visible step; you press Fill this page again on the next step |
+| Job post is in another tab, or not open at all (v0) | Looks on the form page, then the opener tab, then same-site tabs; if still not found, asks you to pick a tab or paste the text. Never guesses the resume: no job post = no upload, flagged |
 | You submit without marking it (v0) | Stays `filled` in the history; passive detection (Phase 4) offers to mark it |
 | AI or Hunter free quota used up (v1+) | Spends quota on the best matches first, queues the rest for tomorrow, alerts you |
 | CAPTCHA, logout or 2FA on Prosple | Pauses Prosple, Windows alert, logs it; you solve it in the bot's browser and press Resume |
@@ -243,6 +254,7 @@ A single small page at `localhost:3000` that you keep open next to the bot's bro
 
 - A big **Fill this page** button, a **mode badge** (MOCK / DRY RUN / LIVE) and a status line: "Browser ready · current page: acme.com/careers/apply".
 - You log in to sites and open the application page yourself in the bot's browser. When you press the button, the engine reads the page and fills it. The status line then shows progress: "Reading form… 14 fields found → answering → uploading resume A → done".
+- A **Job post** line shows which page the resume picker read: "Job post: Junior Java Developer – Acme (tab 2)" with a **Change** button. If none was found, it says "Job post not found" and offers a list of open tabs to pick from, or a box to paste the text; the resume is not uploaded until one is chosen.
 - When it finishes, you see a result summary: "12 filled · 2 flagged (guessed) · 1 new question · resume A". Flagged answers are also highlighted in the page itself in the bot's browser, so you can fix them there.
 - It never clicks Submit. The page says "Review the form in the browser, then submit it yourself."
 
@@ -923,7 +935,7 @@ Goal: for each field, the right source answers it: code, answer bank, or Ollama 
 - [ ] **Elaboration:** when a `fixed` answer is a short yes/no but the field is a free-text box (e.g. "Do you have Docker experience? Please explain"), Ollama expands it into 1–2 sentences using only related facts from your answers, projects and resumes, and flags it. Yes/no radios and dropdowns get the plain answer. `protected` answers are never expanded
 - [ ] `prompts/form.md`: field labels + allowed facts → `{field, answer, confidence, source}`; "use only the provided facts"
 - [ ] Pydantic validation of Ollama JSON; retry once, then log and skip that field
-- [ ] Resume picker: job post text from the page + the most similar chunks of each resume (RAG) → `{resume: "A"|"B", reason, evidence}`. It never decides from the file name or label
+- [ ] Resume picker: job post **text** (passed in; finding it in the browser is Phase 4) + the most similar chunks of each resume (RAG) → `{resume: "A"|"B", reason, evidence}`. It never decides from the file name or label. Tested on saved job post text files
 - [ ] Canned responses in `fixtures/ai/` for mock mode; tests cover each rule
 - [ ] A test that no prompt contains phone, address, email or ID numbers
 
@@ -973,6 +985,7 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 **Checklist**
 
 - [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
+- [ ] **Job post finder** (see "Finding the job post" in Part 1): form page → opener tab → same-site tab → ask you (pick a tab or paste). Read-only; shows the job post used with a Change button; no job post = no resume upload, flagged. Mock-mode tests with saved pages
 - [ ] `safety.check()` before every fill; every fill logged to `action_log`
 - [ ] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
 - [ ] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked

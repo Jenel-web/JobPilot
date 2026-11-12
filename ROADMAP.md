@@ -44,7 +44,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Unknown-questions list and approved-wording learning are built (`engine/learning.py`). Next: the rest of `engine/forms/answers.py` (answer bank and AI-draft rules), which will call `learning.triage_question()` for every non-personal field.
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Unknown-questions list and approved-wording learning are built (`engine/learning.py`). Next: the rest of `engine/forms/answers.py` (answer bank and AI-draft rules), which will call `learning.triage_question()` for every non-personal field. Then the resume picker, which takes job post text; finding that text across browser tabs is a Phase 4 step (decided Nov 12).
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -72,6 +72,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-11: learning rules. New `engine/learning.py`: questions below the cutoff go to `unknown_questions` (same question seen again only raises `times_seen`); a matched question in new words is queued in `suggested_wordings` and only written into `answers.json` after `questions approve` (timestamped backup, atomic write, `load` keeps it). Protected answers need `--yes-protected`; rejected wordings never return. New CLI `questions list/approve/reject`. DB: new table and 2 columns, old databases upgraded by `init_db`. 18 new tests (233 pass). Also fixed: nested eval file, venv hint, run instructions in `cli.py`, Chrome launch for Cloudflare.
 - 2026-11-11: portfolio facts for form answers. Scraped markjenelcortas-portfolio.vercel.app with headless Playwright (raw text in git-ignored `data/portfolio_scrape.json`). `Project` now takes optional `status`, `result`, `problem`, `solution`, `hardest_part`; `rag.build_chunks` makes an overview chunk and a separate `(story)` chunk per project (10 project chunks for 5 projects). `profile.json` gained EconLens, richer text for the other 4 and 7 skills (backup: `data/profile.backup-2026-11-11.json`). Real-vector check on a temp DB: challenge, WebSocket and Spring Boot questions find the right story chunks; "led a team" does not rank Pag-IBIG first (the AI sees the top few chunks anyway). 3 new tests (236 pass).
 - 2026-11-11: first `README.md` written (how it works, safety, honest limits, status). It describes the filler as not built yet; re-check and update it after Phase 4, which is when the README checkbox gets ticked.
+- 2026-11-12: decision: the job post is often in another tab, so a **job post finder** goes into Phase 4 (form page → opener tab → same-site tab → ask you; shows what it used with Change; no job post = no resume upload). The Phase 3 resume picker takes job post text as input. SPEC.md (features, flow, edge cases, controls page, Phase 3/4 checklists) and this roadmap updated. No code changed.
 
 
 ---
@@ -229,7 +230,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 1. Teach-first: "Teach me RAG with 5 sentences: embed them with Ollama, ask a question, show the similarity scores."
 2. "Implement `engine/rag.py`: chunking (profile, resumes, projects, answers), embeddings with `nomic-embed-text`, sqlite-vec storage, `retrieve(question, k=5)`, a re-index command. Show the top 5 chunks for each question in my eval set."
 3. "Write `engine/forms/answers.py` with the rule order: by each answer's kind: protected → used exactly as saved, never sent to the AI, highlighted for review (and questions containing sensitive words are treated as protected even with no saved match); fixed → bank via RAG with scope, used as written; open and new non-sensitive questions → Ollama rewrites from retrieved facts only, flagged. Also add elaboration: a short saved \"Yes\" in a free-text box becomes \"Yes\" plus 1–2 sentences of real reasons from my answers, projects and resumes, flagged; radios and dropdowns get the plain answer; protected is never expanded. Add `prompts/form.md`. Mock-mode tests for each rule."
-4. "Add the resume picker (job post + the most similar chunks of each resume → A or B with evidence, never by file name) and the test that **no prompt ever contains phone, address, email or ID numbers**."
+4. "Add the resume picker (job post **text** + the most similar chunks of each resume → A or B with evidence, never by file name) and the test that **no prompt ever contains phone, address, email or ID numbers**." The picker takes the text as input; finding the job post in the browser is Phase 4 (decided Nov 12).
 5. "Run the answer engine against the 3 form fixtures with real Ollama in `dry_run` and print a table: field, answer, source, confidence."
 
 **Matching decisions (Nov 10, 2026)**: how a form question finds its saved answer. Kept here so we don't re-argue them.
@@ -299,11 +300,12 @@ Manual:
 
 1. Explain-first: "Explain how the filler handles each field type, how we highlight guesses, and how passive submit detection works without ever clicking."
 2. "Implement `engine/forms/filler.py`: fill text, select, radio, checkbox, date; upload the resume; 1–4 s random delays; `safety.check()` and logging before each action. **Add a test that fails if any code path clicks a Submit or Apply button.** Test on saved HTML."
-3. "Save a `fills` row (URL, job and company, resume, flagged count, screenshot path, status `filled`) and an unknown-questions row for each unanswered question."
-4. "Add `engine/api.py` (FastAPI on 127.0.0.1 only): fill, unknown questions, answers CRUD, filled pages, mark status, and the wordings endpoints (`GET /wordings`, approve with `confirm_protected`, reject) plus answering an unknown question (writes `answers.json` with a backup, then re-indexes). Reuse `engine/learning.py`."
-5. "Build the controls page in the existing dashboard: Fill this page, Unknown questions, Answer bank editor, Filled pages history. Reuse the existing components. Compare with the mockups afterwards and list the differences."
-6. "Passive detection: after a fill, watch the page read-only for a confirmation (thank-you text, URL change) and offer 'Looks submitted. Mark it?'. Never clicks, never marks without confirmation."
-7. After the week: "Here are my notes from `notes/v0-misses.md`. Group them by cause and propose fixes, smallest first."
+3. "Add the **job post finder** (SPEC Part 1 'Finding the job post'): look on the form page, then the tab that opened it (`page.opener()`), then other tabs on the same site, else ask me (pick a tab or paste text). Read-only. Show which job post was used with a Change button. No job post = no resume upload, flagged. Mock-mode tests with saved pages."
+4. "Save a `fills` row (URL, job and company, resume, flagged count, screenshot path, status `filled`) and an unknown-questions row for each unanswered question."
+5. "Add `engine/api.py` (FastAPI on 127.0.0.1 only): fill, unknown questions, answers CRUD, filled pages, mark status, and the wordings endpoints (`GET /wordings`, approve with `confirm_protected`, reject) plus answering an unknown question (writes `answers.json` with a backup, then re-indexes). Reuse `engine/learning.py`."
+6. "Build the controls page in the existing dashboard: Fill this page, Unknown questions, Answer bank editor, Filled pages history. Reuse the existing components. Compare with the mockups afterwards and list the differences."
+7. "Passive detection: after a fill, watch the page read-only for a confirmation (thank-you text, URL change) and offer 'Looks submitted. Mark it?'. Never clicks, never marks without confirmation."
+8. After the week: "Here are my notes from `notes/v0-misses.md`. Group them by cause and propose fixes, smallest first."
 
 **Check**
 
@@ -315,6 +317,7 @@ python -m pytest -q
 
 Manual checklist (do all three sites):
 - [ ] Press Fill this page: fields fill, resume uploads, flagged answers are highlighted.
+- [ ] Job post finder: with the description on the form page, in the opener tab, and not open at all (it asks you), the controls page shows the right job post, and Change works.
 - [ ] The Submit button was **not** clicked, and the form is still open.
 - [ ] A new row appears in Filled pages history with a screenshot.
 - [ ] A question you've never answered lands in Unknown questions. Answer it, re-fill, and see it filled.
