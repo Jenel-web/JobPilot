@@ -205,6 +205,7 @@ Rows marked (v1+) apply once batch mode exists. Each risk has a planned response
 | --- | --- |
 | Field type the reader doesn't recognise, or a custom widget (v0) | Leaves it empty, adds it to the report as "needs you", logs a screenshot |
 | Multi-step form (v0) | Fills the visible step; you press Fill this page again on the next step |
+| Form needs a Google sign-in, or a "Sign in with Google" button (v0) | You sign in once by hand in the bot's Chrome; the persistent profile keeps you signed in. The bot never types the password, never signs in or out, and never navigates inside Gmail or Drive. If Google refuses the sign-in ("This browser or app may not be secure"), open the bot's profile on its own without JobPilot attached, sign in, close it, then let JobPilot reopen it. `data/browser_profile/` holds the login, so it stays git-ignored and is never shared or synced |
 | Job post is in another tab, or not open at all (v0) | Looks on the form page, then the opener tab, then same-site tabs; if still not found, asks you to pick a tab or paste the text. Never guesses the resume: no job post = no upload, flagged |
 | You submit without marking it (v0) | Stays `filled` in the history; passive detection (Phase 4) offers to mark it |
 | AI or Hunter free quota used up (v1+) | Spends quota on the best matches first, queues the rest for tomorrow, alerts you |
@@ -324,6 +325,75 @@ The engine learns new ways a form asks a saved question, but **only you approve 
 - Statuses: `filled` (default) → `submitted` or `abandoned`. A **Mark as submitted** button and an **Abandoned** button sit on each row. In Phase 4, passive detection watches the page after you submit (read-only, no clicks) and offers "Looks submitted. Mark it?".
 
 **What it does not show in v0:** job lists, scores, batches, emails, a kill switch or settings. Those arrive in v1–v3.
+
+## How v0 works day to day
+
+This is the whole v0 product from your side: what you open, what you press, and what happens behind it. The scenarios after it walk through real cases.
+
+**Two windows side by side**
+
+| Window | What it is | What you do there |
+| --- | --- | --- |
+| **Bot's Chrome** | Your installed Chrome, started with JobPilot's own profile (`data/browser_profile/`), never your everyday Chrome profile | Browse jobs, sign in to sites, open forms, press **Fill this page** on the floating panel, review, click Submit yourself |
+| **Dashboard** (`localhost:3000`) | The v0 controls page | Fill this page (same as the panel), Unknown questions, Suggested wordings, Answer bank editor, Filled pages history |
+
+**What happens when you press Fill this page**
+
+```
+You open a job form in the bot's Chrome
+        │
+        ▼
+Press [Fill this page] (floating panel or dashboard)
+        │
+        ├─ 1. Reader: every field's label, type and options (all frames)
+        ├─ 2. Job post finder: this page → opener tab → same-site tab → asks you
+        ├─ 3. Answer engine, per field:
+        │      personal (name, phone, email)  → code, never sent to AI
+        │      protected (visa, legal, GPA)   → saved answer exactly; none saved → empty, flagged, unknown list
+        │      fixed (salary, start date)     → saved answer found with RAG, scope matches the job
+        │      open ("Why us?")               → Ollama drafts from your facts + the job post, flagged
+        │      never seen (score < cutoff)    → unknown questions list, flagged
+        ├─ 4. Resume picker: job post vs. what resume A and B actually say → uploads one as `upload_name`
+        └─ 5. Filler: fills, highlights guesses, screenshot, saves a `fills` row, STOPS
+        │
+        ▼
+You review the page, fix highlighted fields, click Submit yourself
+        │
+        ▼
+Passive detection sees the confirmation → "Looks submitted. Mark it?" → you confirm → `submitted`
+```
+
+**Starting a session (about 2 minutes)**
+
+1. Ollama runs in the background (it starts with Windows).
+2. `python -m engine.api` starts the engine on `127.0.0.1` and opens (or attaches to) the bot's Chrome. The exact start-up is settled in Phase 4.
+3. `cd dashboard; npm run dev`, then open `localhost:3000`. The mode badge shows MOCK / DRY RUN / LIVE.
+4. The first fill is slow (Ollama loads in about 20–50 s); a warm-up call at start-up is planned for Phase 4.
+5. You are already signed in to your job sites and Google from earlier sessions; the profile remembers.
+
+**What v0 never does:** click Submit, Next or Apply; find jobs for you (v1); run in your everyday Chrome (an extension is under "Later"); solve CAPTCHAs, logins or 2FA; invent facts. Custom widgets it can't read are left empty and flagged "needs you".
+
+## v0 scenarios
+
+Eight scenarios show a normal day with v0, written as "you". All names and numbers are sample data. (The "User scenarios" section further down describes v1–v3.)
+
+**0. Starting up.** You run the engine and the dashboard as above. The bot's Chrome opens, still signed in to your job sites and Google. The badge says DRY RUN for the first week of tests, LIVE after that (v0 never submits in either mode; you do).
+
+**1. Description and form on the same page (Workable, Greenhouse).** You open "Junior Java Developer – Acme" and click Apply; the form appears under the description. You press **Fill this page** on the floating panel. It shows "Reading form… 14 fields → answering → uploading resume A → done", then "Job post: Junior Java Developer – Acme (this page) ✎ · 12 filled · 2 flagged · 1 new question · resume A". The 2 flagged fields are outlined in the page; one is a drafted "Why Acme?" answer. You edit a sentence, scroll through everything and click Submit yourself. The page says "Application received"; JobPilot offers "Looks submitted. Mark it?" and you confirm.
+
+**2. Job post in another tab.** On a job board, "Apply on company website" opens the form in a new tab without the description. You press Fill. The finder finds nothing on the form page, so it reads the tab that opened it and shows "Job post: Backend Intern – Globex (tab 1)". The picker chooses resume B because the post asks for Node and PostgreSQL, which resume B shows. If the finder had picked the wrong tab, you'd press ✎ Change before anything is uploaded. **Variant:** you opened the form from a bookmark, so there's no job post tab. The panel says "Job post not found", lists open tabs and offers a paste box. The rest of the form fills; the resume waits until you choose.
+
+**3. A question it has never seen.** "How many hours per week can you commit during the semester?" matches nothing above the cutoff, so the field is flagged and the question lands in Unknown questions with a link to the page. You answer "20 hours per week", scope "any", once. The engine re-indexes; you press Fill again and it fills. A month later "Weekly availability during school?" matches it by meaning.
+
+**4. A legal question with no saved answer.** "Have you ever been employed by a government agency?" is a "have you ever" question, so it's protected: the AI never answers it. With no saved answer, the field stays empty and flagged and the dashboard says "You must answer this yourself." You answer it in the page, and in the dashboard so it's saved for next time.
+
+**5. The same question in new words.** A form asks "When could you begin?"; the bank has "When can you start?". The match is strong, so the saved answer fills. The new wording appears on the Wordings tab ("When could you begin?" → "When can you start?", 0.91). Once a week you approve or reject these; protected ones need a second confirmation.
+
+**6. Multi-step form (Workday style) with a Google sign-in.** The site offers "Sign in with Google". You click it, pick your account in the popup and you're in; the bot never touches the sign-in. Step 1: Fill, review, you click Next yourself. Steps 2 and 3: the same. Then you click Submit. Each step is one fill; the bot never clicks Next or Submit.
+
+**7. Changing your mind.** You fill a form, then notice it wants 2 years of experience. You close the tab and press **Abandoned** on that row in Filled pages history.
+
+**8. End-of-week check (5 minutes).** In the dashboard: history (every filled page with screenshot, resume, flagged count, status), the leftover unknown questions (most-seen first), the Wordings tab, and `notes/v0-misses.md` for anything it got wrong, which becomes the fix list after the week of real use.
 
 
 ## Design notes

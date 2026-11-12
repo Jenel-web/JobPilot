@@ -74,6 +74,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-11: first `README.md` written (how it works, safety, honest limits, status). It describes the filler as not built yet; re-check and update it after Phase 4, which is when the README checkbox gets ticked.
 - 2026-11-12: decision: the job post is often in another tab, so a **job post finder** goes into Phase 4 (form page → opener tab → same-site tab → ask you; shows what it used with Change; no job post = no resume upload). The Phase 3 resume picker takes job post text as input. SPEC.md (features, flow, edge cases, controls page, Phase 3/4 checklists) and this roadmap updated. No code changed.
 - 2026-11-13: decision: an **on-page Fill button** (floating panel injected by Playwright into the bot's browser, wired to the engine with `expose_binding`) is added to Phase 4 next to the dashboard button; a mockup comes first. A Chrome extension for your everyday Chrome goes to SPEC "Later (optional)" (needs a JS rewrite of reader/filler, a token for the localhost API, and breaks the own-profile decision). SPEC.md and this roadmap updated. No code changed.
+- 2026-11-13: SPEC Part 2 gained "How v0 works day to day" (two windows, what Fill does, start-up) and 8 "v0 scenarios"; Part 1 edge cases gained Google sign-in (sign in once by hand; workaround if Google blocks it). Phase 4 gained a Google sign-in test step. Open for later: whether the job post finder may read a LinkedIn tab (rule 9). No code changed.
 
 
 ---
@@ -291,6 +292,7 @@ Manual:
 
 - [ ] Approve adding `fastapi` and `uvicorn`.
 - [ ] Test on your own Google Form first, then Prosple, then a career page, always in `dry_run`. **You** click Submit.
+- [ ] Sign in to Google by hand in the bot's Chrome (pick which account employers will see). Use a Google Form that requires sign-in (file upload or "limit to 1 response") for the first test. If Google says "This browser or app may not be secure": open the bot's profile on its own without JobPilot attached, sign in, close it, then let JobPilot reopen it (SPEC Part 1 edge cases). Never share or sync `data/browser_profile/`; it holds your logins.
 - [ ] **Design the Wordings screen first** (a third tab in `design/screens/Questions.html`: Waiting | Wordings | Answered), then build it. Requirements are in `SPEC.md` Part 2 "2b. Suggested wordings" and `design/DESIGN.md`: rows with new wording, matched saved question, score, times seen, kind chip; Approve / Reject; a ConfirmDialog for protected answers; Toast, Banner and EmptyState. Unknown question cards also show "seen N times, on N pages".
 - [ ] **Mock up the on-page Fill panel** (new `design/screens/FillPanel.html`, using `tokens.css`): collapsed tab, ready, filling, done (summary + job post with Change), job post not found. Approve it before it's built.
 - [ ] Look at the controls page next to the design mockups (`Questions.html`, `Applications.html`, `Components.html`) and tell Claude what differs. CLAUDE.md requires a side-by-side comparison, so don't skip it.
