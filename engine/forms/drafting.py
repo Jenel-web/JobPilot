@@ -33,9 +33,11 @@ DRAFTABLE_TYPES = frozenset({"text", "textarea"})  # the AI only writes into tex
 FACT_COUNT = 4  # facts sent with each question
 # (sentences, characters) when the page gives no limit of its own
 _LIMITS = {"textarea": (4, 1200), "text": (1, 250)}
-_REFLECT_LIMITS = {"textarea": (6, 1500), "text": (2, 300)}  # reflective answers need room for 2 examples
-REFLECT_PROJECTS = 3  # the best-matching projects sent for a reflective question (more would overflow the model's context)
+_REFLECT_LIMITS = {"textarea": (5, 1000), "text": (2, 300)}  # stance + 2 short examples + a closing
+REFLECT_PROJECTS = 2  # the best-matching projects sent for a reflective question: two examples are enough, and
+# fewer facts keep the answer short and the opinion in front
 MAX_FACT_CHARS = 1600  # one fact is cut here before it goes in a prompt
+MAX_EXAMPLES = 2  # examples in a reflective answer: the facts are the support, the closing is the point
 MIN_CHARS_FOR_TWO_EXAMPLES = 400  # a smaller box only needs one project as evidence
 
 
@@ -108,6 +110,21 @@ def _project_name(ref: str) -> str:
     return re.sub(r"\s*\(story\)$", "", ref).strip()
 
 
+_STORY = re.compile(r"Project: (?P<name>.*?)\. Problem: (?P<problem>.*?) Solution: (?P<solution>.*?) Hardest part: (?P<hard>.*)", re.DOTALL)
+
+
+def _origin_only(hit: rag.Hit) -> rag.Hit:
+    """Rewrite a project story as ``What started it`` + ``What was hard`` (the Solution is dropped).
+
+    If the story is not in the expected shape (a project saved without all three parts), it is kept as is.
+    """
+    match = _STORY.match(hit.text)
+    if match is None:
+        return hit
+    text = f"Project: {match['name']}. What started it: {match['problem'].strip()} What was hard: {match['hard'].strip()}"
+    return rag.Hit(hit.id, hit.source, hit.ref, text, hit.score)
+
+
 def gather_reflective_facts(conn: sqlite3.Connection, label: str, settings: Settings | None = None) -> list[rag.Hit]:
     """Facts for a reflective question: the story of the best 3 projects, plus your summary and skills.
 
@@ -125,7 +142,9 @@ def gather_reflective_facts(conn: sqlite3.Connection, label: str, settings: Sett
         by_project.setdefault(name, {})[kind] = hit
         best[name] = max(best.get(name, 0.0), hit.score)
     chosen = sorted(best, key=lambda n: -best[n])[:REFLECT_PROJECTS]
-    facts = [h for name in chosen for h in (by_project[name].get("story"), by_project[name].get("overview")) if h is not None]
+    # Only the origin and the hard part: with the Solution and the tech overview in view, a small model
+    # copies them into resume-style bullets instead of reflecting.
+    facts = [_origin_only(by_project[name]["story"]) if "story" in by_project[name] else by_project[name]["overview"] for name in chosen]
     if not facts:
         return []
     profile = rag.retrieve(conn, label, 8, sources=("profile",), settings=settings)
@@ -144,6 +163,12 @@ _HEDGE = re.compile(
 )
 _OVERCLAIM = re.compile(
     r"\b(?:always|never|every time|everyone|definitely|obviously|passionate|passion|obsessed|expert|world-class|best)\b", re.I
+)
+# Self-praise ("demonstrates my ability", "capable") is a CV line, not a reflection. Checked on the closing only.
+_PRAISE = re.compile(
+    r"\bdemonstrat\w*|\bmy ability\b|\bcapable\b|\bcapability\b|\bproficien\w*|\bskilled\b|\bexpertise\b|"
+    r"\bshine\w*|\bexcel\w*|\bskills and experience\b",
+    re.I,
 )
 _NUMBER = re.compile(r"\d[\d,.]*\d|\d")
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*")
@@ -175,6 +200,28 @@ def _ungrounded_name(text: str, allowed: str) -> str | None:
             if not _contains(allowed, word):
                 return word
     return None
+
+
+COPY_RUN_WORDS = 7  # this many words in a row, shared with the prompt, count as copying it
+
+
+def _word_runs(text: str, size: int) -> set[tuple[str, ...]]:
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    return {tuple(words[i : i + size]) for i in range(len(words) - size + 1)}
+
+
+def _copies_prompt(text: str, section: str) -> bool:
+    """True if the answer repeats a run of words from the prompt's own text (not from the facts).
+
+    A small model will parrot a worked example if it is given one (it did, word for word), and what it
+    parrots is not about you. The raw prompt section is compared, before the question and facts are filled in.
+    """
+    try:
+        template = PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    match = re.search(rf"^## {section}\s*\n(.*?)(?=^## |\Z)", template, flags=re.MULTILINE | re.DOTALL)
+    return bool(match) and bool(_word_runs(text, COPY_RUN_WORDS) & _word_runs(match.group(1), COPY_RUN_WORDS))
 
 
 def _mentions_project(text: str, name: str) -> bool:
@@ -237,11 +284,19 @@ def check_reply(
     if not _source_ok(chosen["source"], facts, allow_saved):
         return _rejected(f"its source {chosen['source']!r} is not one of the facts it was given")
     if reflective:
+        if _copies_prompt(text, "REFLECT"):
+            return _rejected("the answer repeats wording from the prompt instead of your projects")
         if not _HEDGE.search(text):
             return _rejected("not in a reflective voice (no 'I think', 'I believe', 'What I do is'...)")
         overclaim = _OVERCLAIM.search(text)
         if overclaim:
             return _rejected(f"overclaims with {overclaim.group(0)!r}")
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        allowed_sentences = int(_limits_for(field, reflective=True)[0])
+        if len(sentences) > allowed_sentences:
+            return _rejected(f"{len(sentences)} sentences but at most {allowed_sentences} (too much fact, too little view)")
+        if not _HEDGE.search(sentences[-1]):
+            return _rejected("the closing sentence is not reflective: it must say what the examples mean to you")
 
     allowed = " ".join([label, saved, *(h.text for h in facts)])
     number = _ungrounded_number(text, allowed)
@@ -257,7 +312,7 @@ def check_reply(
         needed = min(2, len(given)) if max_chars >= MIN_CHARS_FOR_TWO_EXAMPLES else 1
         if len(used) < needed:
             return _rejected(f"it names {len(used)} of your projects as evidence but {needed} are needed")
-        source = ", ".join(used)  # the projects the answer really uses, found by code, not claimed by the AI
+        source = "; ".join(used)  # the projects the answer really uses, found by code, not claimed by the AI
     return DraftResult(text, float(chosen["confidence"]), source, "")
 
 
@@ -270,6 +325,12 @@ def _limits_for(field: FormField, reflective: bool = False) -> tuple[str, str]:
     if max_chars < 150:
         sentences = 1
     return str(sentences), str(max_chars)
+
+
+def _end_sentence(text: str) -> str:
+    """Trim and make sure the part ends with a full stop, so the joined answer reads as sentences (and counts as them)."""
+    text = " ".join(text.split())
+    return text if not text or text[-1] in ".!?" else text + "."
 
 
 def _refuse_if_sensitive(label: str) -> None:
@@ -359,9 +420,25 @@ def reflect_answer(
         max_chars=chars,
     )
     try:
-        reply = ai.ask_ai("form_answer", prompt, settings=settings)
+        reply = ai.ask_ai("reflect_answer", prompt, settings=settings)
     except (ai.AIError, NotImplementedError) as exc:
         return _rejected(f"AI unavailable: {exc}")
-    return check_reply(
-        reply, field.label, facts, field=field, saved=saved, allow_saved=bool(saved), reflective=True
-    )
+
+    stance, closing = _end_sentence(reply["stance"]), _end_sentence(reply["closing"])
+    examples = [_end_sentence(e) for e in reply["examples"] if e.strip()]
+    if reply["confidence"] <= 0 or not (stance or closing):
+        return _rejected("the AI says your projects do not support an answer to this question")
+    if not stance or not closing:
+        return _rejected("the answer is missing its stance or its closing (the reflective part)")
+    if len(examples) > MAX_EXAMPLES:
+        return _rejected(f"{len(examples)} examples but at most {MAX_EXAMPLES} (too much fact, too little view)")
+    if not _HEDGE.search(closing):
+        return _rejected("the closing is not reflective: it must say what the examples mean to you")
+    if _PRAISE.search(closing):
+        return _rejected("the closing praises you instead of reflecting on how you choose and what pulls you in")
+    # Join the three parts and run the same checks as every other answer (grounding, voice, length, evidence).
+    joined = {"answers": [{
+        "field": field.label, "answer": " ".join([stance, *examples, closing]),
+        "confidence": reply["confidence"], "source": "project:" + ";".join(_project_name(h.ref) for h in facts if h.source == "project"),
+    }]}
+    return check_reply(joined, field.label, facts, field=field, saved=saved, allow_saved=bool(saved), reflective=True)
