@@ -215,6 +215,10 @@ def _call_ollama(model: str, prompt: str) -> str:
             {"role": "user", "content": prompt},
         ],
         format="json",
+        # temperature 0: same input, same output (less drift, less invention).
+        # num_ctx: reflective prompts hold 3 project stories (~2,000 tokens). Without this the server may
+        # use a smaller window and silently cut off the START of the prompt, which is where the rules are.
+        options={"temperature": 0, "num_ctx": 4096},
     )
     return response["message"]["content"]
 

@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from engine import learning, safety
+from engine.forms import drafting
 from engine.forms.reader import FormField
 from engine.profile import lookup_answer
 from engine.rag import RagError
@@ -165,6 +166,37 @@ def is_sensitive(label: str) -> bool:
     must never write its answer.
     """
     return bool(SENSITIVE_PATTERN.search(_words(label)))
+
+
+# Reflective = asks for YOUR VIEW, so the answer is an opinion drawn from your projects (not a lookup).
+REFLECTIVE_PATTERN = re.compile(
+    r"\bstrengths?\b|"
+    r"\bhow do you (?:decide|choose|approach|handle|learn|prioriti[sz]e|solve|tackle|work|pick)\b|"
+    r"\bwhat (?:motivates|drives|inspires|excites|interests) you\b|"
+    r"\babout yourself\b|\bdescribe yourself\b|\bwho are you\b|"
+    r"\bwhat (?:kind|type|sort) of (?:apps?|projects?|problems?|work|software)\b|"
+    r"\bwhat do you (?:enjoy|like|love|care about|value)\b|"
+    r"\byour (?:approach|philosophy|process) to\b"
+)
+
+# Company questions need the job post to answer well. Until Phase 4 gives us the job post, the AI does not
+# touch them: an open answer you saved is used as written, otherwise the field is left for you.
+COMPANY_PATTERN = re.compile(
+    r"\bwhy (?:do|would|did) you want to (?:work|join)\b|\bwhy (?:us|this (?:company|role|position|job)|our (?:company|team))\b|"
+    r"\bwhy are you (?:interested|applying)\b|"
+    r"\bwhat (?:attracts|interests|excites|draws) you (?:about|to) (?:us|this|our|the (?:company|role|position))\b|"
+    r"\bwhy do you want this (?:job|role|position|internship)\b"
+)
+
+
+def is_reflective(label: str) -> bool:
+    """True if the question asks for your own view (strengths, how you decide, what drives you)."""
+    return bool(REFLECTIVE_PATTERN.search(_words(label)))
+
+
+def is_company_question(label: str) -> bool:
+    """True if the question asks why you want THIS company or role (best answered with the job post, Phase 4)."""
+    return bool(COMPANY_PATTERN.search(_words(label)))
 
 
 def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
@@ -296,7 +328,7 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
 
 # ---- the answer engine -----------------------------------------------------------------------
 
-AnswerSource = Literal["personal", "bank", "none"]
+AnswerSource = Literal["personal", "bank", "draft", "none"]
 
 
 @dataclass(frozen=True)
@@ -363,6 +395,10 @@ def answer_field(
     score = hit.score if hit is not None else 0.0
 
     if triage.outcome == "matched" and row is not None:
+        if row["kind"] == "open" and field.type in drafting.DRAFTABLE_TYPES and not is_sensitive(field.label):
+            if is_company_question(field.label):
+                return _saved_open(field, row, score, "company question: saved text used; the AI needs the job post to adapt it (Phase 4)")
+            return _rewritten_answer(conn, field, row, score, settings)
         return _matched_answer(field, row, score)
 
     # No close saved question (or no saved row for this job's location).
@@ -375,8 +411,44 @@ def answer_field(
                 matched_question=hit.ref, unknown_id=triage.unknown_id,
             )
         return _needs_you(field.label, "legal/eligibility question: you must answer this yourself", triage.unknown_id)
-    # New non-sensitive question: the AI draft arrives in the next step.
-    return _needs_you(field.label, "new question: no saved answer yet", triage.unknown_id)
+    # New non-sensitive question: the AI may draft it, but only into a text box.
+    if field.type not in drafting.DRAFTABLE_TYPES:
+        return _needs_you(field.label, "new question: choose this one yourself (the AI only writes into text boxes)", triage.unknown_id)
+    if is_company_question(field.label):
+        return _needs_you(field.label, "company question: needs the job post (Phase 4), so answer it yourself for now", triage.unknown_id)
+    if is_reflective(field.label):
+        draft = drafting.reflect_answer(conn, field, settings=settings)
+        kind_of_note = "AI interpretation (an opinion drawn from your projects, edit freely)"
+    else:
+        draft = drafting.draft_answer(conn, field, settings=settings)
+        kind_of_note = "AI draft"
+    if draft.ok:
+        return FieldAnswer(
+            field.label, draft.text, "draft", True,
+            f"{kind_of_note} from {draft.source}: check it before submitting",
+            confidence=draft.confidence, unknown_id=triage.unknown_id,
+        )
+    return _needs_you(field.label, f"AI draft rejected: {draft.note}", triage.unknown_id)
+
+
+def _rewritten_answer(
+    conn: sqlite3.Connection, field: FormField, row: sqlite3.Row, score: float, settings: Settings | None
+) -> FieldAnswer:
+    """A matched ``open`` answer, adapted to this form's wording by the AI (flagged). Falls back to the saved text."""
+    reflective = is_reflective(field.label)
+    if reflective:
+        result = drafting.reflect_answer(conn, field, row["answer"], row["kind"], settings=settings)
+    else:
+        result = drafting.rewrite_open(conn, field, row["answer"], row["kind"], settings=settings)
+    common = {"kind": row["kind"], "confidence": score, "matched_question": row["question"]}
+    if result.ok and reflective:
+        note = f"AI interpretation of your saved answer and projects ({result.source}): an opinion drawn from your data, edit freely"
+        return FieldAnswer(field.label, result.text, "bank", True, note, **common)
+    if result.ok:
+        note = f"open answer rewritten for this question (from {result.source}): check it"
+        return FieldAnswer(field.label, result.text, "bank", True, note, **common)
+    note = f"AI rewrite not used ({result.note}): saved text used"
+    return FieldAnswer(field.label, row["answer"], "bank", True, note, **common)
 
 
 def _pick(field: FormField, saved: str) -> str:
@@ -384,6 +456,14 @@ def _pick(field: FormField, saved: str) -> str:
     if field.type in _GROUP_TYPES and field.options:
         return pick_option(saved, field.options)
     return saved
+
+
+def _saved_open(field: FormField, row: sqlite3.Row, score: float, note: str) -> FieldAnswer:
+    """Your saved open answer, used as written (no AI) and flagged."""
+    return FieldAnswer(
+        field.label, row["answer"], "bank", True, note,
+        kind=row["kind"], confidence=score, matched_question=row["question"],
+    )
 
 
 def _matched_answer(field: FormField, row: sqlite3.Row, score: float) -> FieldAnswer:
@@ -402,7 +482,7 @@ def _matched_answer(field: FormField, row: sqlite3.Row, score: float) -> FieldAn
     if kind == "protected":
         return make(value, True, "protected: used exactly as saved, never sent to the AI")
     if kind == "open":
-        # Rewriting open answers with the AI arrives in the next step; until then, the saved text, flagged.
+        # Only reached for non-text fields or sensitive questions: the AI is not used, so the saved text, flagged.
         return make(value, True, "open answer: saved text, check it fits")
     return make(value, False, "")
 
@@ -427,7 +507,7 @@ def answer_form(
             results.append(
                 answer_field(conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings)
             )
-        except (learning.LearningError, RagError, sqlite3.Error, RuntimeError, ValueError, OSError) as exc:
+        except (learning.LearningError, drafting.DraftError, RagError, sqlite3.Error, RuntimeError, ValueError, OSError) as exc:
             results.append(_needs_you(f.label, f"error: {type(exc).__name__}: {exc}"))
     flagged = sum(r.flagged for r in results)
     safety.log_action(conn, "read", page_url, f"answered {len(results)} fields, {flagged} flagged")

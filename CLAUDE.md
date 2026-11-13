@@ -43,6 +43,7 @@ jobpilot/
       reader.py      # reads every field's label, type and options on the open page
       filler.py      # fills fields, uploads resume, highlights guesses, stops before Submit
       answers.py     # answer engine: code / answer bank / Ollama draft rules
+      drafting.py    # AI drafts and open-answer rewrites, with guardrail checks on every reply
     sites/prosple.py # (v1) job discovery + apply flow for Prosple
     contacts.py      # (v2) search API + Hunter
     mailer.py        # (v2) Gmail send
