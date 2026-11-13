@@ -1,4 +1,16 @@
-"""Answer engine, step 1: recognise PERSONAL fields and fill them straight from your profile.
+"""The answer engine: decide what goes in each form field, and where it came from.
+
+Order for every field (first rule that applies wins; see :func:`answer_field`):
+
+1. No readable label  -> empty, "needs you".
+2. Personal field     -> your profile, by code. No search, no AI.
+3. Everything else is looked up in your answer bank (``learning.triage_question``) and:
+   * matched ``protected`` -> your saved text exactly, flagged for review
+   * matched ``fixed``     -> your saved text as written (strong match, so not flagged)
+   * sensitive, weak match -> closest saved text, flagged NOT RECOMMENDED; nothing saved -> empty
+   The AI never writes a sensitive or protected answer.
+
+Part 1: recognise PERSONAL fields and fill them straight from your profile.
 
 Personal fields (name, email, phone, address, city, country, links) are handled by
 plain code, before RAG or any AI (CLAUDE.md rule 3: those values never go in a
@@ -28,7 +40,11 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Literal
 
+from engine import learning, safety
 from engine.forms.reader import FormField
+from engine.profile import lookup_answer
+from engine.rag import RagError
+from engine.settings import Settings
 
 PersonalKey = Literal[
     "first_name", "middle_name", "middle_initial", "last_name", "full_name",
@@ -102,6 +118,7 @@ SENSITIVE_PATTERN = re.compile(
 
 _PERSONAL_TYPES = {"text", "email", "tel", "url", "select", "dropdown", "textarea"}
 _CHOICE_TYPES = {"select", "dropdown"}
+_GROUP_TYPES = {"select", "dropdown", "radio", "checkbox"}  # answers picked from a list of options
 
 
 @dataclass(frozen=True)
@@ -275,3 +292,143 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
             return PersonalFill(key, "", signal, True, f"none of the {len(field.options)} options matches your {key}")
         value, note = option, "matching dropdown option"
     return PersonalFill(key, value, signal, False, note)
+
+
+# ---- the answer engine -----------------------------------------------------------------------
+
+AnswerSource = Literal["personal", "bank", "none"]
+
+
+@dataclass(frozen=True)
+class FieldAnswer:
+    """What the engine decided for one form field. Everything the review screen needs.
+
+    ``value`` is empty when you must fill the field yourself. ``flagged`` means "look at this
+    before you submit". ``recommended`` is False for a weak match (shown as NOT RECOMMENDED).
+    """
+
+    label: str
+    value: str
+    source: AnswerSource
+    flagged: bool
+    note: str = ""
+    kind: str = ""  # the saved answer's kind: fixed / open / protected
+    confidence: float = 0.0  # RAG similarity; 1.0 for personal fields
+    recommended: bool = True
+    matched_question: str = ""
+    unknown_id: int | None = None  # row on the unknown questions list, when the question was filed there
+
+
+def _needs_you(label: str, note: str, unknown_id: int | None = None) -> FieldAnswer:
+    """An empty, flagged field: you fill it yourself."""
+    return FieldAnswer(label, "", "none", True, note, unknown_id=unknown_id)
+
+
+def answer_field(
+    conn: sqlite3.Connection,
+    field: FormField,
+    values: dict[str, str],
+    *,
+    job_scope: str = "any",
+    job_city: str = "",
+    page_url: str = "",
+    settings: Settings | None = None,
+) -> FieldAnswer:
+    """Decide the answer for ONE field. Reads and decides only: nothing is typed or clicked.
+
+    Args:
+        values: your personal values (:func:`profile_values`).
+        job_scope / job_city: where the job is, so the right location-scoped answer is used.
+        page_url: remembered with unknown questions and suggested wordings.
+
+    Raises:
+        learning.LearningError, rag.RagError, sqlite3.Error: the lookup failed
+            (:func:`answer_form` turns these into a flagged field).
+    """
+    if field.needs_you:
+        return _needs_you(field.label, "no readable label: needs you")
+
+    personal = fill_personal(field, values)
+    if personal is not None:
+        return FieldAnswer(
+            field.label, personal.value, "personal", personal.flagged,
+            personal.note, confidence=1.0 if personal.value else 0.0,
+        )
+
+    triage = learning.triage_question(
+        conn, field.label, page_url=page_url, field_type=field.type, options=tuple(field.options), settings=settings
+    )
+    hit = triage.match.hit
+    row = lookup_answer(conn, hit.ref, job_scope=job_scope, job_city=job_city) if hit is not None else None
+    score = hit.score if hit is not None else 0.0
+
+    if triage.outcome == "matched" and row is not None:
+        return _matched_answer(field, row, score)
+
+    # No close saved question (or no saved row for this job's location).
+    if is_sensitive(field.label):
+        if row is not None and hit is not None:
+            return FieldAnswer(
+                field.label, _pick(field, row["answer"]), "bank", True,
+                f"NOT RECOMMENDED: closest saved question scored {score:.2f} (needs {triage.match.threshold:.2f})",
+                kind=row["kind"], confidence=score, recommended=False,
+                matched_question=hit.ref, unknown_id=triage.unknown_id,
+            )
+        return _needs_you(field.label, "legal/eligibility question: you must answer this yourself", triage.unknown_id)
+    # New non-sensitive question: the AI draft arrives in the next step.
+    return _needs_you(field.label, "new question: no saved answer yet", triage.unknown_id)
+
+
+def _pick(field: FormField, saved: str) -> str:
+    """The saved text for a text box; for a list of options, the option that matches it ("" if none)."""
+    if field.type in _GROUP_TYPES and field.options:
+        return pick_option(saved, field.options)
+    return saved
+
+
+def _matched_answer(field: FormField, row: sqlite3.Row, score: float) -> FieldAnswer:
+    """A strong match: use the saved answer according to its kind."""
+    kind = row["kind"]
+    value = _pick(field, row["answer"])
+
+    def make(text: str, flagged: bool, note: str) -> FieldAnswer:
+        return FieldAnswer(
+            field.label, text, "bank", flagged, note,
+            kind=kind, confidence=score, matched_question=row["question"],
+        )
+
+    if not value:
+        return make("", True, f"none of the {len(field.options)} options matches your saved answer")
+    if kind == "protected":
+        return make(value, True, "protected: used exactly as saved, never sent to the AI")
+    if kind == "open":
+        # Rewriting open answers with the AI arrives in the next step; until then, the saved text, flagged.
+        return make(value, True, "open answer: saved text, check it fits")
+    return make(value, False, "")
+
+
+def answer_form(
+    conn: sqlite3.Connection,
+    fields: list[FormField],
+    *,
+    job_scope: str = "any",
+    job_city: str = "",
+    page_url: str = "",
+    settings: Settings | None = None,
+) -> list[FieldAnswer]:
+    """Answer every field, in page order. One failing field never stops the others.
+
+    Logs one ``read`` row to ``action_log`` (a count only: values can hold phone or email).
+    """
+    values = profile_values(conn)
+    results: list[FieldAnswer] = []
+    for f in fields:
+        try:
+            results.append(
+                answer_field(conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings)
+            )
+        except (learning.LearningError, RagError, sqlite3.Error, RuntimeError, ValueError, OSError) as exc:
+            results.append(_needs_you(f.label, f"error: {type(exc).__name__}: {exc}"))
+    flagged = sum(r.flagged for r in results)
+    safety.log_action(conn, "read", page_url, f"answered {len(results)} fields, {flagged} flagged")
+    return results
