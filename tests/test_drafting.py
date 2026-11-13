@@ -231,7 +231,7 @@ def test_rewrite_puts_the_saved_answer_in_the_prompt_and_allows_its_numbers(fake
 def test_new_question_gets_a_flagged_draft(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rag, "match_saved_question", lambda *a, **k: rag.SavedMatch(None, False, (), rag.MATCH_THRESHOLD))
     fake_ai.answer(GOOD)
-    result = answer_field(conn, box(), {})
+    result = answer_field(conn, box("Which programming languages do you know?"), {})
     assert (result.value, result.source, result.flagged) == (GOOD, "draft", True)
     assert "EconLens PH" in result.note and result.unknown_id is not None
 
@@ -239,7 +239,7 @@ def test_new_question_gets_a_flagged_draft(conn: sqlite3.Connection, fake_ai: Fa
 def test_rejected_draft_leaves_the_field_empty_and_flagged(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rag, "match_saved_question", lambda *a, **k: rag.SavedMatch(None, False, (), rag.MATCH_THRESHOLD))
     fake_ai.answer("I built a rocket with Kubernetes.")
-    result = answer_field(conn, box(), {})
+    result = answer_field(conn, box("Which programming languages do you know?"), {})
     assert result.value == "" and result.flagged and result.source == "none" and "rejected" in result.note
 
 

@@ -17,7 +17,7 @@ import pytest
 from engine import ai, rag
 from engine.db import connect, init_db
 from engine.forms import drafting
-from engine.forms.answers import answer_field, is_company_question, is_reflective
+from engine.forms.answers import answer_field, is_company_question, is_reflective, is_story
 from engine.forms.drafting import DraftError, reflect_answer
 from engine.forms.reader import FormField
 from engine.profile import load_answers
@@ -52,6 +52,7 @@ def fake_retrieve(conn: object, question: str, k: int = 5, *, sources: tuple[str
         hits.append(_hit(n * 2 + 1, "project", name, f"Project: {name}. Technologies: React, Java.", score - 0.05))
     hits.append(_hit(100, "profile", "summary", "About me: IT student and full-stack developer.", 0.6))
     hits.append(_hit(101, "profile", "skills", "Skills: java, react, spring boot, sql.", 0.55))
+    hits.append(_hit(102, "profile", "preferences", "Target roles: Java developer intern. Job types: internship.", 0.5))
     wanted = set(sources or rag.SOURCES)
     return sorted((h for h in hits if h.source in wanted), key=lambda h: -h.score)[:k]
 
@@ -59,6 +60,7 @@ def fake_retrieve(conn: object, question: str, k: int = 5, *, sources: tuple[str
 class FakeAI:
     def __init__(self) -> None:
         self.prompts: list[str] = []
+        self.tasks: list[str] = []
         self.reply: object = None
 
     def answer(self, text: str) -> None:
@@ -73,6 +75,7 @@ class FakeAI:
         self.reply = {"stance": stance, "examples": examples, "closing": closing, "confidence": confidence}
 
     def __call__(self, task: str, prompt: str, **kwargs: object) -> dict:
+        self.tasks.append(task)
         self.prompts.append(prompt)
         if isinstance(self.reply, Exception):
             raise self.reply
@@ -139,6 +142,16 @@ def match(monkeypatch: pytest.MonkeyPatch, ref: str) -> None:
         "Describe yourself in a few sentences",
         "What kind of projects do you enjoy?",
         "What do you care about when you build software?",
+        "Why do you like software engineering?",
+        "Why did you choose to study IT?",
+        "Why are you passionate about technology?",
+        "What got you into programming?",
+        "Where do you see yourself in five years?",
+        "What are your career goals?",
+        "What makes you a good fit for a developer role?",
+        "How have you grown as a developer?",
+        "Is there anything else you would like us to know?",
+        "Explain what software quality means to you.",
     ],
 )
 def test_reflective_questions_are_recognised(label: str) -> None:
@@ -151,14 +164,35 @@ def test_reflective_questions_are_recognised(label: str) -> None:
         "When can you start?",
         "What is your expected monthly salary?",
         "Which programming languages do you know?",
-        "Describe a project you are proud of",
         "Cover letter",
         "What are your hobbies?",
         "Why do you want to work here?",
+        "What programming languages do you know?",
+        "How many years of experience do you have?",
+        "List your technical skills",
     ],
 )
 def test_factual_questions_are_not_reflective(label: str) -> None:
     assert not is_reflective(label), label
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Describe a project you are proud of",
+        "Tell us about a challenge you faced",
+        "Describe a time you worked in a team",
+        "What is the most challenging project you have built?",
+        "Tell us about a project you built",
+    ],
+)
+def test_story_questions_are_recognised(label: str) -> None:
+    assert is_story(label), label
+
+
+def test_opinion_questions_are_not_story_questions() -> None:
+    assert not is_story("Why do you like software engineering?")
+    assert not is_story("What are your strengths?")
 
 
 @pytest.mark.parametrize(
@@ -197,9 +231,10 @@ def test_matched_open_company_answer_keeps_the_saved_text(conn: sqlite3.Connecti
 def test_facts_are_the_two_best_projects_plus_profile() -> None:
     facts = drafting.gather_reflective_facts(None, QUESTION)  # type: ignore[arg-type]
     refs = [h.ref for h in facts]
-    projects = {r.replace(" (story)", "") for r in refs if r not in ("summary", "skills")}
+    projects = {r.replace(" (story)", "") for r in refs if r not in ("summary", "skills", "preferences")}
     assert projects == {"CheatNoNo", "MJ Cinema"}
     assert "CheatNoNo (story)" in refs and "summary" in refs and "skills" in refs
+    assert "preferences" in refs  # target roles: what a "where do you see yourself" question needs
 
 
 def test_each_project_is_reduced_to_what_started_it_and_what_was_hard() -> None:
@@ -219,6 +254,7 @@ def test_reflective_prompt_holds_the_two_stories_and_the_shape_rules(fake_ai: Fa
     assert "EconLens" not in prompt and "Countdown Math Arena" not in prompt and "Pag-IBIG" not in prompt
     assert "I think" in prompt and "What was hard" in prompt and "{{" not in prompt
     assert "CLOSING" in prompt and "Do not reuse any wording from this prompt" in prompt
+    assert "pulls you in" not in prompt  # a phrase in the prompt gets echoed into every answer
     assert "Budget Tracker" not in prompt  # no worked example for the model to copy
 
 
@@ -279,20 +315,50 @@ def test_the_closing_sentence_must_be_reflective(fake_ai: FakeAI) -> None:
     assert not result.ok and "closing" in result.note
 
 
-def test_a_long_answer_that_is_mostly_facts_is_rejected(fake_ai: FakeAI) -> None:
+def test_a_long_list_of_facts_cannot_hide_a_missing_second_project(fake_ai: FakeAI) -> None:
+    # five fact sentences: only the first two survive, and they do not name MJ Cinema, so the evidence check fails
     fake_ai.answer(
         "I think I build from problems. CheatNoNo came from cheating. It uses React. It uses Spring Boot. "
         "MJ Cinema came from booking. What I do is start there."
     )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "examples" in result.note
+    assert not reflect_answer(None, box()).ok  # type: ignore[arg-type]
 
 
 def test_copying_the_prompt_is_rejected(fake_ai: FakeAI) -> None:
     # the model once repeated its prompt example word for word; any 7-word run from the prompt is now refused
-    fake_ai.answer("I think the point is how you notice what is worth building and what pulls you in, as CheatNoNo and MJ Cinema show.")
+    fake_ai.answer("I think I should say what you want to grow toward, as CheatNoNo and MJ Cinema show.")
     result = reflect_answer(None, box())  # type: ignore[arg-type]
     assert not result.ok and "prompt" in result.note
+
+
+def test_why_do_you_like_question_now_gets_the_reflective_task_not_a_skills_list(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.answer(GOOD)
+    result = answer_field(conn, box("Why do you like software engineering?"), {})
+    assert fake_ai.tasks == ["reflect_answer"] and result.source == "draft" and "interpretation" in result.note
+
+
+def test_a_story_question_sends_only_the_best_project(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.parts("I think the project I am proudest of started from a real problem.", ["CheatNoNo began when students cheated on online exams and teachers could not see it."],
+                  "To me it shows I start from a real problem and then work on the hard part.")
+    result = answer_field(conn, box("Describe a project you are proud of"), {})
+    prompt = fake_ai.prompts[0]
+    assert result.value and "CheatNoNo" in prompt and "MJ Cinema" not in prompt
+    assert "AT MOST 1" in prompt
+
+
+def test_a_story_answer_keeps_only_the_first_example(fake_ai: FakeAI) -> None:
+    fake_ai.parts("I think I like hard problems.", ["CheatNoNo began with cheating.", "MJ Cinema began with a gap."], "To me that is the pattern.")
+    result = reflect_answer(None, box("Describe a project you are proud of"), single_project=True)  # type: ignore[arg-type]
+    assert result.ok and "CheatNoNo began with cheating." in result.text and "MJ Cinema" not in result.text
+
+
+def test_factual_question_with_the_strict_prompt_is_told_not_to_answer_with_a_list(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.reply = {"answers": []}
+    answer_field(conn, box("Which programming languages do you know?"), {})
+    assert "list of technologies" in fake_ai.prompts[0]
 
 
 def test_a_short_box_needs_only_one_project(fake_ai: FakeAI) -> None:
@@ -342,10 +408,10 @@ def test_a_closing_that_praises_instead_of_reflecting_is_rejected(fake_ai: FakeA
     assert not result.ok and "praise" in result.note
 
 
-def test_more_than_two_examples_are_rejected(fake_ai: FakeAI) -> None:
+def test_more_than_two_examples_are_cut_to_the_first_two(fake_ai: FakeAI) -> None:
     fake_ai.parts("I think I start from real problems.", ["CheatNoNo began with cheating.", "MJ Cinema began with a gap.", "EconLens began with news."], "To me that is the pattern.")
     result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "examples" in result.note
+    assert result.ok and "MJ Cinema began" in result.text and "EconLens" not in result.text
 
 
 def test_the_mock_fixture_has_the_structured_shape() -> None:

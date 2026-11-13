@@ -125,10 +125,12 @@ def _origin_only(hit: rag.Hit) -> rag.Hit:
     return rag.Hit(hit.id, hit.source, hit.ref, text, hit.score)
 
 
-def gather_reflective_facts(conn: sqlite3.Connection, label: str, settings: Settings | None = None) -> list[rag.Hit]:
-    """Facts for a reflective question: the story of the best 3 projects, plus your summary and skills.
+def gather_reflective_facts(
+    conn: sqlite3.Connection, label: str, settings: Settings | None = None, *, count: int = REFLECT_PROJECTS
+) -> list[rag.Hit]:
+    """Facts for a reflective question: the story of the best ``count`` projects, plus your summary, skills and target roles.
 
-    Every project is considered (so the best 3 for THIS question are chosen), but only 3 are sent: a
+    Every project is considered (so the best ones for THIS question are chosen), but only ``count`` are sent: a
     pattern needs several examples, while more would overflow the model's context on this PC. For each
     chosen project the story (problem, solution, hardest part) comes first, then its overview, which
     holds the technologies, so the names the AI may use are in the facts.
@@ -141,14 +143,14 @@ def gather_reflective_facts(conn: sqlite3.Connection, label: str, settings: Sett
         kind = "story" if hit.ref.endswith("(story)") else "overview"
         by_project.setdefault(name, {})[kind] = hit
         best[name] = max(best.get(name, 0.0), hit.score)
-    chosen = sorted(best, key=lambda n: -best[n])[:REFLECT_PROJECTS]
+    chosen = sorted(best, key=lambda n: -best[n])[:count]
     # Only the origin and the hard part: with the Solution and the tech overview in view, a small model
     # copies them into resume-style bullets instead of reflecting.
     facts = [_origin_only(by_project[name]["story"]) if "story" in by_project[name] else by_project[name]["overview"] for name in chosen]
     if not facts:
         return []
     profile = rag.retrieve(conn, label, 8, sources=("profile",), settings=settings)
-    return facts + [h for h in profile if h.ref in ("summary", "skills")]
+    return facts + [h for h in profile if h.ref in ("summary", "skills", "preferences")]
 
 
 # ---- checking a reply -------------------------------------------------------------------------------------
@@ -390,14 +392,21 @@ def rewrite_open(
 
 
 def reflect_answer(
-    conn: sqlite3.Connection, field: FormField, saved: str = "", kind: str = "open", *, settings: Settings | None = None
+    conn: sqlite3.Connection,
+    field: FormField,
+    saved: str = "",
+    kind: str = "open",
+    *,
+    settings: Settings | None = None,
+    single_project: bool = False,
 ) -> DraftResult:
     """Answer a REFLECTIVE question ("what are your strengths", "how do you decide what to build").
 
     The AI reads the story of your 3 best-matching projects and may state an OPINION about the pattern it
     sees, in a humble first-person voice. New conclusions are allowed, new facts are not: the usual checks
     still apply, plus the voice, overclaiming and evidence checks of :func:`check_reply`. ``saved`` is an
-    optional ``open`` answer, treated as one more fact about you.
+    optional ``open`` answer, treated as one more fact about you. ``single_project`` is for story questions
+    ("describe a project / a challenge"): only the best project is sent and only one example is allowed.
 
     Raises:
         DraftError: the question is sensitive, a saved answer is not ``open``, or the field is not a text box.
@@ -407,7 +416,8 @@ def reflect_answer(
     _refuse_if_sensitive(field.label)
     if field.type not in DRAFTABLE_TYPES:
         raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
-    facts = gather_reflective_facts(conn, field.label, settings)
+    max_examples = 1 if single_project else MAX_EXAMPLES
+    facts = gather_reflective_facts(conn, field.label, settings, count=max_examples)
     if not any(h.source == "project" for h in facts):
         return _rejected("no projects found to draw a pattern from")
     sentences, chars = _limits_for(field, reflective=True)
@@ -418,6 +428,7 @@ def reflect_answer(
         facts=format_facts(facts),
         max_sentences=sentences,
         max_chars=chars,
+        max_examples=str(max_examples),
     )
     try:
         reply = ai.ask_ai("reflect_answer", prompt, settings=settings)
@@ -430,8 +441,7 @@ def reflect_answer(
         return _rejected("the AI says your projects do not support an answer to this question")
     if not stance or not closing:
         return _rejected("the answer is missing its stance or its closing (the reflective part)")
-    if len(examples) > MAX_EXAMPLES:
-        return _rejected(f"{len(examples)} examples but at most {MAX_EXAMPLES} (too much fact, too little view)")
+    examples = examples[:max_examples]  # the model lists its best fit first, so extra examples are simply dropped
     if not _HEDGE.search(closing):
         return _rejected("the closing is not reflective: it must say what the examples mean to you")
     if _PRAISE.search(closing):

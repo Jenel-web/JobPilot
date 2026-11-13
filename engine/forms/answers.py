@@ -169,34 +169,63 @@ def is_sensitive(label: str) -> bool:
 
 
 # Reflective = asks for YOUR VIEW, so the answer is an opinion drawn from your projects (not a lookup).
+# Wide on purpose: forms word opinion questions in many ways, and a question this list misses falls back to
+# the strict fact-only prompt, which answered "Why do you like software engineering?" with a list of skills.
 REFLECTIVE_PATTERN = re.compile(
     r"\bstrengths?\b|"
-    r"\bhow do you (?:decide|choose|approach|handle|learn|prioriti[sz]e|solve|tackle|work|pick)\b|"
-    r"\bwhat (?:motivates|drives|inspires|excites|interests) you\b|"
-    r"\babout yourself\b|\bdescribe yourself\b|\bwho are you\b|"
-    r"\bwhat (?:kind|type|sort) of (?:apps?|projects?|problems?|work|software)\b|"
-    r"\bwhat do you (?:enjoy|like|love|care about|value)\b|"
+    r"\bhow (?:do|did|would|have|can) you (?!hear|find out|know about)|"
+    r"\bwhy (?:do|did|would|are|have) you\b|"
+    r"\bwhat (?:motivates|drives|inspires|excites|interests|got|made|makes) you\b|"
+    r"\bwhat (?:do|did|would) you (?:enjoy|like|love|care about|value|find|think|hope|consider)\b|"
+    r"\bwhat (?:is|are|was) your (?:biggest |greatest |main |top )?(?:strengths?|goals?|passions?|interests?|motivation|approach|philosophy|favou?rite)\b|"
+    r"\bwhat (?:kind|type|sort) of (?:apps?|projects?|problems?|work|software|developer|engineer)\b|"
+    r"\b(?:about|describe|introduce) yourself\b|\bwho are you\b|"
+    r"\bwhere do you see yourself\b|\bcareer goals?\b|\blong[- ]term goals?\b|"
+    r"\bgood fit\b|\bwhat makes you\b|"
+    r"\banything else\b|"
+    r"\bexplain (?:what|how|why)\b|"
     r"\byour (?:approach|philosophy|process) to\b"
+)
+
+# A STORY question asks for one example told well ("describe a project / a challenge / a time when").
+# It gets the reflective treatment too, but with only the single best project.
+STORY_PATTERN = re.compile(
+    r"\b(?:describe|tell us about|tell me about|share|give an example of) (?:a|an|one|the) "
+    r"(?:project|time|situation|challenge|problem|experience|accomplishment|achievement)\b|"
+    r"\b(?:biggest|greatest) (?:challenge|accomplishment|achievement|project)\b|"
+    r"\bmost (?:challenging|difficult|impressive|significant) (?:project|challenge|thing)\b|"
+    r"\bproud of\b|\ba time (?:when|you)\b"
 )
 
 # Company questions need the job post to answer well. Until Phase 4 gives us the job post, the AI does not
 # touch them: an open answer you saved is used as written, otherwise the field is left for you.
 COMPANY_PATTERN = re.compile(
     r"\bwhy (?:do|would|did) you want to (?:work|join)\b|\bwhy (?:us|this (?:company|role|position|job)|our (?:company|team))\b|"
-    r"\bwhy are you (?:interested|applying)\b|"
+    r"\bwhy are you (?:interested|applying)\b|\bwhy (?:did|do) you apply\b|"
     r"\bwhat (?:attracts|interests|excites|draws) you (?:about|to) (?:us|this|our|the (?:company|role|position))\b|"
     r"\bwhy do you want this (?:job|role|position|internship)\b"
 )
 
 
-def is_reflective(label: str) -> bool:
-    """True if the question asks for your own view (strengths, how you decide, what drives you)."""
-    return bool(REFLECTIVE_PATTERN.search(_words(label)))
-
-
 def is_company_question(label: str) -> bool:
     """True if the question asks why you want THIS company or role (best answered with the job post, Phase 4)."""
     return bool(COMPANY_PATTERN.search(_words(label)))
+
+
+def is_reflective(label: str) -> bool:
+    """True if the question asks for your own view (strengths, why you like it, how you decide, what drives you)."""
+    words = _words(label)
+    return bool(REFLECTIVE_PATTERN.search(words)) and not COMPANY_PATTERN.search(words)
+
+
+def is_story(label: str) -> bool:
+    """True if the question asks for one example told well (a project, a challenge, a time when...)."""
+    return bool(STORY_PATTERN.search(_words(label)))
+
+
+def wants_opinion(label: str) -> bool:
+    """Reflective or story: the answer is built from your projects with a reflective closing (not a fact lookup)."""
+    return is_reflective(label) or is_story(label)
 
 
 def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
@@ -416,8 +445,8 @@ def answer_field(
         return _needs_you(field.label, "new question: choose this one yourself (the AI only writes into text boxes)", triage.unknown_id)
     if is_company_question(field.label):
         return _needs_you(field.label, "company question: needs the job post (Phase 4), so answer it yourself for now", triage.unknown_id)
-    if is_reflective(field.label):
-        draft = drafting.reflect_answer(conn, field, settings=settings)
+    if wants_opinion(field.label):
+        draft = drafting.reflect_answer(conn, field, settings=settings, single_project=is_story(field.label))
         kind_of_note = "AI interpretation (an opinion drawn from your projects, edit freely)"
     else:
         draft = drafting.draft_answer(conn, field, settings=settings)
@@ -435,9 +464,11 @@ def _rewritten_answer(
     conn: sqlite3.Connection, field: FormField, row: sqlite3.Row, score: float, settings: Settings | None
 ) -> FieldAnswer:
     """A matched ``open`` answer, adapted to this form's wording by the AI (flagged). Falls back to the saved text."""
-    reflective = is_reflective(field.label)
+    reflective = wants_opinion(field.label)
     if reflective:
-        result = drafting.reflect_answer(conn, field, row["answer"], row["kind"], settings=settings)
+        result = drafting.reflect_answer(
+            conn, field, row["answer"], row["kind"], settings=settings, single_project=is_story(field.label)
+        )
     else:
         result = drafting.rewrite_open(conn, field, row["answer"], row["kind"], settings=settings)
     common = {"kind": row["kind"], "confidence": score, "matched_question": row["question"]}
