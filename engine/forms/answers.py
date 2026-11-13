@@ -80,6 +80,26 @@ _NOT_YOURS = re.compile(
     r"school|university|company|employer|business|project|file|user ?name|nick ?name|code|confirm\w* code)\b"
 )
 
+# Sensitive = legal, eligibility or identity questions (CLAUDE.md rules 4 and 5b). The AI never
+# writes these: the answer is your saved text word for word, or empty for you to fill in.
+# Matched on whole words in the lowercased label, so "embrace" does not trigger "race".
+# One list in one place: add a word here when a form slips through.
+SENSITIVE_PATTERN = re.compile(
+    r"\b("
+    r"visas?|sponsor\w*|authori[sz]\w*|work permits?|right to work|eligible to work|"
+    r"citizens?|citizenship|nationality|immigration|"
+    r"have you ever|convict\w*|criminal|felony|misdemeanou?r|arrest\w*|"
+    r"background checks?|consents?|terms and conditions|"
+    r"related to (an?|any) (current |former )?(employee|officer|director|member)|relatives?|"
+    r"disabilit\w+|disabled|gender|sex|pronouns?|ethnic\w*|race|racial|veterans?|"
+    r"marital status|religio\w+|sexual orientation|"
+    r"gpa|grade point average|"
+    r"(current|previous|last|present) (salary|pay|compensation)|salary history|"
+    r"date of birth|dob|birth ?date|birthday|"
+    r"(18|21) years|over (18|21)|legal age"
+    r")\b"
+)
+
 _PERSONAL_TYPES = {"text", "email", "tel", "url", "select", "dropdown", "textarea"}
 _CHOICE_TYPES = {"select", "dropdown"}
 
@@ -119,6 +139,15 @@ def _match_words(text: str) -> PersonalKey | None:
         if pattern.search(words):
             return key
     return None
+
+
+def is_sensitive(label: str) -> bool:
+    """True if the question is legal / eligibility / identity related (visa, "have you ever", GPA, gender...).
+
+    Such a question is treated as ``protected`` even when no saved answer matches it: the AI
+    must never write its answer.
+    """
+    return bool(SENSITIVE_PATTERN.search(_words(label)))
 
 
 def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
