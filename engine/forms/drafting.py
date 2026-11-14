@@ -146,6 +146,9 @@ def _origin_only(hit: rag.Hit) -> rag.Hit:
 _PROJECT_FIELDS = rag.PROJECT_FIELDS  # (key, label) in the order an answer reads best
 FIELDS_PER_PROJECT = 6  # the details of a project that match the question best (plus what started it)
 SECOND_FIELD_WEIGHT = 0.3  # a project ranks by its best detail, plus this share of its second best
+# Similarity cannot tell a one-line mistake from a real story ("A mistake is when..." echoes the question). Among the
+# projects with a detail this close to the best match, the one with the richest (longest) close detail goes first.
+RICHNESS_MARGIN = 0.08
 
 
 def _stored_projects(conn: sqlite3.Connection | None) -> dict[str, dict]:
@@ -214,6 +217,7 @@ def gather_reflective_facts(
     stored = _stored_projects(conn)
     by_short = {project_short_name(p): name for name, p in stored.items()}
     detail_scores: dict[str, dict[str, float]] = {}  # project -> {field key: similarity}
+    detail_words: dict[str, dict[str, int]] = {}  # project -> {field key: words}
     scores: dict[str, list[float]] = {}
     pieces: dict[str, dict[str, rag.Hit]] = {}  # the old-style story / overview chunks, used when no details are indexed
     for hit in hits:
@@ -221,6 +225,7 @@ def gather_reflective_facts(
             short, key = hit.ref.split(rag.FIELD_SEP, 1)
             name = by_short.get(short, short)
             detail_scores.setdefault(name, {})[key] = hit.score
+            detail_words.setdefault(name, {})[key] = len(hit.text.split())
         else:
             name = _project_name(hit.ref)
             pieces.setdefault(name, {})["story" if hit.ref.endswith("(story)") else "overview"] = hit
@@ -230,7 +235,16 @@ def gather_reflective_facts(
         ordered = sorted(scores[name], reverse=True)
         return ordered[0] + (SECOND_FIELD_WEIGHT * ordered[1] if len(ordered) > 1 else 0.0)
 
-    chosen = sorted(scores, key=lambda n: -rank(n))[:count]
+    top = max(max(values) for values in scores.values()) if scores else 0.0
+
+    def richness(name: str) -> int:
+        """Words in this project's longest detail that is about as close to the question as the best match."""
+        close = [key for key, score in detail_scores.get(name, {}).items() if score >= top - RICHNESS_MARGIN]
+        return max((detail_words[name][key] for key in close), default=0)
+
+    near = [n for n in scores if max(scores[n]) >= top - RICHNESS_MARGIN]
+    rest = [n for n in scores if n not in near]
+    chosen = (sorted(near, key=lambda n: (-richness(n), -rank(n))) + sorted(rest, key=lambda n: -rank(n)))[:count]
     facts: list[rag.Hit] = []
     for name in chosen:
         detail = stored.get(name)
@@ -566,8 +580,17 @@ def rewrite_open(
 _STOCK = re.compile(
     r"\bexcit\w*|\bthrill\w*|\beager\w*|\bpositive impact\b|\bmake a (?:real |positive )?(?:difference|impact)\b|"
     r"\bimpact on (?:people|users|others|lives)|\bpeople's lives\b|"
-    r"\bthrough these projects\b|\bin today's\b|\bever-?changing\b|\bcutting-edge\b",
+    r"\bthrough these projects\b|\bin today's\b|\bever-?changing\b|\bcutting-edge\b|"
+    r"\bhigh-quality\b|\b(?:committed|dedicated) to\b|\btangible\b|\bwilling to take risks\b|"
+    r"\bbring this mindset\b|\bcontinue to (?:learn|grow)\b|\blearn and grow\b|\bgrow as a\b",
     re.I,
+)
+# Sent once when the closing was nothing but stock phrases: ask again for ONLY a real closing.
+_CLOSING_RETRY = (
+    "\n\nYOUR PREVIOUS REPLY WAS REJECTED: the closing was only stock phrases (excited, passion, make an impact, "
+    "through these projects, high-quality results). Reply again in exactly the same JSON shape. This time the closing "
+    "must state ONE specific thing that your examples show about how you work or decide, in plain words, using the "
+    "facts above. No feelings about the future, no praise of yourself."
 )
 _THIS_PROJECT_STARTED = re.compile(r"\b(this project) (started|began) with\b", re.I)
 
@@ -668,6 +691,13 @@ def reflect_answer(
     # "I think..." openers removed, full names shortened, stock phrases dropped, full stops added.
     clean = lambda text: _end_sentence(_drop_stock(_drop_hedge_openers(_reword_started(_shorten_names(text, shorten))), tech))  # noqa: E731
     stance, closing = clean(reply["stance"]), clean(reply["closing"])
+    if stance and not closing and had_stock and reply["confidence"] > 0:
+        # The part that answers the question was all stock phrases. Ask once more, for the closing only.
+        try:
+            again = ai.ask_ai("reflect_answer", prompt + _CLOSING_RETRY, settings=settings)
+            closing = clean(again["closing"])
+        except (ai.AIError, NotImplementedError):
+            pass  # keep the rejection below: an answer without its closing is never used
     examples = [clean(e) for e in reply["examples"] if e.strip()]
     examples = [e for e in examples if e]
     # Cut to the box instead of rejecting: stance 1 sentence, each example 1 (small box) or 2 (big box), closing the rest.

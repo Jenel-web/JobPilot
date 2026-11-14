@@ -122,8 +122,13 @@ def test_the_draft_path_never_sees_the_per_detail_pieces(conn: sqlite3.Connectio
 # ---- choosing the best projects ---------------------------------------------------------------------------------
 
 
-def _field_hits(scores: dict[tuple[str, str], float]) -> list[rag.Hit]:
-    return [rag.Hit(n, "project", f"{short} :: {key}", f"Project: {short}. {key}", score) for n, ((short, key), score) in enumerate(scores.items())]
+def _field_hits(scores: dict[tuple[str, str], float], words: dict[tuple[str, str], int] | None = None) -> list[rag.Hit]:
+    """Fake detail hits. Every detail is 10 words long unless ``words`` says otherwise (length matters for richness)."""
+    words = words or {}
+    return [
+        rag.Hit(n, "project", f"{short} :: {key}", "word " * words.get((short, key), 10), score)
+        for n, ((short, key), score) in enumerate(scores.items())
+    ]
 
 
 def _patch_search(monkeypatch: pytest.MonkeyPatch, project_hits: list[rag.Hit]) -> None:
@@ -271,3 +276,84 @@ def test_a_tiny_box_still_works_with_short_names(conn: sqlite3.Connection, fake_
     fake_ai.parts("I learn from mistakes like the one on CheatNoNo.", [], "What I do now is test limits.")
     result = reflect_answer(conn, box(type="text", max_length=300))
     assert result.ok, result.note
+
+
+# ---- one retry when the closing is only stock phrases -------------------------------------------------------------
+
+
+class SequenceAI:
+    """Replies one after another, and remembers each prompt."""
+
+    def __init__(self, *replies: dict) -> None:
+        self.replies = list(replies)
+        self.prompts: list[str] = []
+
+    def __call__(self, task: str, prompt: str, **kwargs: object) -> dict:
+        self.prompts.append(prompt)
+        return self.replies.pop(0)
+
+
+def _reply(closing: str, stance: str = "I learn the most from my mistakes.") -> dict:
+    return {"pattern": "", "stance": stance, "closing": closing, "confidence": 0.8,
+            "examples": ["CheatNoNo froze at 60 students.", "MJ Cinema showed me two people can book one seat."]}
+
+
+STOCK_CLOSING = "I'm excited to make a positive impact. Through these projects I showed my passion."
+
+
+def test_a_stock_closing_gets_one_retry_for_the_closing_only(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    sequence = SequenceAI(_reply(STOCK_CLOSING), _reply("What I do now is test the limit before I ship."))
+    monkeypatch.setattr(ai, "ask_ai", sequence)
+    result = reflect_answer(conn, box())
+    assert result.ok, result.note
+    assert len(sequence.prompts) == 2 and "PREVIOUS REPLY WAS REJECTED" in sequence.prompts[1]
+    assert result.text.endswith("What I do now is test the limit before I ship.") and "excited" not in result.text
+
+
+def test_a_second_stock_closing_is_rejected_and_there_is_no_third_call(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    sequence = SequenceAI(_reply(STOCK_CLOSING), _reply("I'm thrilled to grow as a developer."))
+    monkeypatch.setattr(ai, "ask_ai", sequence)
+    result = reflect_answer(conn, box())
+    assert not result.ok and "stock phrases" in result.note and len(sequence.prompts) == 2
+
+
+def test_a_good_closing_makes_no_second_call(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    sequence = SequenceAI(_reply("What I do now is test the limit before I ship."))
+    monkeypatch.setattr(ai, "ask_ai", sequence)
+    assert reflect_answer(conn, box()).ok and len(sequence.prompts) == 1
+
+
+def test_self_praise_endings_are_dropped_too(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    closing = "I fixed it with batching. This shows I'm committed to delivering high-quality results."
+    monkeypatch.setattr(ai, "ask_ai", SequenceAI(_reply(closing)))
+    result = reflect_answer(conn, box())
+    assert result.ok and "committed" not in result.text and "high-quality" not in result.text
+
+
+# ---- a richer story beats a slightly closer one-liner ---------------------------------------------------------------
+
+
+def test_among_close_matches_the_richer_detail_wins(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    # the real case: MJ Cinema's one-line mistake echoes the question (0.688); CheatNoNo's long story is 0.065 behind
+    _patch_search(monkeypatch, _field_hits(
+        {("MJ Cinema", "mistake_and_fix"): 0.688, ("CheatNoNo", "mistake_and_fix"): 0.623, ("Econ Lens", "mistake_and_fix"): 0.40},
+        {("MJ Cinema", "mistake_and_fix"): 57, ("CheatNoNo", "mistake_and_fix"): 86, ("Econ Lens", "mistake_and_fix"): 90},
+    ))
+    refs = [h.ref for h in drafting.gather_reflective_facts(conn, QUESTION, count=1) if h.source == "project"]
+    assert refs == ["CheatNoNo (story)"]  # Econ Lens is longer still, but far from the question, so it is not considered
+
+
+def test_a_much_closer_match_is_not_beaten_by_a_longer_one(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    margin = drafting.RICHNESS_MARGIN
+    _patch_search(monkeypatch, _field_hits(
+        {("MJ Cinema", "mistake_and_fix"): 0.70, ("CheatNoNo", "mistake_and_fix"): 0.70 - margin - 0.01},
+        {("MJ Cinema", "mistake_and_fix"): 20, ("CheatNoNo", "mistake_and_fix"): 200},
+    ))
+    refs = [h.ref for h in drafting.gather_reflective_facts(conn, QUESTION, count=1) if h.source == "project"]
+    assert refs == ["MJ Cinema (story)"]
+
+
+def test_equally_rich_close_matches_keep_the_similarity_order(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_search(monkeypatch, _field_hits({("MJ Cinema", "problem"): 0.70, ("CheatNoNo", "problem"): 0.68}))
+    refs = [h.ref for h in drafting.gather_reflective_facts(conn, QUESTION, count=2) if h.source == "project"]
+    assert refs == ["MJ Cinema (story)", "CheatNoNo (story)"]
