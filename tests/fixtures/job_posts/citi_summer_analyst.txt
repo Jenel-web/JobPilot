@@ -1,0 +1,26 @@
+Your Role
+Here's what you will be doing:
+
+Design, implement, and maintain physical infrastructure components, including data centers, server rooms, and associated hardware.
+Ensure stability, availability, and performance of all technology infrastructure.
+Manage capacity planning and growth for computing and storage resources.
+Work on Infrastructure Management within Technology Services, supporting Citi's global operations.
+Gain exposure to technologies such as Microservices Development (Java, Spring Framework, Pivotal Cloud Foundry), Front-End Web Development (React, Angular, Apigee, TypeScript, HTML5), Generative AI & AI Agents (GitHub Copilot, Devin.AI, Prompt Engineering), and Data Analytics (Splunk, Tableau, Adobe Analytics).
+Participate in globally scoped projects with cross-functional teams.
+Contribute to real-world projects shaping the future of banking, including digital banking solutions, cybersecurity, and data-driven innovations.
+About You
+The company is looking for:
+
+Graduates between December 2027 and July 2028.
+Educational background in Computer Science, Computer Engineering, Information Technology, Management Information Systems, or related tech degrees.
+Preferred GPA of 3.0 or higher.
+A proactive problem-solver who embraces innovation and leverages Generative AI to solve complex business problems.
+A global outlook with willingness to collaborate across cultures and time zones.
+Excellent communication, project management, leadership skills, attention to detail, and ability to work well within diverse teams.
+Ability to pass technical interviews involving basic algorithmic programming exercises.
+Collaborative and adaptable, with prior experience in agile teams desirable.
+Authorized to work in the Philippines without employer sponsorship now or in the future.
+Compensation & Benefits
+Participation in a 10-week Summer Analyst Program starting in June, including in-depth education on the Analyst role and Citi's culture.
+On-the-desk training, speaker series, and networking opportunities.
+Structured learning, mentoring, and development programs to enhance technical, business, and leadership skills.

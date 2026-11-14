@@ -1,0 +1,35 @@
+About the job
+Introduction
+
+A career in IBM Consulting is rooted in long-term relationships and close collaboration with clients across the globe.
+
+You'll work with visionaries across multiple industries to improve the hybrid cloud and AI journey for the most innovative and valuable companies in the world. Your ability to accelerate impact and make meaningful change for your clients is enabled by our strategic partner ecosystem and our robust technology platforms across the IBM portfolio, including Software and Red Hat.
+
+Curiosity and a constant quest for knowledge serve as the foundation to success in IBM Consulting. You will be encouraged to challenge the norm, investigate ideas outside of your role, and come up with creative solutions resulting in groundbreaking impact for a wide network of clients. Our culture of evolution and empathy centers on long-term career growth and development opportunities in an environment that embraces your unique skills and experience.
+
+Your Role And Responsibilities
+
+During your internship, you can enhance your knowledge and gain professional experience by working on client projects. This role provides an exceptional opportunity to build a compelling portfolio, acquire new skills, gain insights into diverse industries, and embrace novel challenges for your future career.
+
+At IBM, we prioritize continuous learning, skill development, and personal growth within a culture of coaching and mentorship. As an intern, you'll experience this culture and have the opportunity to advance to our associate program based on results and performance.
+
+Work Experiences You Could Be Exposed To
+
+Team Collaboration and Innovation: Join cross functional teams to understand requirements and define technical specs for various projects, fostering collaboration innovation.
+Precision in Documentation: Document technical specifications and design decisions with clarity ensuring effective communication within the team and stakeholders.
+Code Excellence: develop scalable reusable code and champion code review processes/tools to uphold top notch code quality.
+Full Stack Versatility: Engage in full stack cloud native development, utilizing design thinking to create products that prioritize user experience, performance, security, quality, and stability. Gain exposure to a diverse tech stack including databases, operating systems, cloud providers, and modern UI frameworks, contributing to the entire product delivery life cycle.
+
+Required Technical And Professional Expertise
+
+Currently pursuing a university degree with a track-record of academic success
+Strong Interpersonal skills that enhance collaboration and relationship building, while also managing dynamic workloads in an agile environment
+Have initiative and passion to actively seek new knowledge and improve skills while embracing a growth mindset to assimilate diverse viewpoints
+Demonstrate leadership experience and ability to communicate effectively through active listening; while also be willing to adapt and have a readiness to take ownership of tasks and challenges.
+Experience with 1 of the following (Java, C++, Python, Scala, R, SAS, SQL, HTML, SPSS, VBA, Tableau, etc.), as well as systems design/development, hyperscale platforms, and information technology world
+
+Preferred Technical And Professional Experience
+
+Knowledge or interested in database development, as well as a curiosity in a wide range of cloud platforms, web markup languages, deploying applications with container technology, and generative AI.
+Exposure to web services, API, and multiple Java application frameworks highly desired.
+Knowledge or interest in best practices around design patterns, performance tuning, automated and unit testing.

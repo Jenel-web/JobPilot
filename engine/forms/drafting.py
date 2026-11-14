@@ -20,6 +20,7 @@ All AI calls go through ``ai.ask_ai`` (CLAUDE.md rule 2).
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -33,10 +34,24 @@ DRAFTABLE_TYPES = frozenset({"text", "textarea"})  # the AI only writes into tex
 FACT_COUNT = 4  # facts sent with each question
 # (sentences, characters) when the page gives no limit of its own
 _LIMITS = {"textarea": (4, 1200), "text": (1, 250)}
-_REFLECT_LIMITS = {"textarea": (5, 1000), "text": (2, 300)}  # stance + 2 short examples + a closing
+_REFLECT_LIMITS = {"textarea": (8, 1500), "text": (2, 300)}  # default box sizes; the sentence budget comes from the size
 REFLECT_PROJECTS = 2  # the best-matching projects sent for a reflective question: two examples are enough, and
 # fewer facts keep the answer short and the opinion in front
 MAX_FACT_CHARS = 1600  # one fact is cut here before it goes in a prompt
+_EXAMPLE_LENGTH_SHORT = (
+    'ONE short sentence (about 25 words) naming the project and saying what started it or what was hard about it, in a '
+    'normal spoken sentence (not "Project name: description", not a list). Do not list features or technologies.'
+)
+_EXAMPLE_LENGTH_FULL = (
+    "TWO sentences (about 45 words) each: the first names the project, says what started it and why you built it; the "
+    "second says what you did or decided, or what was hard or what you learned. Normal spoken sentences, not a list. "
+    "Do not list features or technologies."
+)
+_DEPTH_SHORT = "Keep it tight: this box is small."
+_DEPTH_FULL = (
+    "THIS BOX HAS ROOM. Explain properly: give each example real substance (what you decided and why, not only what "
+    "happened) and let the closing take two or three sentences."
+)
 MAX_EXAMPLES = 2  # examples in a reflective answer: the facts are the support, the closing is the point
 MIN_CHARS_FOR_TWO_EXAMPLES = 400  # a smaller box only needs one project as evidence
 
@@ -125,15 +140,69 @@ def _origin_only(hit: rag.Hit) -> rag.Hit:
     return rag.Hit(hit.id, hit.source, hit.ref, text, hit.score)
 
 
-def gather_reflective_facts(
-    conn: sqlite3.Connection, label: str, settings: Settings | None = None, *, count: int = REFLECT_PROJECTS
-) -> list[rag.Hit]:
-    """Facts for a reflective question: the story of the best ``count`` projects, plus your summary, skills and target roles.
+_PROJECT_FIELDS = (
+    ("problem", "What started it"),
+    ("why_i_built_it", "Why I built it"),
+    ("my_part", "My part"),
+    ("key_decision", "Key decision"),
+    ("hardest_part", "What was hard"),
+    ("what_i_learned", "What I learned"),
+    ("would_change", "What I would change"),
+    ("proud_of", "Proud of"),
+)
 
-    Every project is considered (so the best ones for THIS question are chosen), but only ``count`` are sent: a
-    pattern needs several examples, while more would overflow the model's context on this PC. For each
-    chosen project the story (problem, solution, hardest part) comes first, then its overview, which
-    holds the technologies, so the names the AI may use are in the facts.
+
+def _stored_projects(conn: sqlite3.Connection | None) -> dict[str, dict]:
+    """Your projects as saved from ``profile.json``, by name (empty when there is no database)."""
+    if conn is None:
+        return {}
+    try:
+        row = conn.execute("SELECT projects FROM profile WHERE id = 1").fetchone()
+        return {p["name"]: p for p in json.loads(row[0])} if row else {}
+    except (sqlite3.Error, ValueError, KeyError):
+        return {}
+
+
+def _project_text(project: dict, include_result: bool) -> str:
+    """One project as ``What started it: ... Why I built it: ...`` from YOUR words. No Solution, no tech list."""
+    parts = [f"Project: {project['name']}."]
+    for key, label in _PROJECT_FIELDS:
+        value = str(project.get(key) or "").strip()
+        if value:
+            parts.append(f"{label}: {value if value[-1] in '.!?' else value + '.'}")
+    result = str(project.get("result") or "").strip()
+    if include_result and result:
+        parts.append(f"Result: {result}")
+    return " ".join(parts)
+
+
+def _voice_notes(conn: sqlite3.Connection | None) -> str:
+    """How you want to sound (``about_me.voice_notes``), or an empty string."""
+    if conn is None:
+        return ""
+    try:
+        row = conn.execute("SELECT about_me FROM profile WHERE id = 1").fetchone()
+        return str(json.loads(row[0] or "{}").get("voice_notes", "")).strip() if row else ""
+    except (sqlite3.Error, ValueError, AttributeError):
+        return ""
+
+
+def gather_reflective_facts(
+    conn: sqlite3.Connection,
+    label: str,
+    settings: Settings | None = None,
+    *,
+    count: int = REFLECT_PROJECTS,
+    include_result: bool = False,
+) -> list[rag.Hit]:
+    """Facts for a reflective question: the best ``count`` projects, plus your summary, skills, goals and own words.
+
+    Every project is considered (so the best ones for THIS question are chosen), but only ``count`` are sent, so
+    the prompt fits the model's context on this PC. Each project is shown as what started it, why you built it, your
+    part, a key decision, what was hard and what you learned (whatever you filled in), never the Solution or the tech
+    overview: with those in view a small model copies them into resume-style bullets. ``include_result`` adds the
+    measurable result (used for long answers). From the profile come the summary, skills, target roles, and the 3
+    ``about_me`` lines closest to the question.
     """
     hits = rag.retrieve(conn, label, 64, sources=("project",), settings=settings)
     by_project: dict[str, dict[str, rag.Hit]] = {}
@@ -144,13 +213,23 @@ def gather_reflective_facts(
         by_project.setdefault(name, {})[kind] = hit
         best[name] = max(best.get(name, 0.0), hit.score)
     chosen = sorted(best, key=lambda n: -best[n])[:count]
-    # Only the origin and the hard part: with the Solution and the tech overview in view, a small model
-    # copies them into resume-style bullets instead of reflecting.
-    facts = [_origin_only(by_project[name]["story"]) if "story" in by_project[name] else by_project[name]["overview"] for name in chosen]
+    stored = _stored_projects(conn)
+    facts: list[rag.Hit] = []
+    for name in chosen:
+        story = by_project[name].get("story")
+        detail = stored.get(name)
+        if detail and any(str(detail.get(key) or "").strip() for key, _ in _PROJECT_FIELDS):
+            score = best[name]
+            facts.append(rag.Hit(story.id if story else 0, "project", f"{name} (story)", _project_text(detail, include_result), score))
+        elif story is not None:
+            facts.append(_origin_only(story))
+        else:
+            facts.append(by_project[name]["overview"])
     if not facts:
         return []
-    profile = rag.retrieve(conn, label, 8, sources=("profile",), settings=settings)
-    return facts + [h for h in profile if h.ref in ("summary", "skills", "preferences")]
+    profile = rag.retrieve(conn, label, 40, sources=("profile",), settings=settings)
+    about = [h for h in profile if h.ref.startswith("about:")][:3]  # the 3 closest of your own-words lines
+    return facts + [h for h in profile if h.ref in ("summary", "skills", "preferences")] + about
 
 
 # ---- checking a reply -------------------------------------------------------------------------------------
@@ -158,11 +237,8 @@ def gather_reflective_facts(
 _AI_TALK = re.compile(r"\bas an ai\b|language model|\bi(?:'m| am) sorry\b|\bi (?:cannot|can't|can not)\b|\bas a (?:large|text)\b", re.I)
 _FIRST_PERSON = re.compile(r"\bI\b|\b[Mm]y\b|\b[Mm]e\b|\b[Mm]yself\b")
 _THIRD_PERSON = re.compile(r"\b(?:the applicant|the candidate|this applicant|he|she)\b", re.I)
-_HEDGE = re.compile(
-    r"\bI (?:think|believe|feel|tend|find|usually|try|prefer|would say)\b|\bI'd say\b|\bwhat I do\b|\bto me\b|"
-    r"\bin my (?:view|experience|opinion)\b|\bit seems (?:to me|that I)\b",
-    re.I,
-)
+# "I think ..." / "I believe ..." at the start of a sentence: removed from reflective answers (see _drop_hedge_openers).
+_HEDGE_OPENER = re.compile(r"^(?:I think|I believe|I feel|I guess|I'd say|I would say)(?: that)?,?\s+", re.I)
 _OVERCLAIM = re.compile(
     r"\b(?:always|never|every time|everyone|definitely|obviously|passionate|passion|obsessed|expert|world-class|best)\b", re.I
 )
@@ -171,6 +247,10 @@ _PRAISE = re.compile(
     r"\bdemonstrat\w*|\bmy ability\b|\bcapable\b|\bcapability\b|\bproficien\w*|\bskilled\b|\bexpertise\b|"
     r"\bshine\w*|\bexcel\w*|\bskills and experience\b",
     re.I,
+)
+# The labels the facts are written with ("What started it: ..."). They must never appear in an answer.
+_FACT_LABEL = re.compile(
+    r"\b(?:what started it|what was hard|why i built it|my part|key decision|what i learned|what i would change|proud of):", re.I
 )
 _NUMBER = re.compile(r"\d[\d,.]*\d|\d")
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*")
@@ -192,6 +272,13 @@ def _ungrounded_number(text: str, allowed: str) -> str | None:
     return None
 
 
+# Ordinary words that may start a clause after a colon. Any other capitalised word there is still checked.
+_STARTERS = frozenset(
+    "this that these those it its we our us my i the a an for when after before since because with in on at as and but so "
+    "now then here there what how why who which while during once if although though however".split()
+)
+
+
 def _ungrounded_name(text: str, allowed: str) -> str | None:
     """A capitalised word (not the first of its sentence, not "I") that is nowhere in the allowed text."""
     for sentence in re.split(r"(?<=[.!?])\s+", text):
@@ -199,6 +286,9 @@ def _ungrounded_name(text: str, allowed: str) -> str | None:
             word = match.group(0).rstrip(".-")
             if position == 0 or word == "I" or not word[:1].isupper():
                 continue
+            after_colon = sentence[: match.start()].rstrip().endswith(":")
+            if after_colon and word.lower() in _STARTERS:
+                continue  # "CheatNoNo: This began..." is a new clause; "CheatNoNo: Kubernetes began..." is still checked
             if not _contains(allowed, word):
                 return word
     return None
@@ -224,6 +314,52 @@ def _copies_prompt(text: str, section: str) -> bool:
         return False
     match = re.search(rf"^## {section}\s*\n(.*?)(?=^## |\Z)", template, flags=re.MULTILINE | re.DOTALL)
     return bool(match) and bool(_word_runs(text, COPY_RUN_WORDS) & _word_runs(match.group(1), COPY_RUN_WORDS))
+
+
+def _repeated_opener(sentences: list[str]) -> str:
+    """The first two words that start three or more sentences ("i build"), or "" if the openers vary."""
+    openers = [" ".join(re.findall(r"[a-z']+", s.lower())[:2]) for s in sentences]
+    for opener in dict.fromkeys(o for o in openers if o):
+        if openers.count(opener) >= 3:
+            return opener
+    return ""
+
+
+def _first_sentences(text: str, limit: int) -> str:
+    """The first ``limit`` sentences of ``text``: a model ignores a sentence count, so the code enforces it."""
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return " ".join(sentences[:limit])
+
+
+def _drop_hedge_openers(text: str) -> str:
+    """Remove a leading "I think / I believe / I feel (that)" from every sentence, then capitalise.
+
+    The model overuses these ("I think... I think..."), and you wanted a confident, direct voice.
+    """
+    out = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+        sentence = _HEDGE_OPENER.sub("", sentence, count=1)
+        out.append(sentence[:1].upper() + sentence[1:])
+    return " ".join(s for s in out if s.strip())
+
+
+_COLON_EXAMPLE = re.compile(r"^(?P<name>[^:]{3,90}):\s+(?P<rest>(?:I|I'm|I'd|I've|We|My|Our|For|When|After|Before|Since|This|That|It|The)\b.*)$", re.DOTALL)
+
+
+def _natural_example(text: str, project_names: list[str]) -> str:
+    """``'MJ Cinema: I had just learned Spring Boot.'`` -> ``'With MJ Cinema, I had just learned Spring Boot.'``
+
+    Models like to write "Project name: description", which reads like a list. It is only rewritten when the
+    part after the colon already starts with a person ("I", "we", "my"...), so the new sentence stays grammatical.
+    """
+    match = _COLON_EXAMPLE.match(text)
+    if match is None or not any(_mentions_project(match["name"], n) for n in project_names):
+        return text
+    rest = match["rest"]
+    first_word = rest.split(" ", 1)[0]
+    if first_word not in ("I", "I'm", "I'd", "I've"):
+        rest = rest[:1].lower() + rest[1:]
+    return f"With {match['name'].strip()}, {rest}"
 
 
 def _mentions_project(text: str, name: str) -> bool:
@@ -275,7 +411,7 @@ def check_reply(
 
     _, default_chars = (_REFLECT_LIMITS if reflective else _LIMITS).get(field.type, _LIMITS["text"])
     max_chars = field.max_length or default_chars
-    if len(text) > max_chars:
+    if len(text) > max_chars and (field.max_length or not reflective):
         return _rejected(f"the AI wrote {len(text)} characters but the box allows {max_chars}")
     if rag.scrub(text) != text:
         return _rejected("the AI included an email, phone or ID number")
@@ -288,8 +424,9 @@ def check_reply(
     if reflective:
         if _copies_prompt(text, "REFLECT"):
             return _rejected("the answer repeats wording from the prompt instead of your projects")
-        if not _HEDGE.search(text):
-            return _rejected("not in a reflective voice (no 'I think', 'I believe', 'What I do is'...)")
+        leaked = _FACT_LABEL.search(text)
+        if leaked:
+            return _rejected(f"the answer repeats an internal label ({leaked.group(0)!r}) instead of speaking naturally")
         overclaim = _OVERCLAIM.search(text)
         if overclaim:
             return _rejected(f"overclaims with {overclaim.group(0)!r}")
@@ -297,8 +434,9 @@ def check_reply(
         allowed_sentences = int(_limits_for(field, reflective=True)[0])
         if len(sentences) > allowed_sentences:
             return _rejected(f"{len(sentences)} sentences but at most {allowed_sentences} (too much fact, too little view)")
-        if not _HEDGE.search(sentences[-1]):
-            return _rejected("the closing sentence is not reflective: it must say what the examples mean to you")
+        same = _repeated_opener(sentences)
+        if same:
+            return _rejected(f"three or more sentences start the same way ({same!r})")
 
     allowed = " ".join([label, saved, *(h.text for h in facts)])
     number = _ungrounded_number(text, allowed)
@@ -321,10 +459,21 @@ def check_reply(
 # ---- the two jobs -------------------------------------------------------------------------------------------
 
 
+def _sentence_budget(max_chars: int) -> int:
+    """How many sentences a box of this size can hold: small boxes stay tight, big ones get room to explain."""
+    for limit, sentences in ((150, 1), (400, 2), (800, 4), (1200, 6)):
+        if max_chars < limit:
+            return sentences
+    return 8
+
+
 def _limits_for(field: FormField, reflective: bool = False) -> tuple[str, str]:
+    """``(max sentences, max characters)`` for this field, as the strings the prompt needs."""
     sentences, chars = (_REFLECT_LIMITS if reflective else _LIMITS).get(field.type, _LIMITS["text"])
     max_chars = field.max_length or chars
-    if max_chars < 150:
+    if reflective:
+        sentences = _sentence_budget(max_chars)
+    elif max_chars < 150:
         sentences = 1
     return str(sentences), str(max_chars)
 
@@ -417,10 +566,11 @@ def reflect_answer(
     if field.type not in DRAFTABLE_TYPES:
         raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
     max_examples = 1 if single_project else MAX_EXAMPLES
-    facts = gather_reflective_facts(conn, field.label, settings, count=max_examples)
+    sentences, chars = _limits_for(field, reflective=True)
+    full = int(sentences) >= 6  # a big box: room to explain properly, with the measurable result as a fact
+    facts = gather_reflective_facts(conn, field.label, settings, count=max_examples, include_result=full)
     if not any(h.source == "project" for h in facts):
         return _rejected("no projects found to draw a pattern from")
-    sentences, chars = _limits_for(field, reflective=True)
     prompt = load_prompt(
         "REFLECT",
         question=" ".join(field.label.split()).replace('"', "'"),
@@ -429,23 +579,34 @@ def reflect_answer(
         max_sentences=sentences,
         max_chars=chars,
         max_examples=str(max_examples),
+        example_length=_EXAMPLE_LENGTH_FULL if full else _EXAMPLE_LENGTH_SHORT,
+        depth=_DEPTH_FULL if full else _DEPTH_SHORT,
+        voice=_voice_notes(conn) or "(none given)",
     )
     try:
         reply = ai.ask_ai("reflect_answer", prompt, settings=settings)
     except (ai.AIError, NotImplementedError) as exc:
         return _rejected(f"AI unavailable: {exc}")
 
-    stance, closing = _end_sentence(reply["stance"]), _end_sentence(reply["closing"])
-    examples = [_end_sentence(e) for e in reply["examples"] if e.strip()]
+    clean = lambda text: _end_sentence(_drop_hedge_openers(text))  # noqa: E731  ("I think..." openers removed, full stops added)
+    stance, closing = clean(reply["stance"]), clean(reply["closing"])
+    examples = [clean(e) for e in reply["examples"] if e.strip()]
+    # Cut to the box instead of rejecting: stance 1 sentence, each example 1 (small box) or 2 (big box), closing the rest.
+    budget = int(sentences)
+    per_example = 2 if budget >= 8 else 1
+    keep = min(len(examples), max_examples, max(0, (budget - 2) // per_example))  # leave room for a stance and a closing
+    stance = _first_sentences(stance, 1)
+    examples = [_first_sentences(e, per_example) for e in examples[:keep]]
+    closing = _first_sentences(closing, max(1, budget - 1 - per_example * len(examples)))
     if reply["confidence"] <= 0 or not (stance or closing):
         return _rejected("the AI says your projects do not support an answer to this question")
     if not stance or not closing:
-        return _rejected("the answer is missing its stance or its closing (the reflective part)")
+        return _rejected("the answer is missing its stance or its closing (the part that answers the question)")
     examples = examples[:max_examples]  # the model lists its best fit first, so extra examples are simply dropped
-    if not _HEDGE.search(closing):
-        return _rejected("the closing is not reflective: it must say what the examples mean to you")
+    names = sorted({_project_name(h.ref) for h in facts if h.source == "project"})
+    examples = [_natural_example(e, names) for e in examples]
     if _PRAISE.search(closing):
-        return _rejected("the closing praises you instead of reflecting on how you choose and what pulls you in")
+        return _rejected("the closing praises you instead of saying how you choose and what you do")
     # Join the three parts and run the same checks as every other answer (grounding, voice, length, evidence).
     joined = {"answers": [{
         "field": field.label, "answer": " ".join([stance, *examples, closing]),

@@ -35,9 +35,9 @@ STORIES = {
     "Pag-IBIG Housing": ("Problem: loan forms were confusing. Solution: an online form. Hardest part: validation.", 0.40),
 }
 GOOD = (
-    "I think I decide what to build by starting from problems I have seen people struggle with. "
+    "I decide what to build by starting from problems I have seen people struggle with. "
     "CheatNoNo came from students cheating on online exams, and MJ Cinema came from not having built a full booking system "
-    "after learning Spring Boot. What I do is look for the hard part first, like keeping the live camera feed in sync."
+    "after learning Spring Boot. What I look for is the hard part first, like keeping the live camera feed in sync."
 )
 
 
@@ -53,6 +53,13 @@ def fake_retrieve(conn: object, question: str, k: int = 5, *, sources: tuple[str
     hits.append(_hit(100, "profile", "summary", "About me: IT student and full-stack developer.", 0.6))
     hits.append(_hit(101, "profile", "skills", "Skills: java, react, spring boot, sql.", 0.55))
     hits.append(_hit(102, "profile", "preferences", "Target roles: Java developer intern. Job types: internship.", 0.5))
+    for n, (ref, text, score) in enumerate([
+        ("about:why_software_engineering", "Why I like software engineering: a small idea can help many people.", 0.72),
+        ("about:goals", "My goals. In five years: lead a small team.", 0.66),
+        ("about:strength:Finishing", "Strength: Finishing. Evidence: I shipped before the deadline.", 0.6),
+        ("about:values", "What I value: honest work.", 0.4),
+    ]):
+        hits.append(_hit(110 + n, "profile", ref, text, score))
     wanted = set(sources or rag.SOURCES)
     return sorted((h for h in hits if h.source in wanted), key=lambda h: -h.score)[:k]
 
@@ -231,10 +238,12 @@ def test_matched_open_company_answer_keeps_the_saved_text(conn: sqlite3.Connecti
 def test_facts_are_the_two_best_projects_plus_profile() -> None:
     facts = drafting.gather_reflective_facts(None, QUESTION)  # type: ignore[arg-type]
     refs = [h.ref for h in facts]
-    projects = {r.replace(" (story)", "") for r in refs if r not in ("summary", "skills", "preferences")}
+    projects = {h.ref.replace(" (story)", "") for h in facts if h.source == "project"}
     assert projects == {"CheatNoNo", "MJ Cinema"}
     assert "CheatNoNo (story)" in refs and "summary" in refs and "skills" in refs
     assert "preferences" in refs  # target roles: what a "where do you see yourself" question needs
+    about = [r for r in refs if r.startswith("about:")]
+    assert about == ["about:why_software_engineering", "about:goals", "about:strength:Finishing"]  # the best 3 only
 
 
 def test_each_project_is_reduced_to_what_started_it_and_what_was_hard() -> None:
@@ -291,7 +300,6 @@ def test_factual_question_still_uses_the_strict_prompt(conn: sqlite3.Connection,
     ("text", "why"),
     [
         ("I think I build things people need. CheatNoNo came from students cheating on online exams. To me that is the pattern.", "only one project"),
-        ("I build things from problems people have. CheatNoNo and MJ Cinema both came from real problems, so I start there.", "no hedge"),
         ("I think I always start from a real problem, like CheatNoNo and MJ Cinema.", "overclaim: always"),
         ("I believe I am passionate about problems, like CheatNoNo and MJ Cinema.", "overclaim: passionate"),
         ("I think CheatNoNo and MJ Cinema show I like Kubernetes style work.", "invented tool"),
@@ -305,14 +313,29 @@ def test_bad_reflective_answers_are_rejected(fake_ai: FakeAI, text: str, why: st
     assert not result.ok and result.note, why
 
 
-def test_the_closing_sentence_must_be_reflective(fake_ai: FakeAI) -> None:
-    # hedged at the start, but it ends on a plain fact: the "reflective touch" is missing
-    fake_ai.answer(
-        "I think I start from real problems. CheatNoNo came from students cheating on online exams. "
-        "MJ Cinema came from a booking system I had not built before."
+def test_a_confident_answer_with_no_hedging_is_accepted(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and "I think" not in result.text and "I believe" not in result.text
+
+
+def test_leading_i_think_and_i_believe_are_removed_from_every_sentence(fake_ai: FakeAI) -> None:
+    fake_ai.parts(
+        "I think I start from real problems.",
+        ["I believe CheatNoNo began with cheating.", "I feel that MJ Cinema began with a gap."],
+        "I think what matters is the hard part.",
     )
     result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "closing" in result.note
+    assert result.ok
+    assert result.text == (
+        "I start from real problems. CheatNoNo began with cheating. MJ Cinema began with a gap. What matters is the hard part."
+    )
+
+
+def test_sentences_that_all_open_the_same_way_are_rejected(fake_ai: FakeAI) -> None:
+    fake_ai.parts("I build from problems.", ["I build CheatNoNo for exams.", "I build MJ Cinema for seats."], "I build what people need.")
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert not result.ok and "same way" in result.note
 
 
 def test_a_long_list_of_facts_cannot_hide_a_missing_second_project(fake_ai: FakeAI) -> None:
@@ -361,6 +384,33 @@ def test_factual_question_with_the_strict_prompt_is_told_not_to_answer_with_a_li
     assert "list of technologies" in fake_ai.prompts[0]
 
 
+def test_a_big_box_asks_for_a_fuller_answer(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box())  # type: ignore[arg-type]
+    prompt = fake_ai.prompts[0]
+    assert "At most 8 sentence(s)" in prompt and "Explain properly" in prompt and "TWO sentences" in prompt
+
+
+def test_a_small_box_stays_short(fake_ai: FakeAI) -> None:
+    fake_ai.answer("I start from real problems, like CheatNoNo. What matters is the hard part, like MJ Cinema.")
+    reflect_answer(None, box(max_length=300))  # type: ignore[arg-type]
+    prompt = fake_ai.prompts[0]
+    assert "At most 2 sentence(s)" in prompt and "Explain properly" not in prompt and "ONE short sentence" in prompt
+
+
+def test_a_full_answer_with_longer_examples_is_accepted(fake_ai: FakeAI) -> None:
+    fake_ai.parts(
+        "I choose projects by the problem behind them.",
+        [
+            "CheatNoNo began when students cheated on online exams. I designed the whole system myself.",
+            "MJ Cinema began after I had just learned Spring Boot. Stopping two people booking one seat was the hard part.",
+        ],
+        "What I look for is a real problem with a hard core. That is where I learn the most.",
+    )
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and result.text.count(".") == 7
+
+
 def test_a_short_box_needs_only_one_project(fake_ai: FakeAI) -> None:
     fake_ai.parts("I think I start from a real problem, like CheatNoNo.", [], "To me that is what makes an app worth building.")
     assert reflect_answer(None, box(type="text", max_length=200)).ok  # type: ignore[arg-type]
@@ -375,15 +425,43 @@ def test_parts_without_full_stops_are_joined_as_proper_sentences(fake_ai: FakeAI
     result = reflect_answer(None, box())  # type: ignore[arg-type]
     assert result.ok
     assert result.text == (
-        "I think I start from real problems. CheatNoNo began with students cheating on online exams. "
+        "I start from real problems. CheatNoNo began with students cheating on online exams. "
         "MJ Cinema began after I had just learned Spring Boot. What I do is look for the hard part first."
     )
 
 
-def test_unpunctuated_parts_still_count_as_separate_sentences(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I think a", ["CheatNoNo b", "MJ Cinema c"], "I think d. I think e. I think f")  # 6 sentences once punctuated
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "sentences" in result.note
+def test_an_over_long_answer_is_trimmed_to_the_box_not_thrown_away(fake_ai: FakeAI) -> None:
+    # the model ignores the sentence count: stance 2, examples 3 each, closing 7 = 15 sentences
+    fake_ai.parts(
+        "I start from real problems. I mean it.",
+        ["CheatNoNo began with cheating. It was hard. It taught me a lot.", "MJ Cinema began with a gap. It was new. It taught me more."],
+        "What I look for is a real problem. It has a hard core. That is where I learn. I like that. It keeps me honest. I repeat it. I do.",
+    )
+    result = reflect_answer(None, box())  # type: ignore[arg-type]  # a big box: 8 sentences
+    sentences = re.split(r"(?<=[.!?])\s+", result.text)
+    assert result.ok and len(sentences) == 8  # 1 stance + 2 + 2 examples + 3 closing
+    assert result.text.startswith("I start from real problems. CheatNoNo began with cheating. It was hard. MJ Cinema")
+    assert "It taught me" not in result.text and result.text.endswith("That is where I learn.")
+
+
+def test_a_small_box_trims_each_example_to_one_sentence(fake_ai: FakeAI) -> None:
+    fake_ai.parts("I start from real problems.", ["CheatNoNo began with cheating. It was hard.", "MJ Cinema began with a gap."], "What I look for is the hard core. And more.")
+    result = reflect_answer(None, box(type="text", max_length=500))  # type: ignore[arg-type]  # budget: 4 sentences
+    assert result.ok and "It was hard" not in result.text
+    assert len(re.split(r"(?<=[.!?])\s+", result.text)) <= 4  # the budget of a 500-character box
+
+
+def test_a_tiny_box_keeps_only_a_stance_and_a_closing(fake_ai: FakeAI) -> None:
+    fake_ai.parts("I start from real problems, like CheatNoNo.", ["MJ Cinema began with a gap."], "What I look for is the hard core.")
+    result = reflect_answer(None, box(type="text", max_length=300))  # type: ignore[arg-type]  # budget: 2 sentences
+    assert result.ok and len(re.split(r"(?<=[.!?])\s+", result.text)) == 2 and "MJ Cinema" not in result.text
+
+
+def test_a_capital_after_a_colon_is_not_an_invented_name() -> None:
+    from engine.forms.drafting import _ungrounded_name
+
+    assert _ungrounded_name("CheatNoNo: This began with a gap.", "CheatNoNo began with a gap") is None
+    assert _ungrounded_name("CheatNoNo: Kubernetes began with a gap.", "CheatNoNo began with a gap") == "Kubernetes"
 
 
 def test_the_closing_is_required(fake_ai: FakeAI) -> None:
@@ -454,3 +532,128 @@ def test_failed_reflective_rewrite_falls_back_to_the_saved_text(conn: sqlite3.Co
     fake_ai.reply = ai.AIError("down")
     result = answer_field(conn, box(), {})
     assert result.value == "I am strong in OOP and databases." and result.flagged and "saved text" in result.note
+
+
+# ---- richer facts straight from your data ---------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def rich_conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
+    from engine.profile import load_profile
+
+    profile = {
+        "first_name": "Juan", "last_name": "Dela Cruz",
+        "projects": [
+            {"name": "CheatNoNo", "problem": "students cheated on online exams and teachers could not see it",
+             "hardest_part": "keeping the live camera feed in sync", "solution": "A chrome extension and a dashboard.",
+             "why_i_built_it": "I watched classmates share answers in a group chat.",
+             "key_decision": "I chose Supabase because I did not have time to build a backend.",
+             "what_i_learned": "Decide the architecture before writing code.", "result": "Cut review from 10 minutes to 20 seconds."},
+            {"name": "MJ Cinema", "problem": "I had just learned Spring Boot but had never built a full-stack project",
+             "hardest_part": "stopping two people booking the same seat"},
+        ],
+        "about_me": {"voice_notes": "Direct and plain, short sentences."},
+    }
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    connection = connect(":memory:")
+    init_db(connection)
+    load_profile(connection, path, tmp_path)
+    yield connection
+    connection.close()
+
+
+def test_projects_use_your_own_fields_from_the_database(rich_conn: sqlite3.Connection) -> None:
+    facts = drafting.gather_reflective_facts(rich_conn, QUESTION)
+    cheat = next(h for h in facts if h.ref == "CheatNoNo (story)").text
+    assert "What started it: students cheated on online exams" in cheat
+    assert "Why I built it: I watched classmates share answers in a group chat." in cheat
+    assert "Key decision: I chose Supabase" in cheat and "What I learned: Decide the architecture" in cheat
+    assert "chrome extension" not in cheat and "Result:" not in cheat  # the Solution is left out; Result only for a full answer
+
+
+def test_a_full_answer_also_gets_the_result(rich_conn: sqlite3.Connection) -> None:
+    facts = drafting.gather_reflective_facts(rich_conn, QUESTION, include_result=True)
+    assert "Result: Cut review from 10 minutes to 20 seconds." in next(h for h in facts if h.ref == "CheatNoNo (story)").text
+
+
+def test_the_two_best_projects_are_still_chosen_with_a_database(rich_conn: sqlite3.Connection) -> None:
+    facts = drafting.gather_reflective_facts(rich_conn, QUESTION)
+    assert {h.ref for h in facts if h.source == "project"} == {"CheatNoNo (story)", "MJ Cinema (story)"}
+
+
+def test_your_voice_notes_go_into_the_prompt(rich_conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(rich_conn, box())
+    assert "Direct and plain, short sentences." in fake_ai.prompts[0]
+
+
+def test_without_voice_notes_the_prompt_says_none(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box())  # type: ignore[arg-type]
+    assert "(none given)" in fake_ai.prompts[0]
+
+
+# ---- examples that read like speech, not a list ---------------------------------------------------------------------------
+
+
+def test_a_project_name_colon_example_becomes_a_spoken_sentence(fake_ai: FakeAI) -> None:
+    fake_ai.parts(
+        "I choose projects by the problem behind them.",
+        ["CheatNoNo: students cheated on online exams, so we built a way to see it.", "MJ Cinema: I had just learned Spring Boot."],
+        "What I look for is a real problem with a hard core.",
+    )
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok
+    assert "With MJ Cinema, I had just learned Spring Boot." in result.text
+    assert "MJ Cinema:" not in result.text
+
+
+def test_a_colon_example_that_does_not_continue_with_a_person_is_left_alone(fake_ai: FakeAI) -> None:
+    fake_ai.parts(
+        "I choose projects by the problem behind them.",
+        ["CheatNoNo: a proctoring platform for exams.", "MJ Cinema began after I had just learned Spring Boot."],
+        "What I look for is a real problem with a hard core.",
+    )
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and "CheatNoNo: a proctoring platform" in result.text
+
+
+# ---- length: only a real limit on the box rejects; the labels of the facts must not leak ----------------------------------------
+
+
+def test_a_long_answer_is_fine_when_the_form_states_no_limit(fake_ai: FakeAI) -> None:
+    long_example = ("CheatNoNo began when students cheated on online exams and teachers could not see it. " * 4).strip()
+    fake_ai.parts("I choose projects by the problem behind them.", [long_example, "MJ Cinema began after I had just learned Spring Boot."],
+                  "What I look for is a real problem with a hard core.")
+    result = reflect_answer(None, box())  # type: ignore[arg-type]  # a textarea with no max_length
+    assert result.ok  # never rejected for our own default size
+
+
+def test_a_real_limit_on_the_box_still_rejects_a_long_answer(fake_ai: FakeAI) -> None:
+    long_sentence = "I choose projects by the problem behind them, like CheatNoNo and MJ Cinema, " + "and I keep going back to that idea " * 6
+    fake_ai.parts(long_sentence, [], "What I look for is a real problem with a hard core.")
+    result = reflect_answer(None, box(max_length=200))  # type: ignore[arg-type]
+    assert not result.ok and "characters" in result.note
+
+
+@pytest.mark.parametrize("label", ["What started it", "What was hard", "Why I built it", "Key decision", "What I learned"])
+def test_the_internal_fact_labels_must_not_leak_into_the_answer(fake_ai: FakeAI, label: str) -> None:
+    fake_ai.parts("I choose projects by the problem behind them.", [f"CheatNoNo: {label}: students cheated.", "MJ Cinema began with a gap."],
+                  "What I look for is a real problem with a hard core.")
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert not result.ok and "label" in result.note
+
+
+def test_the_prompt_tells_the_model_not_to_write_the_labels(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box())  # type: ignore[arg-type]
+    assert "Do not write these labels" in fake_ai.prompts[0]
+
+
+def test_a_colon_example_that_continues_with_this_project_is_rewritten_too(fake_ai: FakeAI) -> None:
+    fake_ai.parts("I choose projects by the problem behind them.",
+                  ["CheatNoNo: This project started with students cheating on online exams.", "MJ Cinema began with a gap."],
+                  "What I look for is a real problem with a hard core.")
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and "With CheatNoNo, this project started with students cheating on online exams." in result.text

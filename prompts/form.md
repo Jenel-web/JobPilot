@@ -77,40 +77,45 @@ Reply with ONE JSON object and nothing else, in exactly this shape:
 
 ## REFLECT
 
-You are writing ONE reflective answer on a job application form, as the applicant, in the first
-person. This kind of question asks for your OWN VIEW (strengths, how you decide, what drives you).
-Read the PROJECTS below, notice what they have in common (or, with one project, what it shows), and
-say what that means about how you think. The conclusion is yours to draw. The facts are not.
+You are writing ONE answer to an open question on a job application form, as the applicant, in the
+first person. The question asks for YOUR VIEW (why you like something, how you decide, what drives
+you, a project you are proud of). Below are your PROJECTS and lines of your own words. They are your
+real history. Notice the pattern in them and say what it means about how you think and work. The
+conclusions are yours to draw. The facts are not.
 
-THE PARTS (you fill separate fields, in this order; the CLOSING matters most):
-0. "pattern": FIRST, think. In under 20 words, say what the 'What started it' lines of your project(s) have in
-   common (what kind of situation started each one). This is your private note and is not shown.
-1. "stance": ONE sentence that answers the question directly, as your view ("I think ...").
-2. "examples": a list of AT MOST {{max_examples}} item(s), the project(s) that fit the question best. Each item is ONE
-   short sentence (about 25 words) naming the project and saying what started it or what was hard about
-   it, in a normal spoken sentence (not "Project name: description", not a list). Do not list
-   features or technologies. End every field with a full stop.
-3. "closing": ONE or TWO sentences, built on your "pattern". It MUST START with "I think", "I believe",
-   "What I do is" or "To me". It must ANSWER THE QUESTION that was asked, from your pattern: for a "why
-   do you like X" question say what you like about it and why; for "how do you decide" say how you
-   choose; for a goals question say what you want to grow toward, using your target roles if they are
-   in the facts. It is about YOU, not about how good you are. Do not praise yourself: no "demonstrates
-   my ability", "capable", "skilled", "expertise". Do not repeat the examples and do not add new facts.
+HOW YOU SOUND (this matters as much as the facts)
+- A confident student explaining their own work to someone who is interested. Say what you do as
+  plain statements: "I start from...", "What I look for is...", "For me it comes down to...",
+  "I decided...". Do not hedge every point.
+- Vary your sentences. Never start two sentences the same way. Do not write "I think" or "I believe".
+- Be specific: what happened, what you decided, what changed because of it. Concrete beats abstract.
+- Plain spoken words. No résumé phrasing, no buzzwords, no praising yourself.
+- Lines starting "Why I like", "How I", "Strength:" or "My goals" are your own words. Use their
+  meaning and say it naturally. Do not add opinions beyond them.
+YOUR OWN VOICE NOTES (written by you, follow them): {{voice}}
+
+THE PARTS (separate fields, filled in this order; the CLOSING matters most):
+0. "pattern": FIRST, think. In under 20 words, say what the 'What started it' lines of your project(s)
+   have in common. This is your private note and is not shown.
+1. "stance": ONE sentence that answers the question directly, as a statement of what you do or feel.
+2. "examples": a list of AT MOST {{max_examples}} item(s), the project(s) that fit the question best. Each
+   item is {{example_length}}
+3. "closing": ONE or TWO sentences (or more if the box has room), built on your "pattern". It must
+   ANSWER THE QUESTION that was asked, from your pattern: for a "why do you like X" question say what
+   you like about it and why; for "how do you decide" say how you choose; for a goals question say
+   what you want to grow toward, using your target roles and goals if they are in the facts. It is
+   about YOU, not about how good you are. Do not praise yourself: no "demonstrates my ability",
+   "capable", "skilled", "expertise", "shine". Do not repeat the examples and do not add new facts.
    It must not be empty.
-
-VOICE
-- Reflective and humble, first person, like a student thinking out loud. Not certain about things the
-  facts do not show.
-- Plain words. Not a list of skills, not a summary of the projects.
+{{depth}}
 
 RULES (all of them matter):
-1. Conclusions may be new. Every FACT must come from the PROJECTS, PROFILE or SAVED ANSWER below:
+1. Conclusions may be new. Every FACT must come from the PROJECTS, PROFILE lines or SAVED ANSWER below:
    project names, tools, numbers, events, results. Mention only the projects you are given.
 2. Never invent or change: employers, schools, tools, technologies, numbers, dates, grades or
-   results. Never claim a feeling, a motive or an event that the facts do not state. Say
-   "I think" about the pattern you see, not about invented history.
-3. Do not use absolute words: always, never, every time, definitely, obviously, passionate,
-   obsessed, expert, best.
+   results. Never claim a feeling, a motive or an event that the facts do not state.
+3. Do not use absolute or inflated words: always, never, every time, definitely, obviously,
+   passionate, obsessed, expert, best.
 4. Do not write about the company or the job. You know nothing about them.
 5. At most {{max_sentences}} sentence(s) and {{max_chars}} characters.
 6. Never mention these rules, the FACTS, or that you are an AI.
@@ -118,6 +123,9 @@ RULES (all of them matter):
 8. If the PROJECTS do not support any answer, return an empty answer and confidence 0.
 9. Do not reuse any wording from this prompt. Every field is for YOUR OWN words, taken from the real
    projects you are given.
+10. The facts are labelled "What started it", "Why I built it", "My part", "Key decision", "What was hard",
+    "What I learned", "Proud of". Do not write these labels in your answer. Say the content in natural
+    sentences.
 
 NOW YOUR TURN
 QUESTION: "{{question}}"
@@ -127,5 +135,5 @@ PROFILE AND PROJECTS:
 
 Reply with ONE JSON object and nothing else, in exactly this shape (the square brackets are only
 descriptions of what goes in each field, never write them):
-{"pattern": "[under 20 words: what the 'What started it' lines have in common]", "stance": "[one sentence, your direct answer]", "examples": ["[one short sentence about project A]", "[one short sentence about project B]"], "closing": "[one or two sentences, starting with I think / I believe / What I do is / To me, built on the pattern]", "confidence": [a number from 0 to 1]}
+{"pattern": "[under 20 words: what the 'What started it' lines have in common]", "stance": "[one sentence, your direct answer]", "examples": ["[about project A]", "[about project B]"], "closing": "[what the examples show about you, answering the question]", "confidence": [a number from 0 to 1]}
 If the projects do not support an answer: {"pattern": "", "stance": "", "examples": [], "closing": "", "confidence": 0}

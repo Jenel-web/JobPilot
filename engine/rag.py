@@ -51,7 +51,7 @@ _DOC_PREFIX = "search_document: "
 _QUERY_PREFIX = "search_query: "
 
 # Bump when the way chunks are embedded changes, so an old index is rebuilt.
-INDEX_VERSION = 2
+INDEX_VERSION = 3  # 3: about_me chunks and the new project fields
 
 
 def _doc_prefix(source: str) -> str:
@@ -234,6 +234,10 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
     if profile is not None:
         private = [profile["email"] or "", profile["phone"] or "", profile["address"] or ""]
         chunks += _profile_chunks(profile)
+        chunks += [
+            Chunk(c.source, c.ref, scrub(c.text, private))  # your own words may mention an email or phone: remove it
+            for c in _about_chunks(json.loads(profile["about_me"] or "{}"))
+        ]
         for project in json.loads(profile["projects"]):
             tech = ", ".join(project.get("tech", []))
             parts = [f"Project: {project['name']}.", f"Technologies: {tech}." if tech else "", project.get("blurb", "")]
@@ -246,7 +250,11 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
             # challenge finds it without the overview text diluting the match.
             story = [
                 f"{label}: {project[key]}"
-                for key, label in (("problem", "Problem"), ("solution", "Solution"), ("hardest_part", "Hardest part"))
+                for key, label in (
+                    ("problem", "Problem"), ("solution", "Solution"), ("hardest_part", "Hardest part"),
+                    ("why_i_built_it", "Why I built it"), ("my_part", "My part"), ("key_decision", "Key decision"),
+                    ("what_i_learned", "What I learned"), ("would_change", "Would change"), ("proud_of", "Proud of"),
+                )
                 if project.get(key)
             ]
             if story:
@@ -272,6 +280,39 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
                 seen.add(key)
                 chunks.append(Chunk("answer", question, text.strip()))
     return chunks
+
+
+_ABOUT_LABELS = (
+    ("why_software_engineering", "Why I like software engineering"),
+    ("how_i_choose_what_to_build", "How I choose what to build"),
+    ("how_i_work", "How I work"),
+    ("working_with_others", "Working with others"),
+    ("growth_area", "What I am working on improving"),
+    ("values", "What I value"),
+)
+
+
+def _about_chunks(about: dict) -> list[Chunk]:
+    """Your ``about_me`` as profile chunks, one per topic. Empty entries make no chunk.
+
+    ``voice_notes`` is an instruction about how you sound, not a fact, so it is not searched
+    (``drafting`` reads it straight from the database).
+    """
+    out = [Chunk("profile", f"about:{key}", f"{label}: {about[key].strip()}") for key, label in _ABOUT_LABELS if str(about.get(key, "")).strip()]
+    for strength in about.get("strengths", []):
+        name = str(strength.get("name", "")).strip()
+        if name:
+            evidence = str(strength.get("evidence", "")).strip()
+            out.append(Chunk("profile", f"about:strength:{name}", f"Strength: {name}." + (f" Evidence: {evidence}" if evidence else "")))
+    goals = about.get("goals", {})
+    parts = [
+        f"{label}: {str(goals.get(key, '')).strip()}"
+        for key, label in (("next_year", "Next year"), ("five_years", "In five years"), ("kind_of_work", "The kind of work I want"))
+        if str(goals.get(key, "")).strip()
+    ]
+    if parts:
+        out.append(Chunk("profile", "about:goals", "My goals. " + " ".join(parts)))
+    return out
 
 
 def _profile_chunks(profile: sqlite3.Row) -> list[Chunk]:

@@ -1,0 +1,31 @@
+We are seeking Software Engineers interested in working in one or more of the following roles: Front End, Back End, Quality Engineer and Full Stack.
+Tentative start date is February 2027.
+Each year, we hire over 50 students for internships, giving you plenty of opportunities to make new friends and connections. You can meet your fellow interns at various events such as Hackathons, Innovation Challenges, and other fun social gatherings.
+Position Responsibilities:
+Familiarity with agile and DevOps principles, test-driven development, continuous integration, and other approaches to accelerate the delivery of new features
+Familiar with modern software architectures and API-driven development
+Familiar with scripting languages
+Collaborative attitude, willingness to work with team members;
+Experiments with emerging technologies and understanding how they will impact what comes next.
+Works together in a small team with a common purpose, follows rules from team members
+
+Required Qualifications:
+Bachelor's Degree or equivalent
+School required or voluntary internship
+Participation in a school-required or voluntary internship
+Background in various tech stacks such as Java, Python, Spring Boot, React JS, and others,
+Background in Testing and Automation, OR
+Background in scripting languages such as Bash, PowerShell, etc.
+Some squad assignments may also involve data analysis using Python, DataBricks on Azure, and writing complex queries & stored procedures
+Good verbal and written communication
+
+Preferred Qualifications:
+Familiarity with agile and DevOps principles, test-driven development, continuous integration, and other approaches to accelerate the delivery of new features
+Familiar with modern software architectures and API-driven development
+Familiar with scripting languages
+Collaborative attitude, willingness to work with team members;
+
+When you join our team:
+We'll empower you to learn and grow the career you want.
+We'll recognize and support you in a flexible environment where well-being and inclusion are more than just words.
+As part of our global team, we'll support you in shaping the future you want to see.

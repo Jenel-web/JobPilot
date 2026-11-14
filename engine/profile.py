@@ -72,6 +72,44 @@ class Project(BaseModel):
     problem: str = ""
     solution: str = ""
     hardest_part: str = ""
+    # In YOUR words, so open answers can say why and how, not just what (all optional; leave empty rather than guess).
+    why_i_built_it: str = ""  # what made you want to build it
+    my_part: str = ""  # what you personally did, especially in a team
+    key_decision: str = ""  # one decision or trade-off you made, and why
+    what_i_learned: str = ""  # what changed in how you work
+    would_change: str = ""  # what you would do differently now
+    proud_of: str = ""  # the part you are proudest of
+
+
+class Strength(BaseModel):
+    """One strength and the real thing that shows it. A blank slot (an unfilled template line) is ignored."""
+
+    name: str = ""
+    evidence: str = ""
+
+
+class Goals(BaseModel):
+    next_year: str = ""
+    five_years: str = ""
+    kind_of_work: str = ""
+
+
+class AboutMe(BaseModel):
+    """You, in your own words. Every field is optional and an empty one changes nothing.
+
+    The AI may only rephrase and connect what is written here and in your projects; it never
+    invents opinions for you. ``voice_notes`` is an instruction about HOW you sound, not a fact.
+    """
+
+    why_software_engineering: str = ""
+    how_i_choose_what_to_build: str = ""
+    how_i_work: str = ""  # your approach to problems, learning, deadlines
+    working_with_others: str = ""
+    strengths: list[Strength] = []
+    growth_area: str = ""  # something honest you are improving, and what you do about it
+    goals: Goals = Goals()
+    values: str = ""
+    voice_notes: str = ""  # e.g. "direct and plain, short sentences, no buzzwords"
 
 
 class ResumeEntry(BaseModel):
@@ -104,6 +142,7 @@ class ProfileFile(BaseModel):
     skills: list[str] = []
     summary: str = ""
     projects: list[Project] = []
+    about_me: AboutMe = AboutMe()
     resumes: list[ResumeEntry] = []
     upload_name: str = ""
 
@@ -189,11 +228,11 @@ def load_profile(
             """
             INSERT INTO profile (id, full_name, first_name, middle_name, last_name, email, phone, address, school, degree, year_level,
                 grad_year, gpa, location, open_to_remote, github, linkedin, portfolio, job_types,
-                target_roles, preferred_locations, skills, summary, projects, upload_name)
+                target_roles, preferred_locations, skills, summary, projects, about_me, upload_name)
             VALUES (1, :full_name, :first_name, :middle_name, :last_name, :email, :phone, :address, :school, :degree, :year_level,
                 :grad_year, :gpa, :location, :open_to_remote, :github, :linkedin, :portfolio,
                 :job_types, :target_roles, :preferred_locations, :skills, :summary, :projects,
-                :upload_name)
+                :about_me, :upload_name)
             ON CONFLICT(id) DO UPDATE SET
                 full_name=excluded.full_name, first_name=excluded.first_name,
                 middle_name=excluded.middle_name, last_name=excluded.last_name, email=excluded.email, phone=excluded.phone,
@@ -203,7 +242,7 @@ def load_profile(
                 github=excluded.github, linkedin=excluded.linkedin, portfolio=excluded.portfolio,
                 job_types=excluded.job_types, target_roles=excluded.target_roles,
                 preferred_locations=excluded.preferred_locations, skills=excluded.skills,
-                summary=excluded.summary, projects=excluded.projects,
+                summary=excluded.summary, projects=excluded.projects, about_me=excluded.about_me,
                 upload_name=excluded.upload_name
             """,
             {
@@ -230,6 +269,7 @@ def load_profile(
                 "skills": json.dumps(data.skills),
                 "summary": data.summary,
                 "projects": json.dumps([p.model_dump() for p in data.projects]),
+                "about_me": json.dumps(data.about_me.model_dump()),
                 "upload_name": data.upload_name or f"{data.full_name}.pdf",
             },
         )

@@ -194,6 +194,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("first_name", "TEXT NOT NULL DEFAULT ''"),
         ("middle_name", "TEXT NOT NULL DEFAULT ''"),
         ("last_name", "TEXT NOT NULL DEFAULT ''"),
+        ("about_me", "TEXT NOT NULL DEFAULT '{}'"),  # JSON: you in your own words (see profile.AboutMe)
     ],
 }
 
