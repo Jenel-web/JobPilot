@@ -79,6 +79,22 @@ class Project(BaseModel):
     what_i_learned: str = ""  # what changed in how you work
     would_change: str = ""  # what you would do differently now
     proud_of: str = ""  # the part you are proudest of
+    how_i_got_through_it: str = ""  # how you solved the hardest part
+    mistake_and_fix: str = ""  # a real mistake and what you did about it
+    teamwork: str = ""  # how the team worked, or the feedback you got
+    timeline: str = ""  # how long it took, and the constraints
+    short_name: str = ""  # how you say the name out loud; empty = the part before the comma, at most 3 words
+
+
+def project_short_name(project: dict | str) -> str:
+    """How an answer should call a project: ``short_name`` if you set one, else the part of the name before a
+    comma or colon, cut to 3 words. ``'CheatNoNo, Exam Integrity Platform'`` -> ``'CheatNoNo'``."""
+    explicit = "" if isinstance(project, str) else str(project.get("short_name") or "").strip()
+    if explicit:
+        return explicit
+    name = project if isinstance(project, str) else str(project.get("name") or "")
+    first = re.split(r"[,:]", name)[0].strip()
+    return " ".join(first.split()[:3]) or name.strip()
 
 
 class Strength(BaseModel):

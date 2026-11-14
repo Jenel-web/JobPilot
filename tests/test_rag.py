@@ -349,8 +349,9 @@ def test_project_with_details_gets_an_overview_and_a_story_chunk(conn: sqlite3.C
         ),
     )
     chunks = [c for c in rag.build_chunks(conn) if c.source == "project"]
-    assert [c.ref for c in chunks] == ["PetTracker", "PetTracker (story)"]
-    overview, story = chunks[0].text, chunks[1].text
+    whole = [c for c in chunks if not rag.is_field_ref(c.ref)]  # the per-field pieces are tested in test_project_selection
+    assert [c.ref for c in whole] == ["PetTracker", "PetTracker (story)"]
+    overview, story = whole[0].text, whole[1].text
     assert "Status: ongoing." in overview and "Result: Used by 20 pet owners." in overview
     assert "Problem: Owners forget" in story and "Hardest part: Scheduling alarms" in story
     assert "Problem:" not in overview  # the story stays out of the overview chunk

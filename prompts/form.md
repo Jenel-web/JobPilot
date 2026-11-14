@@ -90,6 +90,13 @@ HOW YOU SOUND (this matters as much as the facts)
 - Vary your sentences. Never start two sentences the same way. Do not write "I think" or "I believe".
 - Be specific: what happened, what you decided, what changed because of it. Concrete beats abstract.
 - Plain spoken words. No résumé phrasing, no buzzwords, no praising yourself.
+- REFLECT, do not summarise. Pick ONE real moment from the projects that fits the question (a mistake and how
+  you fixed it, a decision and why, how you got through the hard part, what the team did) and tell it in your
+  own words. Then say what that moment shows about how you think. A reader should learn something about YOU, not
+  what the project does.
+- Call each project exactly as it is named in the facts. Never lengthen the name or add a subtitle.
+- No stock endings: no "excited", no "positive impact", no "make a difference", no "this project started
+  with", no "through these projects". Do not list technologies.
 - Lines starting "Why I like", "How I", "Strength:" or "My goals" are your own words. Use their
   meaning and say it naturally. Do not add opinions beyond them.
 YOUR OWN VOICE NOTES (written by you, follow them): {{voice}}
@@ -124,8 +131,9 @@ RULES (all of them matter):
 9. Do not reuse any wording from this prompt. Every field is for YOUR OWN words, taken from the real
    projects you are given.
 10. The facts are labelled "What started it", "Why I built it", "My part", "Key decision", "What was hard",
-    "What I learned", "Proud of". Do not write these labels in your answer. Say the content in natural
-    sentences.
+    "How I got through it", "A mistake and the fix", "Teamwork", "What I learned", "What I would change",
+    "Proud of", "Timeline". Do not write these labels in your answer. Say the content in natural sentences.
+11. Use only the details that help answer THIS question. Leave the rest out, even if they are interesting.
 
 NOW YOUR TURN
 QUESTION: "{{question}}"

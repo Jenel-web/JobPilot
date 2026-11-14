@@ -26,6 +26,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from engine import ai, rag
+from engine.profile import project_short_name
 from engine.forms.reader import FormField
 from engine.settings import ROOT, Settings
 
@@ -39,13 +40,14 @@ REFLECT_PROJECTS = 2  # the best-matching projects sent for a reflective questio
 # fewer facts keep the answer short and the opinion in front
 MAX_FACT_CHARS = 1600  # one fact is cut here before it goes in a prompt
 _EXAMPLE_LENGTH_SHORT = (
-    'ONE short sentence (about 25 words) naming the project and saying what started it or what was hard about it, in a '
-    'normal spoken sentence (not "Project name: description", not a list). Do not list features or technologies.'
+    'ONE short sentence (about 25 words) naming the project and ONE real moment from it that fits the question (a mistake, '
+    'a decision, how you got through something), as a normal spoken sentence (not "Project name: description", not a '
+    'list). Do not list features or technologies.'
 )
 _EXAMPLE_LENGTH_FULL = (
-    "TWO sentences (about 45 words) each: the first names the project, says what started it and why you built it; the "
-    "second says what you did or decided, or what was hard or what you learned. Normal spoken sentences, not a list. "
-    "Do not list features or technologies."
+    "TWO sentences (about 45 words) each: the first names the project and the one moment from it that fits the question "
+    "best (a mistake and its fix, a decision, how you got through the hard part, what the team did); the second says what "
+    "you did or what it changed in how you work. Normal spoken sentences, not a list. Do not list features or technologies."
 )
 _DEPTH_SHORT = "Keep it tight: this box is small."
 _DEPTH_FULL = (
@@ -112,7 +114,8 @@ def load_prompt(section: str, **values: str) -> str:
 
 def gather_facts(conn: sqlite3.Connection, label: str, settings: Settings | None = None) -> list[rag.Hit]:
     """The closest profile, project and resume chunks for ``label`` (already scrubbed of private data)."""
-    return rag.retrieve(conn, label, FACT_COUNT, sources=rag.FACT_SOURCES, settings=settings)
+    hits = rag.retrieve(conn, label, FACT_COUNT * 4, sources=rag.FACT_SOURCES, settings=settings)
+    return [h for h in hits if not rag.is_field_ref(h.ref)][:FACT_COUNT]  # the per-field pieces are for reflective answers
 
 
 def format_facts(hits: list[rag.Hit]) -> str:
@@ -140,16 +143,9 @@ def _origin_only(hit: rag.Hit) -> rag.Hit:
     return rag.Hit(hit.id, hit.source, hit.ref, text, hit.score)
 
 
-_PROJECT_FIELDS = (
-    ("problem", "What started it"),
-    ("why_i_built_it", "Why I built it"),
-    ("my_part", "My part"),
-    ("key_decision", "Key decision"),
-    ("hardest_part", "What was hard"),
-    ("what_i_learned", "What I learned"),
-    ("would_change", "What I would change"),
-    ("proud_of", "Proud of"),
-)
+_PROJECT_FIELDS = rag.PROJECT_FIELDS  # (key, label) in the order an answer reads best
+FIELDS_PER_PROJECT = 6  # the details of a project that match the question best (plus what started it)
+SECOND_FIELD_WEIGHT = 0.3  # a project ranks by its best detail, plus this share of its second best
 
 
 def _stored_projects(conn: sqlite3.Connection | None) -> dict[str, dict]:
@@ -163,12 +159,15 @@ def _stored_projects(conn: sqlite3.Connection | None) -> dict[str, dict]:
         return {}
 
 
-def _project_text(project: dict, include_result: bool) -> str:
-    """One project as ``What started it: ... Why I built it: ...`` from YOUR words. No Solution, no tech list."""
-    parts = [f"Project: {project['name']}."]
+def _project_text(project: dict, include_result: bool, keys: set[str] | None = None) -> str:
+    """One project as ``What started it: ... Why I built it: ...`` from YOUR words, called by its SHORT name.
+
+    ``keys`` limits it to those details (the ones closest to the question). No Solution, no tech list.
+    """
+    parts = [f"Project: {project_short_name(project)}."]
     for key, label in _PROJECT_FIELDS:
         value = str(project.get(key) or "").strip()
-        if value:
+        if value and (keys is None or key in keys):
             parts.append(f"{label}: {value if value[-1] in '.!?' else value + '.'}")
     result = str(project.get("result") or "").strip()
     if include_result and result:
@@ -187,6 +186,12 @@ def _voice_notes(conn: sqlite3.Connection | None) -> str:
         return ""
 
 
+def _shorten_hit(hit: rag.Hit, name: str, short: str) -> rag.Hit:
+    """The same fact with the project called by its short name."""
+    ref = short + (" (story)" if hit.ref.endswith("(story)") else "")
+    return rag.Hit(hit.id, hit.source, ref, hit.text.replace(name, short), hit.score)
+
+
 def gather_reflective_facts(
     conn: sqlite3.Connection,
     label: str,
@@ -197,34 +202,51 @@ def gather_reflective_facts(
 ) -> list[rag.Hit]:
     """Facts for a reflective question: the best ``count`` projects, plus your summary, skills, goals and own words.
 
-    Every project is considered (so the best ones for THIS question are chosen), but only ``count`` are sent, so
-    the prompt fits the model's context on this PC. Each project is shown as what started it, why you built it, your
-    part, a key decision, what was hard and what you learned (whatever you filled in), never the Solution or the tech
-    overview: with those in view a small model copies them into resume-style bullets. ``include_result`` adds the
-    measurable result (used for long answers). From the profile come the summary, skills, target roles, and the 3
-    ``about_me`` lines closest to the question.
+    EVERY detail of EVERY project is scored against the question (each is its own chunk), so "tell me about a
+    mistake" finds the project with the best mistake, not the one with the best summary. A project ranks by its best
+    detail plus a share of its second best. Only ``count`` projects are sent, each with the details closest to the
+    question (and what started it), never the Solution or the tech overview: with those in view a small model copies
+    them into resume-style bullets. Projects are called by their SHORT name. ``include_result`` adds the measurable
+    result (used for long answers). From the profile come the summary, skills, target roles, and the 3 ``about_me``
+    lines closest to the question.
     """
-    hits = rag.retrieve(conn, label, 64, sources=("project",), settings=settings)
-    by_project: dict[str, dict[str, rag.Hit]] = {}
-    best: dict[str, float] = {}
-    for hit in hits:
-        name = _project_name(hit.ref)
-        kind = "story" if hit.ref.endswith("(story)") else "overview"
-        by_project.setdefault(name, {})[kind] = hit
-        best[name] = max(best.get(name, 0.0), hit.score)
-    chosen = sorted(best, key=lambda n: -best[n])[:count]
+    hits = rag.retrieve(conn, label, 4096, sources=("project",), settings=settings)
     stored = _stored_projects(conn)
+    by_short = {project_short_name(p): name for name, p in stored.items()}
+    detail_scores: dict[str, dict[str, float]] = {}  # project -> {field key: similarity}
+    scores: dict[str, list[float]] = {}
+    pieces: dict[str, dict[str, rag.Hit]] = {}  # the old-style story / overview chunks, used when no details are indexed
+    for hit in hits:
+        if rag.is_field_ref(hit.ref):
+            short, key = hit.ref.split(rag.FIELD_SEP, 1)
+            name = by_short.get(short, short)
+            detail_scores.setdefault(name, {})[key] = hit.score
+        else:
+            name = _project_name(hit.ref)
+            pieces.setdefault(name, {})["story" if hit.ref.endswith("(story)") else "overview"] = hit
+        scores.setdefault(name, []).append(hit.score)
+
+    def rank(name: str) -> float:
+        ordered = sorted(scores[name], reverse=True)
+        return ordered[0] + (SECOND_FIELD_WEIGHT * ordered[1] if len(ordered) > 1 else 0.0)
+
+    chosen = sorted(scores, key=lambda n: -rank(n))[:count]
     facts: list[rag.Hit] = []
     for name in chosen:
-        story = by_project[name].get("story")
         detail = stored.get(name)
-        if detail and any(str(detail.get(key) or "").strip() for key, _ in _PROJECT_FIELDS):
-            score = best[name]
-            facts.append(rag.Hit(story.id if story else 0, "project", f"{name} (story)", _project_text(detail, include_result), score))
+        short = project_short_name(detail) if detail else project_short_name(name)
+        story = pieces.get(name, {}).get("story")
+        filled = bool(detail) and any(str(detail.get(key) or "").strip() for key, _ in _PROJECT_FIELDS)
+        if filled and name in detail_scores:
+            ranked = sorted(detail_scores[name], key=lambda k: -detail_scores[name][k])
+            keep = set(ranked[:FIELDS_PER_PROJECT]) | {"problem"}
+            facts.append(rag.Hit(0, "project", f"{short} (story)", _project_text(detail, include_result, keep), rank(name)))
+        elif filled:
+            facts.append(rag.Hit(story.id if story else 0, "project", f"{short} (story)", _project_text(detail, include_result), rank(name)))
         elif story is not None:
-            facts.append(_origin_only(story))
-        else:
-            facts.append(by_project[name]["overview"])
+            facts.append(_shorten_hit(_origin_only(story), name, short))
+        elif "overview" in pieces.get(name, {}):
+            facts.append(_shorten_hit(pieces[name]["overview"], name, short))
     if not facts:
         return []
     profile = rag.retrieve(conn, label, 40, sources=("profile",), settings=settings)
@@ -250,7 +272,7 @@ _PRAISE = re.compile(
 )
 # The labels the facts are written with ("What started it: ..."). They must never appear in an answer.
 _FACT_LABEL = re.compile(
-    r"\b(?:what started it|what was hard|why i built it|my part|key decision|what i learned|what i would change|proud of):", re.I
+    r"\b(?:what started it|what was hard|why i built it|my part|key decision|what i learned|what i would change|proud of|how i got through it|a mistake and the fix|teamwork|timeline):", re.I
 )
 _NUMBER = re.compile(r"\d[\d,.]*\d|\d")
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*")
@@ -540,6 +562,56 @@ def rewrite_open(
     return _run("REWRITE", conn, field, saved, settings)
 
 
+# Stock phrases every AI answer ends with. A sentence containing one is dropped (the next sentence moves up).
+_STOCK = re.compile(
+    r"\bexcit\w*|\bthrill\w*|\beager\w*|\bpositive impact\b|\bmake a (?:real |positive )?(?:difference|impact)\b|"
+    r"\bimpact on (?:people|users|others|lives)|\bpeople's lives\b|"
+    r"\bthrough these projects\b|\bin today's\b|\bever-?changing\b|\bcutting-edge\b",
+    re.I,
+)
+_THIS_PROJECT_STARTED = re.compile(r"\b(this project) (started|began) with\b", re.I)
+
+
+def _reword_started(text: str) -> str:
+    """'This project started with X' -> 'It started with X' (the long form is how every AI answer begins)."""
+    return _THIS_PROJECT_STARTED.sub(lambda m: ("It " if m.group(1)[0] == "T" else "it ") + m.group(2).lower() + " with", text)
+TECH_LIST_SIZE = 3  # a sentence naming this many of YOUR technologies is a resume line, not a reflection
+
+
+def _tech_terms(conn: sqlite3.Connection | None) -> set[str]:
+    """The technologies named in your profile (project tech lists and skills), lower case."""
+    if conn is None:
+        return set()
+    terms: set[str] = set()
+    try:
+        row = conn.execute("SELECT skills, projects FROM profile WHERE id = 1").fetchone()
+        if row:
+            terms.update(str(t) for t in json.loads(row[0] or "[]"))
+            for project in json.loads(row[1] or "[]"):
+                terms.update(str(t) for t in project.get("tech", []))
+    except (sqlite3.Error, ValueError, TypeError, AttributeError):
+        return set()
+    return {t.lower().strip() for t in terms if len(t.strip()) >= 3}
+
+
+def _is_stock(sentence: str, tech: set[str]) -> bool:
+    if _STOCK.search(sentence):
+        return True
+    return sum(1 for term in tech if _contains(sentence, term)) >= TECH_LIST_SIZE
+
+
+def _drop_stock(text: str, tech: set[str]) -> str:
+    """``text`` without its stock-phrase sentences and technology lists."""
+    return " ".join(s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s and not _is_stock(s, tech))
+
+
+def _shorten_names(text: str, shorten: dict[str, str]) -> str:
+    """Call each project by its short name, whatever the model wrote ('CheatNoNo, Exam Integrity Platform' -> 'CheatNoNo')."""
+    for full in sorted(shorten, key=len, reverse=True):
+        text = re.sub(re.escape(full), shorten[full], text, flags=re.I)
+    return text
+
+
 def reflect_answer(
     conn: sqlite3.Connection,
     field: FormField,
@@ -588,9 +660,16 @@ def reflect_answer(
     except (ai.AIError, NotImplementedError) as exc:
         return _rejected(f"AI unavailable: {exc}")
 
-    clean = lambda text: _end_sentence(_drop_hedge_openers(text))  # noqa: E731  ("I think..." openers removed, full stops added)
+    tech = _tech_terms(conn)
+    stored = _stored_projects(conn)
+    shorten = {name: project_short_name(p) for name, p in stored.items() if project_short_name(p) != name}
+    raw = [reply["stance"], reply["closing"], *reply["examples"]]
+    had_stock = any(_is_stock(sentence, tech) for part in raw for sentence in re.split(r"(?<=[.!?])\s+", part))
+    # "I think..." openers removed, full names shortened, stock phrases dropped, full stops added.
+    clean = lambda text: _end_sentence(_drop_stock(_drop_hedge_openers(_reword_started(_shorten_names(text, shorten))), tech))  # noqa: E731
     stance, closing = clean(reply["stance"]), clean(reply["closing"])
     examples = [clean(e) for e in reply["examples"] if e.strip()]
+    examples = [e for e in examples if e]
     # Cut to the box instead of rejecting: stance 1 sentence, each example 1 (small box) or 2 (big box), closing the rest.
     budget = int(sentences)
     per_example = 2 if budget >= 8 else 1
@@ -598,9 +677,13 @@ def reflect_answer(
     stance = _first_sentences(stance, 1)
     examples = [_first_sentences(e, per_example) for e in examples[:keep]]
     closing = _first_sentences(closing, max(1, budget - 1 - per_example * len(examples)))
+    if had_stock and not (stance or closing):
+        return _rejected("the AI wrote only stock phrases (excited, positive impact, a list of technologies) with nothing real")
     if reply["confidence"] <= 0 or not (stance or closing):
         return _rejected("the AI says your projects do not support an answer to this question")
     if not stance or not closing:
+        if had_stock:
+            return _rejected("the AI wrote only stock phrases (excited, positive impact, a list of technologies) with nothing real")
         return _rejected("the answer is missing its stance or its closing (the part that answers the question)")
     examples = examples[:max_examples]  # the model lists its best fit first, so extra examples are simply dropped
     names = sorted({_project_name(h.ref) for h in facts if h.source == "project"})

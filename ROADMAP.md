@@ -227,7 +227,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 **You do**
 
 - [x] Write a **test set** of 20 questions in `tests/fixtures/eval_questions.json`: for each, the question as a form would word it and which saved answer or source should answer it. Include 8 reworded versions of your saved questions, 4 legal/eligibility, 4 personal fields, and 4 brand-new open questions ("Why do you want to join us?"). This is how you'll judge quality. (Done: 45 questions.)
-- [ ] Write about 10 **held-out** questions without looking at `also_asked_as`, so the eval measures understanding, not memorised wordings.
+- [x] Write about 10 **held-out** questions without looking at `also_asked_as`, so the eval measures understanding, not memorised wordings. (Done Nov 15: 10 added to `tests/fixtures/eval_questions.json` as `ho-01`..`ho-10`: 6 reworded, 1 legal, 1 personal, 2 new open; 60 questions in total. Never copy these into `also_asked_as`; the eval warns if you do.)
 - [x] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these. (Done Nov 11: taken from your portfolio, 5 projects with result, problem, solution and hardest part in `profile.json`. Check them once and fix anything that is not exactly true.)
 - [ ] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
 - [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.

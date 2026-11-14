@@ -656,4 +656,4 @@ def test_a_colon_example_that_continues_with_this_project_is_rewritten_too(fake_
                   ["CheatNoNo: This project started with students cheating on online exams.", "MJ Cinema began with a gap."],
                   "What I look for is a real problem with a hard core.")
     result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and "With CheatNoNo, this project started with students cheating on online exams." in result.text
+    assert result.ok and "With CheatNoNo, it started with students cheating on online exams." in result.text

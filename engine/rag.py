@@ -34,6 +34,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from engine import ai
+from engine.profile import project_short_name
 from engine.settings import Settings, load_settings
 
 SOURCES = ("profile", "project", "resume", "answer")
@@ -51,7 +52,7 @@ _DOC_PREFIX = "search_document: "
 _QUERY_PREFIX = "search_query: "
 
 # Bump when the way chunks are embedded changes, so an old index is rebuilt.
-INDEX_VERSION = 3  # 3: about_me chunks and the new project fields
+INDEX_VERSION = 4  # 4: one chunk per project field (so a question finds the project with the best matching moment)
 
 
 def _doc_prefix(source: str) -> str:
@@ -225,6 +226,32 @@ def split_resume(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
     return chunks
 
 
+# One chunk per project detail, in the order an answer reads best. The label is how the fact is shown to the AI.
+PROJECT_FIELDS = (
+    ("problem", "What started it"),
+    ("why_i_built_it", "Why I built it"),
+    ("my_part", "My part"),
+    ("teamwork", "Teamwork"),
+    ("key_decision", "Key decision"),
+    ("hardest_part", "What was hard"),
+    ("how_i_got_through_it", "How I got through it"),
+    ("mistake_and_fix", "A mistake and the fix"),
+    ("what_i_learned", "What I learned"),
+    ("would_change", "What I would change"),
+    ("proud_of", "Proud of"),
+    ("timeline", "Timeline"),
+)
+FIELD_SEP = " :: "  # a field chunk's ref is "<short name> :: <field key>"
+
+
+def field_ref(short_name: str, key: str) -> str:
+    return f"{short_name}{FIELD_SEP}{key}"
+
+
+def is_field_ref(ref: str) -> bool:
+    return FIELD_SEP in ref
+
+
 def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
     """Read the database and return every chunk to index (see the module docstring for the rules)."""
     chunks: list[Chunk] = []
@@ -254,11 +281,20 @@ def build_chunks(conn: sqlite3.Connection) -> list[Chunk]:
                     ("problem", "Problem"), ("solution", "Solution"), ("hardest_part", "Hardest part"),
                     ("why_i_built_it", "Why I built it"), ("my_part", "My part"), ("key_decision", "Key decision"),
                     ("what_i_learned", "What I learned"), ("would_change", "Would change"), ("proud_of", "Proud of"),
+                    ("how_i_got_through_it", "How I got through it"), ("mistake_and_fix", "A mistake and the fix"),
+                    ("teamwork", "Teamwork"), ("timeline", "Timeline"),
                 )
                 if project.get(key)
             ]
             if story:
                 chunks.append(Chunk("project", f"{project['name']} (story)", " ".join([f"Project: {project['name']}.", *story])))
+            # One chunk per detail, called by the SHORT name, so "tell me about a mistake" is matched against the
+            # mistakes of every project, not against whole project summaries.
+            short = project_short_name(project)
+            for key, label in PROJECT_FIELDS:
+                value = str(project.get(key) or "").strip()
+                if value:
+                    chunks.append(Chunk("project", field_ref(short, key), f"Project: {short}. {label}: {value}"))
 
     for resume in conn.execute("SELECT id, extracted_text FROM resumes ORDER BY id"):
         pieces = split_resume(scrub(resume["extracted_text"], private))
