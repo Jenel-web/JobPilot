@@ -7,7 +7,6 @@ The AI and the search are faked. Fake data and an in-memory database only.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -135,6 +134,8 @@ def _patch_search(monkeypatch: pytest.MonkeyPatch, project_hits: list[rag.Hit]) 
     def fake(conn: object, question: str, k: int = 5, *, sources: tuple[str, ...] | None = None, settings: object = None) -> list[rag.Hit]:
         if sources == ("project",):
             return sorted(project_hits, key=lambda h: -h.score)
+        if sources == ("profile",):
+            return [rag.Hit(900, "profile", "skills", "Skills: java, react, mysql, spring boot, supabase.", 0.5)]
         return []
 
     monkeypatch.setattr(rag, "retrieve", fake)
@@ -187,12 +188,14 @@ def test_facts_call_the_project_by_its_short_name(conn: sqlite3.Connection, monk
 class FakeAI:
     def __init__(self) -> None:
         self.reply: dict = {}
+        self.prompts: list[str] = []
 
     def __call__(self, task: str, prompt: str, **kwargs: object) -> dict:
+        self.prompts.append(prompt)
         return self.reply
 
-    def parts(self, stance: str, examples: list[str], closing: str) -> None:
-        self.reply = {"pattern": "", "stance": stance, "examples": examples, "closing": closing, "confidence": 0.8}
+    def answer(self, text: str, confidence: float = 0.8) -> None:
+        self.reply = {"answer": text, "confidence": confidence}
 
 
 @pytest.fixture
@@ -207,11 +210,9 @@ def fake_ai(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> FakeAI
 
 
 def test_a_full_name_written_by_the_model_becomes_the_short_name(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I learn the most from my mistakes.",
-        ["On CheatNoNo, Exam Integrity Platform I shipped without rate limits and the dashboard froze, so I added batching.",
-         "MJ Cinema, Movie Booking System taught me to expect two people booking one seat."],
-        "What I do now is test the limit before I ship.",
+    fake_ai.answer(
+        "On CheatNoNo, Exam Integrity Platform I shipped without rate limits and the dashboard froze, so I added batching. "
+        "MJ Cinema, Movie Booking System taught me to expect two people booking one seat."
     )
     result = reflect_answer(conn, box())
     assert result.ok, result.note
@@ -219,115 +220,39 @@ def test_a_full_name_written_by_the_model_becomes_the_short_name(conn: sqlite3.C
     assert "Movie Booking System" not in result.text and "MJ Cinema taught me" in result.text
 
 
-def test_stock_sentences_are_dropped_and_the_real_ones_stay(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I learn the most from my mistakes.",
-        ["CheatNoNo froze at 60 students because I shipped without rate limits.", "MJ Cinema showed me two people can book one seat."],
-        "I fixed it with batching. I'm excited to keep building apps that make a positive impact on people's lives.",
-    )
-    result = reflect_answer(conn, box())
-    assert result.ok, result.note
-    assert "excited" not in result.text and "positive impact" not in result.text and "I fixed it with batching." in result.text
-
-
-def test_a_list_of_technologies_is_dropped(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I learn the most from my mistakes.",
-        ["CheatNoNo froze at 60 students because I shipped without rate limits.", "MJ Cinema showed me two people can book one seat."],
-        "I used Java, React and MySQL to build it. What I do now is test the limit before I ship.",
-    )
-    result = reflect_answer(conn, box())
-    assert result.ok, result.note
-    assert "Java, React" not in result.text and "test the limit before I ship" in result.text
-
-
-def test_this_project_started_with_becomes_it_started_with(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I learn the most from my mistakes.",
-        ["CheatNoNo: This project started with students cheating on exams.", "MJ Cinema showed me two people can book one seat."],
-        "What I do now is test the limit before I ship.",
-    )
-    result = reflect_answer(conn, box())
-    assert result.ok and "this project started" not in result.text.lower() and "it started with students cheating" in result.text
-
-
-def test_an_answer_of_only_stock_phrases_is_rejected_with_a_clear_reason(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I'm excited about technology.",
-        ["CheatNoNo froze at 60 students.", "MJ Cinema showed me two people can book one seat."],
-        "I'm excited to make a positive impact on people's lives.",
-    )
-    result = reflect_answer(conn, box())
-    assert not result.ok and "stock phrases" in result.note
-    assert len(re.split(r"(?<=[.!?])\s+", result.text)) <= 1
-
-
-def test_the_prompt_asks_for_a_real_moment_and_no_stock_endings(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[str] = []
-    monkeypatch.setattr(ai, "ask_ai", lambda task, prompt, **k: (seen.append(prompt), fake_ai.reply)[1])
-    fake_ai.parts("I learn from mistakes.", ["CheatNoNo froze at 60 students.", "MJ Cinema booked one seat twice."], "What I do now is test limits.")
+def test_the_notes_in_the_prompt_use_the_short_name_and_say_what_was_built_with(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo froze at 60 students, so I added batching.")
     reflect_answer(conn, box())
-    assert "ONE real moment" in seen[0] and "No stock endings" in seen[0]
-    assert "A mistake and the fix" in seen[0]  # the facts carry the new details
+    prompt = fake_ai.prompts[0]
+    assert "Project: CheatNoNo. Built with: React, Supabase." in prompt
+    assert "Exam Integrity Platform" not in prompt
+    assert "A mistake and the fix: I shipped without rate limits" in prompt  # the new details are in the notes
+
+
+def test_a_tool_from_your_tech_list_may_be_named_but_another_may_not(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo taught me a lot about Supabase, because I had two weeks.")
+    assert reflect_answer(conn, box()).ok
+    fake_ai.answer("CheatNoNo taught me a lot about Redis.")
+    assert not reflect_answer(conn, box()).ok
+
+
+def test_a_list_of_your_technologies_warns_using_your_profile(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
+    fake_ai.answer("On CheatNoNo I used Java, React and MySQL, and I added batching when it froze at 60 students.")
+    result = reflect_answer(conn, box())
+    assert result.ok and "a list of technologies" in result.note  # the terms come from your skills and project tech
+
+
+def test_stock_phrases_warn_and_stay(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
+    text = "CheatNoNo froze at 60 students because I shipped without rate limits. I'm excited to make a positive impact."
+    fake_ai.answer(text)
+    result = reflect_answer(conn, box())
+    assert result.ok and result.text == text and "stock phrases" in result.note
 
 
 def test_a_tiny_box_still_works_with_short_names(conn: sqlite3.Connection, fake_ai: FakeAI) -> None:
-    # a 300-character box has room for 2 sentences and no examples, so the stance itself must name the project
-    fake_ai.parts("I learn from mistakes like the one on CheatNoNo.", [], "What I do now is test limits.")
+    fake_ai.answer("I learn from mistakes like the one on CheatNoNo. What I do now is test limits.")
     result = reflect_answer(conn, box(type="text", max_length=300))
     assert result.ok, result.note
-
-
-# ---- one retry when the closing is only stock phrases -------------------------------------------------------------
-
-
-class SequenceAI:
-    """Replies one after another, and remembers each prompt."""
-
-    def __init__(self, *replies: dict) -> None:
-        self.replies = list(replies)
-        self.prompts: list[str] = []
-
-    def __call__(self, task: str, prompt: str, **kwargs: object) -> dict:
-        self.prompts.append(prompt)
-        return self.replies.pop(0)
-
-
-def _reply(closing: str, stance: str = "I learn the most from my mistakes.") -> dict:
-    return {"pattern": "", "stance": stance, "closing": closing, "confidence": 0.8,
-            "examples": ["CheatNoNo froze at 60 students.", "MJ Cinema showed me two people can book one seat."]}
-
-
-STOCK_CLOSING = "I'm excited to make a positive impact. Through these projects I showed my passion."
-
-
-def test_a_stock_closing_gets_one_retry_for_the_closing_only(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    sequence = SequenceAI(_reply(STOCK_CLOSING), _reply("What I do now is test the limit before I ship."))
-    monkeypatch.setattr(ai, "ask_ai", sequence)
-    result = reflect_answer(conn, box())
-    assert result.ok, result.note
-    assert len(sequence.prompts) == 2 and "PREVIOUS REPLY WAS REJECTED" in sequence.prompts[1]
-    assert result.text.endswith("What I do now is test the limit before I ship.") and "excited" not in result.text
-
-
-def test_a_second_stock_closing_is_rejected_and_there_is_no_third_call(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    sequence = SequenceAI(_reply(STOCK_CLOSING), _reply("I'm thrilled to grow as a developer."))
-    monkeypatch.setattr(ai, "ask_ai", sequence)
-    result = reflect_answer(conn, box())
-    assert not result.ok and "stock phrases" in result.note and len(sequence.prompts) == 2
-
-
-def test_a_good_closing_makes_no_second_call(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    sequence = SequenceAI(_reply("What I do now is test the limit before I ship."))
-    monkeypatch.setattr(ai, "ask_ai", sequence)
-    assert reflect_answer(conn, box()).ok and len(sequence.prompts) == 1
-
-
-def test_self_praise_endings_are_dropped_too(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    closing = "I fixed it with batching. This shows I'm committed to delivering high-quality results."
-    monkeypatch.setattr(ai, "ask_ai", SequenceAI(_reply(closing)))
-    result = reflect_answer(conn, box())
-    assert result.ok and "committed" not in result.text and "high-quality" not in result.text
 
 
 # ---- a richer story beats a slightly closer one-liner ---------------------------------------------------------------

@@ -81,18 +81,14 @@ class FormAnswers(BaseModel):
     answers: list[FormAnswer]
 
 
-class ReflectAnswer(BaseModel):
-    """Task ``reflect_answer``: an opinion answer built in three parts, so a small model cannot skip the last.
+class ReflectText(BaseModel):
+    """Task ``reflect_text``: ONE free-written first-person answer to a reflective or story question.
 
-    ``stance`` answers the question directly, ``examples`` are at most two short sentences about real
-    projects, and ``closing`` says what they mean to the applicant. Code joins them and checks each part.
-    All three may be empty (with confidence 0) when the facts support no answer.
+    The code checks it (no private data, no number or name that is not in the notes) and only warns about style.
+    ``answer`` is empty, with confidence 0, when the notes support no answer.
     """
 
-    pattern: str = ""  # scratch: what the projects' problems have in common. Written BEFORE the closing so it is built on it
-    stance: str = ""
-    examples: list[str] = Field(default_factory=list, max_length=6)  # code rejects more than 2, with a clear reason
-    closing: str = ""
+    answer: str = ""
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -114,7 +110,7 @@ class ResumePick(BaseModel):
 # ``match`` and ``email`` are used from v1 and v2.
 TASK_MODELS: dict[str, type[BaseModel]] = {
     "form_answer": FormAnswers,
-    "reflect_answer": ReflectAnswer,
+    "reflect_text": ReflectText,
     "resume_pick": ResumePick,
     "match": MatchResult,
     "email": EmailDraft,

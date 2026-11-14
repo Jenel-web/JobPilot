@@ -1,6 +1,7 @@
 """Tests for reflective questions ("what are your strengths", "how do you decide what to build").
 
-Reflective answers may state an OPINION drawn from several projects, but never a new fact. The AI and
+Reflective answers are ONE free-written answer: a reflection drawn from your notes, never a new fact. Private
+data, an invented number or name, and assistant talk are rejected; style problems are only warnings. The AI and
 the search are faked; the fake search knows 5 projects so the "best 2 of 5" choice can be checked.
 """
 
@@ -70,16 +71,9 @@ class FakeAI:
         self.tasks: list[str] = []
         self.reply: object = None
 
-    def answer(self, text: str) -> None:
-        """Reply in the structured shape, splitting ``text`` into stance / examples / closing by sentence."""
-        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-        if len(sentences) == 1:
-            self.parts(sentences[0], [], sentences[0])  # one sentence is both stance and closing
-        else:
-            self.parts(sentences[0], sentences[1:-1], sentences[-1])
-
-    def parts(self, stance: str, examples: list[str], closing: str, confidence: float = 0.8) -> None:
-        self.reply = {"stance": stance, "examples": examples, "closing": closing, "confidence": confidence}
+    def answer(self, text: str, confidence: float = 0.8) -> None:
+        """Reply with one free-written answer."""
+        self.reply = {"answer": text, "confidence": confidence}
 
     def __call__(self, task: str, prompt: str, **kwargs: object) -> dict:
         self.tasks.append(task)
@@ -255,26 +249,48 @@ def test_each_project_is_reduced_to_what_started_it_and_what_was_hard() -> None:
     assert not any(h.ref == "CheatNoNo" for h in facts)  # so is the technology overview
 
 
-def test_reflective_prompt_holds_the_two_stories_and_the_shape_rules(fake_ai: FakeAI) -> None:
+def test_the_prompt_holds_the_two_best_projects_and_the_writing_rules(fake_ai: FakeAI) -> None:
     fake_ai.answer(GOOD)
     reflect_answer(None, box())  # type: ignore[arg-type]
     prompt = fake_ai.prompts[0]
     assert "CheatNoNo" in prompt and "MJ Cinema" in prompt
     assert "EconLens" not in prompt and "Countdown Math Arena" not in prompt and "Pag-IBIG" not in prompt
-    assert "I think" in prompt and "What was hard" in prompt and "{{" not in prompt
-    assert "CLOSING" in prompt and "Do not reuse any wording from this prompt" in prompt
-    assert "pulls you in" not in prompt  # a phrase in the prompt gets echoed into every answer
+    assert "{{" not in prompt and "What was hard" in prompt  # every placeholder filled, the notes are in
+    assert "NEVER add a fact" in prompt and "reflective sentence" in prompt
+    assert "Aim for about 5 to 8 sentences" in prompt  # a big box asks for a fuller answer
     assert "Budget Tracker" not in prompt  # no worked example for the model to copy
 
 
-# ---- a good reflective answer -------------------------------------------------------------------------------------
+def test_a_question_about_you_asks_for_a_direct_answer_then_moments_then_a_reflection(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box())  # type: ignore[arg-type]
+    prompt = fake_ai.prompts[0]
+    assert "answering the question directly" in prompt and "one or two real moments" in prompt
+    assert "The impact" not in prompt  # the XYZ shape is for stories
 
 
-def test_good_reflective_answer_passes_and_lists_the_projects_it_used(fake_ai: FakeAI) -> None:
+def test_a_story_question_asks_for_impact_then_what_you_did_then_a_reflection(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box("Describe a project you are proud of"), single_project=True)  # type: ignore[arg-type]
+    prompt = fake_ai.prompts[0]
+    assert "ONE project" in prompt and "The impact" in prompt and "What you did to get there" in prompt
+    assert "CheatNoNo" in prompt and "MJ Cinema" not in prompt  # only the best project
+
+
+def test_a_small_box_asks_for_a_short_answer(fake_ai: FakeAI) -> None:
+    fake_ai.answer("I start from a real problem, like CheatNoNo.")
+    reflect_answer(None, box(type="text", max_length=300))  # type: ignore[arg-type]
+    assert "Write 2 sentences" in fake_ai.prompts[0]
+
+
+# ---- a good answer -------------------------------------------------------------------------------------------------
+
+
+def test_the_answer_is_the_models_own_text_untouched(fake_ai: FakeAI) -> None:
     fake_ai.answer(GOOD)
     result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and result.text == GOOD
-    assert result.source == "CheatNoNo; MJ Cinema"
+    assert result.ok and result.text == GOOD and result.note == ""
+    assert result.source == "CheatNoNo; MJ Cinema" and result.confidence == 0.8
 
 
 def test_new_reflective_question_is_a_flagged_interpretation(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,219 +298,73 @@ def test_new_reflective_question_is_a_flagged_interpretation(conn: sqlite3.Conne
     fake_ai.answer(GOOD)
     result = answer_field(conn, box(), {})
     assert (result.value, result.source, result.flagged) == (GOOD, "draft", True)
-    assert "interpretation" in result.note and "CheatNoNo" in result.note
+    assert "interpretation" in result.note and "CheatNoNo" in result.note and "Warnings" not in result.note
+
+
+def test_why_do_you_like_question_gets_the_reflective_task(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.answer(GOOD)
+    result = answer_field(conn, box("Why do you like software engineering?"), {})
+    assert fake_ai.tasks == ["reflect_text"] and result.source == "draft" and "interpretation" in result.note
+
+
+def test_a_story_question_sends_only_the_best_project(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.answer("CheatNoNo began when students cheated on online exams and teachers could not see it. I built a way to see it.")
+    result = answer_field(conn, box("Describe a project you are proud of"), {})
+    assert result.value and "CheatNoNo" in fake_ai.prompts[0] and "MJ Cinema" not in fake_ai.prompts[0]
 
 
 def test_factual_question_still_uses_the_strict_prompt(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
     no_match(monkeypatch)
     fake_ai.reply = {"answers": []}
     answer_field(conn, box("Which programming languages do you know?"), {})
-    assert "Use ONLY the FACTS" in fake_ai.prompts[0]
-    assert "pattern" not in fake_ai.prompts[0]
+    assert "Use ONLY the FACTS" in fake_ai.prompts[0] and "list of technologies" in fake_ai.prompts[0]
 
 
-# ---- rejected reflective answers ------------------------------------------------------------------------------------
+# ---- hard blocks: the answer is rejected --------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("text", "why"),
     [
-        ("I think I build things people need. CheatNoNo came from students cheating on online exams. To me that is the pattern.", "only one project"),
-        ("I think I always start from a real problem, like CheatNoNo and MJ Cinema.", "overclaim: always"),
-        ("I believe I am passionate about problems, like CheatNoNo and MJ Cinema.", "overclaim: passionate"),
-        ("I think CheatNoNo and MJ Cinema show I like Kubernetes style work.", "invented tool"),
-        ("I think CheatNoNo and MJ Cinema took me 9 months.", "invented number"),
-        ("They think CheatNoNo and MJ Cinema show the applicant solves problems.", "third person"),
+        ("I built 12 apps and CheatNoNo came from students cheating on exams.", "12"),
+        ("CheatNoNo cut review time by 90 percent for the teachers.", "90"),
+        ("I used Redis in CheatNoNo to keep the camera feed in sync.", "Redis"),
+        ("CheatNoNo came from cheating, and I worked at Globex on it.", "Globex"),
+        ("CheatNoNo came from cheating. Write to me at juan.fake@example.com.", "email"),
+        ("CheatNoNo came from cheating. Call me on +63 917 123 4567.", "phone"),
+        ("As an AI language model, I cannot describe CheatNoNo.", "assistant"),
+        ("I'm sorry, but I can't say more. CheatNoNo came from students cheating on online exams.", "assistant only"),  # no other check can catch this one
     ],
 )
-def test_bad_reflective_answers_are_rejected(fake_ai: FakeAI, text: str, why: str) -> None:
+def test_invented_facts_private_data_and_assistant_talk_are_rejected(fake_ai: FakeAI, text: str, why: str) -> None:
     fake_ai.answer(text)
     result = reflect_answer(None, box())  # type: ignore[arg-type]
     assert not result.ok and result.note, why
 
 
-def test_a_confident_answer_with_no_hedging_is_accepted(fake_ai: FakeAI) -> None:
-    fake_ai.answer(GOOD)
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and "I think" not in result.text and "I believe" not in result.text
-
-
-def test_leading_i_think_and_i_believe_are_removed_from_every_sentence(fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I think I start from real problems.",
-        ["I believe CheatNoNo began with cheating.", "I feel that MJ Cinema began with a gap."],
-        "I think what matters is the hard part.",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok
-    assert result.text == (
-        "I start from real problems. CheatNoNo began with cheating. MJ Cinema began with a gap. What matters is the hard part."
-    )
-
-
-def test_sentences_that_all_open_the_same_way_are_rejected(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I build from problems.", ["I build CheatNoNo for exams.", "I build MJ Cinema for seats."], "I build what people need.")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "same way" in result.note
-
-
-def test_a_long_list_of_facts_cannot_hide_a_missing_second_project(fake_ai: FakeAI) -> None:
-    # five fact sentences: only the first two survive, and they do not name MJ Cinema, so the evidence check fails
-    fake_ai.answer(
-        "I think I build from problems. CheatNoNo came from cheating. It uses React. It uses Spring Boot. "
-        "MJ Cinema came from booking. What I do is start there."
-    )
+def test_an_empty_reply_or_zero_confidence_is_rejected(fake_ai: FakeAI) -> None:
+    fake_ai.answer("")
+    assert not reflect_answer(None, box()).ok  # type: ignore[arg-type]
+    fake_ai.answer(GOOD, confidence=0.0)
     assert not reflect_answer(None, box()).ok  # type: ignore[arg-type]
 
 
-def test_copying_the_prompt_is_rejected(fake_ai: FakeAI) -> None:
-    # the model once repeated its prompt example word for word; any 7-word run from the prompt is now refused
-    fake_ai.answer("I think I should say what you want to grow toward, as CheatNoNo and MJ Cinema show.")
+def test_a_reflection_may_not_name_a_tool_that_is_not_in_the_notes(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo taught me a lot about Kubernetes.")
     result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "prompt" in result.note
+    assert not result.ok and "Kubernetes" in result.note
 
 
-def test_why_do_you_like_question_now_gets_the_reflective_task_not_a_skills_list(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    no_match(monkeypatch)
-    fake_ai.answer(GOOD)
-    result = answer_field(conn, box("Why do you like software engineering?"), {})
-    assert fake_ai.tasks == ["reflect_answer"] and result.source == "draft" and "interpretation" in result.note
+def test_a_reflection_about_what_you_learned_is_allowed(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo taught me to fix the hard part first, and MJ Cinema taught me to expect two people to want one seat.")
+    assert reflect_answer(None, box()).ok  # type: ignore[arg-type]
 
 
-def test_a_story_question_sends_only_the_best_project(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    no_match(monkeypatch)
-    fake_ai.parts("I think the project I am proudest of started from a real problem.", ["CheatNoNo began when students cheated on online exams and teachers could not see it."],
-                  "To me it shows I start from a real problem and then work on the hard part.")
-    result = answer_field(conn, box("Describe a project you are proud of"), {})
-    prompt = fake_ai.prompts[0]
-    assert result.value and "CheatNoNo" in prompt and "MJ Cinema" not in prompt
-    assert "AT MOST 1" in prompt
-
-
-def test_a_story_answer_keeps_only_the_first_example(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I think I like hard problems.", ["CheatNoNo began with cheating.", "MJ Cinema began with a gap."], "To me that is the pattern.")
-    result = reflect_answer(None, box("Describe a project you are proud of"), single_project=True)  # type: ignore[arg-type]
-    assert result.ok and "CheatNoNo began with cheating." in result.text and "MJ Cinema" not in result.text
-
-
-def test_factual_question_with_the_strict_prompt_is_told_not_to_answer_with_a_list(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
-    no_match(monkeypatch)
-    fake_ai.reply = {"answers": []}
-    answer_field(conn, box("Which programming languages do you know?"), {})
-    assert "list of technologies" in fake_ai.prompts[0]
-
-
-def test_a_big_box_asks_for_a_fuller_answer(fake_ai: FakeAI) -> None:
-    fake_ai.answer(GOOD)
-    reflect_answer(None, box())  # type: ignore[arg-type]
-    prompt = fake_ai.prompts[0]
-    assert "At most 8 sentence(s)" in prompt and "Explain properly" in prompt and "TWO sentences" in prompt
-
-
-def test_a_small_box_stays_short(fake_ai: FakeAI) -> None:
-    fake_ai.answer("I start from real problems, like CheatNoNo. What matters is the hard part, like MJ Cinema.")
-    reflect_answer(None, box(max_length=300))  # type: ignore[arg-type]
-    prompt = fake_ai.prompts[0]
-    assert "At most 2 sentence(s)" in prompt and "Explain properly" not in prompt and "ONE short sentence" in prompt
-
-
-def test_a_full_answer_with_longer_examples_is_accepted(fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I choose projects by the problem behind them.",
-        [
-            "CheatNoNo began when students cheated on online exams. I designed the whole system myself.",
-            "MJ Cinema began after I had just learned Spring Boot. Stopping two people booking one seat was the hard part.",
-        ],
-        "What I look for is a real problem with a hard core. That is where I learn the most.",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and result.text.count(".") == 7
-
-
-def test_a_short_box_needs_only_one_project(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I think I start from a real problem, like CheatNoNo.", [], "To me that is what makes an app worth building.")
-    assert reflect_answer(None, box(type="text", max_length=200)).ok  # type: ignore[arg-type]
-
-
-def test_parts_without_full_stops_are_joined_as_proper_sentences(fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I think I start from real problems",
-        ["CheatNoNo began with students cheating on online exams", "MJ Cinema began after I had just learned Spring Boot."],
-        "What I do is look for the hard part first",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok
-    assert result.text == (
-        "I start from real problems. CheatNoNo began with students cheating on online exams. "
-        "MJ Cinema began after I had just learned Spring Boot. What I do is look for the hard part first."
-    )
-
-
-def test_an_over_long_answer_is_trimmed_to_the_box_not_thrown_away(fake_ai: FakeAI) -> None:
-    # the model ignores the sentence count: stance 2, examples 3 each, closing 7 = 15 sentences
-    fake_ai.parts(
-        "I start from real problems. I mean it.",
-        ["CheatNoNo began with cheating. It was hard. It taught me a lot.", "MJ Cinema began with a gap. It was new. It taught me more."],
-        "What I look for is a real problem. It has a hard core. That is where I learn. I like that. It keeps me honest. I repeat it. I do.",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]  # a big box: 8 sentences
-    sentences = re.split(r"(?<=[.!?])\s+", result.text)
-    assert result.ok and len(sentences) == 8  # 1 stance + 2 + 2 examples + 3 closing
-    assert result.text.startswith("I start from real problems. CheatNoNo began with cheating. It was hard. MJ Cinema")
-    assert "It taught me" not in result.text and result.text.endswith("That is where I learn.")
-
-
-def test_a_small_box_trims_each_example_to_one_sentence(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I start from real problems.", ["CheatNoNo began with cheating. It was hard.", "MJ Cinema began with a gap."], "What I look for is the hard core. And more.")
-    result = reflect_answer(None, box(type="text", max_length=500))  # type: ignore[arg-type]  # budget: 4 sentences
-    assert result.ok and "It was hard" not in result.text
-    assert len(re.split(r"(?<=[.!?])\s+", result.text)) <= 4  # the budget of a 500-character box
-
-
-def test_a_tiny_box_keeps_only_a_stance_and_a_closing(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I start from real problems, like CheatNoNo.", ["MJ Cinema began with a gap."], "What I look for is the hard core.")
-    result = reflect_answer(None, box(type="text", max_length=300))  # type: ignore[arg-type]  # budget: 2 sentences
-    assert result.ok and len(re.split(r"(?<=[.!?])\s+", result.text)) == 2 and "MJ Cinema" not in result.text
-
-
-def test_a_capital_after_a_colon_is_not_an_invented_name() -> None:
-    from engine.forms.drafting import _ungrounded_name
-
-    assert _ungrounded_name("CheatNoNo: This began with a gap.", "CheatNoNo began with a gap") is None
-    assert _ungrounded_name("CheatNoNo: Kubernetes began with a gap.", "CheatNoNo began with a gap") == "Kubernetes"
-
-
-def test_the_closing_is_required(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I think I start from real problems, like CheatNoNo and MJ Cinema.", [], "")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "closing" in result.note
-
-
-@pytest.mark.parametrize(
-    "closing",
-    [
-        "I think both projects demonstrate my ability to lead.",
-        "To me this shows I am a capable developer.",
-        "I believe I am skilled at making decisions.",
-        "I think this is where my skills and experience shine.",
-        "To me I excel when I build from scratch.",
-    ],
-)
-def test_a_closing_that_praises_instead_of_reflecting_is_rejected(fake_ai: FakeAI, closing: str) -> None:
-    fake_ai.parts("I think I start from real problems.", ["CheatNoNo began with cheating.", "MJ Cinema began with a gap."], closing)
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "praise" in result.note
-
-
-def test_more_than_two_examples_are_cut_to_the_first_two(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I think I start from real problems.", ["CheatNoNo began with cheating.", "MJ Cinema began with a gap.", "EconLens began with news."], "To me that is the pattern.")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and "MJ Cinema began" in result.text and "EconLens" not in result.text
-
-
-def test_the_mock_fixture_has_the_structured_shape() -> None:
-    reply = ai.ask_ai("reflect_answer", "", settings=Settings(run_mode="mock"))
-    assert reply["stance"] and reply["closing"] and len(reply["examples"]) <= 2
+def test_a_tool_named_in_the_notes_may_be_named_in_the_answer(fake_ai: FakeAI) -> None:
+    fake_ai.answer("MJ Cinema was my first full project after I learned Spring Boot, and CheatNoNo came from cheating.")
+    assert reflect_answer(None, box()).ok  # type: ignore[arg-type]  # Spring Boot is in the MJ Cinema note
 
 
 def test_ai_failure_is_a_rejected_result(fake_ai: FakeAI) -> None:
@@ -506,6 +376,77 @@ def test_no_projects_means_no_ai_call(fake_ai: FakeAI, monkeypatch: pytest.Monke
     monkeypatch.setattr(rag, "retrieve", lambda *a, **k: [])
     result = reflect_answer(None, box())  # type: ignore[arg-type]
     assert not result.ok and fake_ai.prompts == []
+
+
+# ---- warnings: the answer is still given, untouched -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "warning"),
+    [
+        ("CheatNoNo came from cheating. I am excited to make a positive impact on people's lives.", "stock phrases"),
+        ("CheatNoNo came from cheating. This demonstrates my ability to lead.", "praises you"),
+        ("CheatNoNo came from cheating, and I always keep the camera feed in sync.", "inflated word 'always'"),
+        ("I think CheatNoNo came from cheating. I believe MJ Cinema came from a gap.", "start with 'I think'"),
+        ("I like CheatNoNo. I like MJ Cinema. I like both of them.", "three sentences start with"),
+        ("What started it: students cheated on online exams, which is why I built CheatNoNo.", "repeats a note label"),
+        ("Say them in your own words shaped to the question, said CheatNoNo.", "repeats wording from the prompt"),
+        ("The applicant built CheatNoNo after students cheated on online exams.", "first person"),
+    ],
+)
+def test_style_problems_are_warnings_and_the_text_is_kept_as_written(fake_ai: FakeAI, text: str, warning: str) -> None:
+    fake_ai.answer(text)
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and result.text == text  # nothing is deleted or rewritten
+    assert warning in result.note
+
+
+def test_a_list_of_your_technologies_is_a_warning(fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(drafting, "_tech_terms", lambda conn: {"java", "react", "spring boot"})
+    fake_ai.answer("CheatNoNo came from cheating, and I used Java, React and Spring Boot for it.")
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert result.ok and "a list of technologies" in result.note
+
+
+def test_more_sentences_than_the_box_suggests_is_a_warning(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo came from cheating. " + "I kept working on it. " * 6)
+    result = reflect_answer(None, box(type="text", max_length=300))  # type: ignore[arg-type]  # a 2-sentence box
+    assert result.ok and "7 sentences, more than the 2" in result.note
+
+
+def test_warnings_reach_the_note_of_the_field_answer(conn: sqlite3.Connection, fake_ai: FakeAI, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_match(monkeypatch)
+    fake_ai.answer("CheatNoNo came from cheating. I am excited to keep building.")
+    result = answer_field(conn, box(), {})
+    assert result.value == "CheatNoNo came from cheating. I am excited to keep building."
+    assert "Warnings: stock phrases ('excited')" in result.note and result.flagged
+
+
+# ---- length: only a real limit of the box matters -----------------------------------------------------------------------
+
+
+def test_a_long_answer_is_cut_after_the_last_whole_sentence_that_fits(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo came from cheating. " + "I kept working on the hard part of it. " * 40)
+    result = reflect_answer(None, box())  # type: ignore[arg-type]  # no limit stated: the default box holds 1500 characters
+    assert result.ok and len(result.text) <= 1500 and result.text.endswith(".")
+    assert "cut after the last whole sentence" in result.note
+
+
+def test_a_real_limit_on_the_box_cuts_to_whole_sentences(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo came from cheating. I built a way to see it. I kept working on the hard part of it for weeks.")
+    result = reflect_answer(None, box(type="textarea", max_length=80))  # type: ignore[arg-type]
+    assert result.text == "CheatNoNo came from cheating. I built a way to see it." and "cut" in result.note
+
+
+def test_a_first_sentence_longer_than_the_box_is_rejected(fake_ai: FakeAI) -> None:
+    fake_ai.answer("CheatNoNo came from students cheating on online exams and teachers could not see any of it at all.")
+    result = reflect_answer(None, box(type="text", max_length=40))  # type: ignore[arg-type]
+    assert not result.ok and "longer than the box" in result.note
+
+
+def test_the_mock_fixture_is_one_free_answer() -> None:
+    reply = ai.ask_ai("reflect_text", "", settings=Settings(run_mode="mock"))
+    assert reply["answer"] and reply["confidence"] > 0 and set(reply) == {"answer", "confidence"}
 
 
 # ---- refusals and matched open answers -----------------------------------------------------------------------------------
@@ -592,68 +533,3 @@ def test_without_voice_notes_the_prompt_says_none(fake_ai: FakeAI) -> None:
     fake_ai.answer(GOOD)
     reflect_answer(None, box())  # type: ignore[arg-type]
     assert "(none given)" in fake_ai.prompts[0]
-
-
-# ---- examples that read like speech, not a list ---------------------------------------------------------------------------
-
-
-def test_a_project_name_colon_example_becomes_a_spoken_sentence(fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I choose projects by the problem behind them.",
-        ["CheatNoNo: students cheated on online exams, so we built a way to see it.", "MJ Cinema: I had just learned Spring Boot."],
-        "What I look for is a real problem with a hard core.",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok
-    assert "With MJ Cinema, I had just learned Spring Boot." in result.text
-    assert "MJ Cinema:" not in result.text
-
-
-def test_a_colon_example_that_does_not_continue_with_a_person_is_left_alone(fake_ai: FakeAI) -> None:
-    fake_ai.parts(
-        "I choose projects by the problem behind them.",
-        ["CheatNoNo: a proctoring platform for exams.", "MJ Cinema began after I had just learned Spring Boot."],
-        "What I look for is a real problem with a hard core.",
-    )
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and "CheatNoNo: a proctoring platform" in result.text
-
-
-# ---- length: only a real limit on the box rejects; the labels of the facts must not leak ----------------------------------------
-
-
-def test_a_long_answer_is_fine_when_the_form_states_no_limit(fake_ai: FakeAI) -> None:
-    long_example = ("CheatNoNo began when students cheated on online exams and teachers could not see it. " * 4).strip()
-    fake_ai.parts("I choose projects by the problem behind them.", [long_example, "MJ Cinema began after I had just learned Spring Boot."],
-                  "What I look for is a real problem with a hard core.")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]  # a textarea with no max_length
-    assert result.ok  # never rejected for our own default size
-
-
-def test_a_real_limit_on_the_box_still_rejects_a_long_answer(fake_ai: FakeAI) -> None:
-    long_sentence = "I choose projects by the problem behind them, like CheatNoNo and MJ Cinema, " + "and I keep going back to that idea " * 6
-    fake_ai.parts(long_sentence, [], "What I look for is a real problem with a hard core.")
-    result = reflect_answer(None, box(max_length=200))  # type: ignore[arg-type]
-    assert not result.ok and "characters" in result.note
-
-
-@pytest.mark.parametrize("label", ["What started it", "What was hard", "Why I built it", "Key decision", "What I learned"])
-def test_the_internal_fact_labels_must_not_leak_into_the_answer(fake_ai: FakeAI, label: str) -> None:
-    fake_ai.parts("I choose projects by the problem behind them.", [f"CheatNoNo: {label}: students cheated.", "MJ Cinema began with a gap."],
-                  "What I look for is a real problem with a hard core.")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert not result.ok and "label" in result.note
-
-
-def test_the_prompt_tells_the_model_not_to_write_the_labels(fake_ai: FakeAI) -> None:
-    fake_ai.answer(GOOD)
-    reflect_answer(None, box())  # type: ignore[arg-type]
-    assert "Do not write these labels" in fake_ai.prompts[0]
-
-
-def test_a_colon_example_that_continues_with_this_project_is_rewritten_too(fake_ai: FakeAI) -> None:
-    fake_ai.parts("I choose projects by the problem behind them.",
-                  ["CheatNoNo: This project started with students cheating on online exams.", "MJ Cinema began with a gap."],
-                  "What I look for is a real problem with a hard core.")
-    result = reflect_answer(None, box())  # type: ignore[arg-type]
-    assert result.ok and "With CheatNoNo, it started with students cheating on online exams." in result.text

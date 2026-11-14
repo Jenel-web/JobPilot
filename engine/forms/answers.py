@@ -454,10 +454,15 @@ def answer_field(
     if draft.ok:
         return FieldAnswer(
             field.label, draft.text, "draft", True,
-            f"{kind_of_note} from {draft.source}: check it before submitting",
+            f"{kind_of_note} from {draft.source}: check it before submitting" + _warning_text(draft.note),
             confidence=draft.confidence, unknown_id=triage.unknown_id,
         )
     return _needs_you(field.label, f"AI draft rejected: {draft.note}", triage.unknown_id)
+
+
+def _warning_text(note: str) -> str:
+    """The checks that did not reject an AI answer but that you may want to fix, as a sentence for the note."""
+    return f". Warnings: {note}" if note else ""
 
 
 def _rewritten_answer(
@@ -473,7 +478,7 @@ def _rewritten_answer(
         result = drafting.rewrite_open(conn, field, row["answer"], row["kind"], settings=settings)
     common = {"kind": row["kind"], "confidence": score, "matched_question": row["question"]}
     if result.ok and reflective:
-        note = f"AI interpretation of your saved answer and projects ({result.source}): an opinion drawn from your data, edit freely"
+        note = f"AI interpretation of your saved answer and projects ({result.source}): an opinion drawn from your data, edit freely" + _warning_text(result.note)
         return FieldAnswer(field.label, result.text, "bank", True, note, **common)
     if result.ok:
         note = f"open answer rewritten for this question (from {result.source}): check it"
