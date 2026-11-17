@@ -1,5 +1,5 @@
 {
-  "run_mode": "dry_run",
+  "run_mode": "mock",
   "ai_provider": "ollama",
   "ollama_model": "llama3.1:8b"
 }
