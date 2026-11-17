@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from collections import Counter
+from pathlib import Path
 from typing import Any, Literal, get_args
 
 from playwright.sync_api import Page, sync_playwright
@@ -187,6 +188,27 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
             )
         )
     return fields
+
+
+def read_fixture(path: Path) -> list[FormField]:
+    """Read the fields of a saved page (``fixtures/forms/*.html``) in a throwaway headless browser.
+
+    Offline and read-only: the HTML is loaded into a blank page, so no site is contacted
+    and the bot's own browser is not needed.
+
+    Raises:
+        OSError: the file cannot be read.
+    """
+    html = path.read_text(encoding="utf-8")
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.wait_for_timeout(300)  # let scripts on the saved page build their fields
+            return read_fields(page)
+        finally:
+            browser.close()
 
 
 def find_current_page(browser: Any) -> Page:

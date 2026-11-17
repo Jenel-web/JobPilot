@@ -57,6 +57,7 @@ All commands
     python -m engine.cli questions reject ID                      throw a wording away for good
     python -m engine.cli forms read       list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
+    python -m engine.cli forms answer --fixture F   read a saved page, print the engine's answer per field (types nothing)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
 
@@ -100,6 +101,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     reading.add_argument("--json", action="store_true", help="print JSON instead of a table")
     capturing = forms.add_parser("capture", help="save the open page as an offline test file")
     capturing.add_argument("name", help="file name, e.g. angkas_workable")
+    answering = forms.add_parser("answer", help="read a saved page and show the answer engine's decision per field")
+    answering.add_argument("--fixture", required=True, help="saved page: a path, or a name in fixtures/forms/")
     questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
         dest="action", required=True
     )
@@ -125,7 +128,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "questions":
             return _questions(conn, args)
         elif args.command == "forms":
-            return _capture_form(conn, args.name) if args.action == "capture" else _read_forms(conn, args.json)
+            if args.action == "capture":
+                return _capture_form(conn, args.name)
+            if args.action == "answer":
+                return _answer_fixture(conn, args.fixture)
+            return _read_forms(conn, args.json)
         elif args.command == "profile":
             print(json.dumps(profile_summary(conn), indent=2, ensure_ascii=False))
         else:
@@ -288,6 +295,49 @@ def _read_forms(conn, as_json: bool) -> int:  # type: ignore[no-untyped-def]
         options = f"  options: {', '.join(f.options)}" if f.options else ""
         where = f"  (in frame: {f.frame.split('/')[2]})" if f.frame.startswith("http") else ""
         print(f"{number:>2}. [{f.type:<8}] {_shorten(f.label) or '(no label)'} {flags}{options}{where}")
+    return 0
+
+
+def _answer_fixture(conn, fixture: str) -> int:  # type: ignore[no-untyped-def]
+    """Read a saved page and print what the answer engine would put in each field. Types and clicks nothing."""
+    from pathlib import Path
+
+    from engine.forms.answers import answer_form
+    from engine.forms.reader import read_fixture
+    from engine.settings import ROOT
+
+    path = Path(fixture)
+    if not path.is_absolute() and not path.exists():  # a bare name like "angkas_workable" lives in fixtures/forms/
+        path = ROOT / "fixtures" / "forms" / (fixture if fixture.endswith(".html") else f"{fixture}.html")
+    if not path.is_file():
+        print(f"Error: fixture not found: {path}", file=sys.stderr)
+        return 1
+    path = path.resolve()  # as_uri() below needs an absolute path
+    try:
+        fields = read_fixture(path)
+        answers = answer_form(conn, fields, page_url=path.as_uri())
+    except (OSError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    rows = []
+    for a in answers:
+        value = "(protected, hidden)" if a.kind == "protected" and a.value else a.value
+        rows.append((
+            _shorten(a.label or "(no label)", 40),
+            _shorten(" ".join(value.split()), 50) or "(empty: you fill it)",
+            a.source,
+            f"{a.confidence:.2f}",
+            "YES" if a.flagged else "no",
+        ))
+    header = ("field", "answer", "source", "confidence", "flagged")
+    widths = [max(len(header[i]), *(len(r[i]) for r in rows)) if rows else len(header[i]) for i in range(5)]
+    line = "  ".join(f"{{:<{w}}}" for w in widths)
+    print(f"{path.name}: {len(answers)} fields, {sum(a.flagged for a in answers)} flagged\n")
+    print(line.format(*header))
+    print(line.format(*("-" * w for w in widths)))
+    for row in rows:
+        print(line.format(*row))
     return 0
 
 

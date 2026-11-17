@@ -716,3 +716,87 @@ def reflect_answer(
     warnings += _earlier_warnings(text, earlier, given)
     used =[n for n in given if _mentions_project(text, n)] or given
     return DraftResult(text, float(reply["confidence"]), "; ".join(used), "; ".join(warnings))
+
+
+# ---- relocation answers -------------------------------------------------------------------------------------
+#
+# The YES or NO is decided by code (engine/forms/jobpost.py). The model only words it. Whatever it writes must keep
+# the stance, add no new place or number, and carry no private data; otherwise the plain sentence below is used.
+
+_REFUSES = re.compile(
+    r"\b(?:not|n't|unable|cannot|can't|unwilling|no)\b|\bnever\b", re.I
+)
+RELOCATION_SENTENCES = 2
+RELOCATION_FALLBACK = {
+    True: "Yes, that works for me: {reason}.",
+    False: "No, I'm not able to relocate, but I can work remotely or on-site within Metro Manila.",
+}
+
+
+def plain_relocation_answer(yes: bool, reason: str) -> str:
+    """The deterministic wording used when the AI is off, fails or breaks a rule."""
+    return RELOCATION_FALLBACK[yes].format(reason=reason[:1].upper() + reason[1:])
+
+
+def _relocation_facts(conn: sqlite3.Connection, label: str, settings: Settings | None) -> list[rag.Hit]:
+    """Your preferences and the closest ``about_me`` lines: the only notes a relocation answer may use."""
+    profile = rag.retrieve(conn, label, 40, sources=("profile",), settings=settings)
+    return [h for h in profile if h.ref == "preferences"] + [h for h in profile if h.ref.startswith("about:")][:3]
+
+
+def elaborate_relocation(
+    conn: sqlite3.Connection,
+    field: FormField,
+    yes: bool,
+    reason: str,
+    *,
+    settings: Settings | None = None,
+) -> DraftResult:
+    """Word a relocation answer whose YES/NO is already decided. Never rejects: falls back to a plain sentence.
+
+    The returned ``note`` says why the plain sentence was used, if it was.
+
+    Raises:
+        DraftError: the field is not a text box (a radio or dropdown gets the plain Yes/No instead).
+    """
+    if field.type not in DRAFTABLE_TYPES:
+        raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
+    plain = plain_relocation_answer(yes, reason)  # YES: 'Yes, that works for me: the job is remote...'; NO: a fixed sentence
+    facts = _relocation_facts(conn, field.label, settings)
+    _, chars = _limits_for(field, reflective=True)
+    prompt = load_prompt(
+        "ELABORATE",
+        stance="YES: relocating is not a problem for me, because no move is needed" if yes else "NO: I am not willing to relocate",
+        reason=reason,
+        question=" ".join(field.label.split()).replace('"', "'"),
+        facts=format_facts(facts) or "(no notes)",
+        max_sentences=str(RELOCATION_SENTENCES),
+        max_chars=chars,
+    )
+    try:
+        reply = ai.ask_ai("reflect_text", prompt, settings=settings)
+    except (ai.AIError, NotImplementedError) as exc:
+        return DraftResult(plain, 1.0, "rules", f"AI unavailable ({exc}): plain wording used")
+    text = " ".join(str(reply.get("answer", "")).split())
+    text, _ = _fit_to_box(text, int(chars))
+    allowed = " ".join([field.label, reason, plain, *(h.text for h in facts)])
+    problem = ""
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text) if s]
+    if not text or float(reply.get("confidence", 0)) <= 0:
+        problem = "the AI gave no answer"
+    elif rag.scrub(text) != text:
+        problem = "the AI included an email, phone or ID number"
+    elif _AI_TALK.search(text):
+        problem = "the AI answered like an assistant"
+    elif _ungrounded_number(text, allowed) or _ungrounded_name(text, allowed):
+        problem = f"{_ungrounded_number(text, allowed) or _ungrounded_name(text, allowed)!r} is not in your notes"
+    elif yes and _REFUSES.search(sentences[0] if sentences else text) and not re.search(r"\b(?:don't|do not|doesn't|no) (?:need|have) to\b|\bno (?:move|need)\b", text, re.I):
+        problem = "the reply sounds unwilling but the stance is yes"
+    elif not yes and not _REFUSES.search(sentences[0] if sentences else text):
+        problem = "the reply does not say no but the stance is no"
+    elif not yes and re.match(r"\s*yes\b", text, re.I):
+        problem = "the reply starts with yes but the stance is no"
+    if problem:
+        return DraftResult(plain, 1.0, "rules", f"{problem}: plain wording used")
+    warnings = _STOCK.search(text)
+    return DraftResult(text, float(reply["confidence"]), "preferences; about_me", f"stock phrase {warnings.group(0)!r}" if warnings else "")

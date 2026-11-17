@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from engine import learning, safety
-from engine.forms import drafting
+from engine.forms import drafting, jobpost
 from engine.forms.reader import FormField
 from engine.profile import lookup_answer
 from engine.rag import RagError
@@ -387,6 +387,38 @@ def _needs_you(label: str, note: str, unknown_id: int | None = None) -> FieldAns
 
 EARLIER_MIN_WORDS = 15  # an answer this long counts as "already said" for the next open question on the form
 
+RELOCATION_PATTERN = re.compile(r"\brelocat\w*|\bwilling to move\b|\bmove (?:to|for) (?:this|the|a)\b")
+
+
+def is_relocation_question(label: str) -> bool:
+    """True if the question asks whether you would relocate / move for the job."""
+    return bool(RELOCATION_PATTERN.search(_words(label))) and not is_sensitive(label)
+
+
+def wants_relocation_stance(field: FormField, job_text: str | None) -> bool:
+    """True when the yes/no for this question is decided from the job's location.
+
+    ``job_text is None`` means no job post was given at all, so the saved answers (with their location scope)
+    work as before. ``""`` means a post was given but showed no location: that is "unknown", and unknown is NO.
+    """
+    return job_text is not None and is_relocation_question(field.label)
+
+
+def _relocation_answer(
+    conn: sqlite3.Connection, field: FormField, job_text: str, job_scope: str, job_city: str, settings: Settings | None
+) -> FieldAnswer:
+    """Decide yes/no from where the job is (code), then let the AI word it in a text box. Always flagged."""
+    location = jobpost.read_job_location(job_text, scope=job_scope, city=job_city)
+    stance = jobpost.relocation_stance(location)
+    word = "YES" if stance.yes else "NO"
+    where = f"found {location.evidence!r} in the job post" if location.evidence else "no Metro Manila place or remote wording found, so NO"
+    if field.type not in drafting.DRAFTABLE_TYPES:
+        value = pick_option("Yes" if stance.yes else "No", field.options) if field.options else ("Yes" if stance.yes else "No")
+        return FieldAnswer(field.label, value, "bank", True, f"relocation: {word} decided from the job location ({where})")
+    result = drafting.elaborate_relocation(conn, field, stance.yes, stance.reason, settings=settings)
+    note = f"relocation: {word} decided from the job location ({where}); the AI only worded it, check it" + _warning_text(result.note)
+    return FieldAnswer(field.label, result.text, "draft", True, note, confidence=result.confidence)
+
 
 def answer_field(
     conn: sqlite3.Connection,
@@ -398,6 +430,7 @@ def answer_field(
     page_url: str = "",
     settings: Settings | None = None,
     earlier: list[str] | None = None,
+    job_text: str | None = None,
 ) -> FieldAnswer:
     """Decide the answer for ONE field. Reads and decides only: nothing is typed or clicked.
 
@@ -406,6 +439,8 @@ def answer_field(
         job_scope / job_city: where the job is, so the right location-scoped answer is used.
         page_url: remembered with unknown questions and suggested wordings.
         earlier: long answers already written on this form, so a new open answer does not repeat them.
+        job_text: the job post's text. A relocation question is answered YES or NO from where the job is
+            (:mod:`engine.forms.jobpost`); ``None`` means no job post was given (saved answers are used as before).
 
     Raises:
         learning.LearningError, rag.RagError, sqlite3.Error: the lookup failed
@@ -420,6 +455,9 @@ def answer_field(
             field.label, personal.value, "personal", personal.flagged,
             personal.note, confidence=1.0 if personal.value else 0.0,
         )
+
+    if wants_relocation_stance(field, job_text):
+        return _relocation_answer(conn, field, job_text or "", job_scope, job_city, settings)
 
     triage = learning.triage_question(
         conn, field.label, page_url=page_url, field_type=field.type, options=tuple(field.options), settings=settings
@@ -544,6 +582,7 @@ def answer_form(
     job_city: str = "",
     page_url: str = "",
     settings: Settings | None = None,
+    job_text: str | None = None,
 ) -> list[FieldAnswer]:
     """Answer every field, in page order. One failing field never stops the others.
 
@@ -556,7 +595,7 @@ def answer_form(
         try:
             answer = answer_field(
                 conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings,
-                earlier=list(earlier),
+                earlier=list(earlier), job_text=job_text,
             )
             results.append(answer)
             if answer.source in ("draft", "bank") and len(answer.value.split()) >= EARLIER_MIN_WORDS:
