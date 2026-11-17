@@ -261,12 +261,58 @@ def test_the_prompt_holds_the_two_best_projects_and_the_writing_rules(fake_ai: F
     assert "Budget Tracker" not in prompt  # no worked example for the model to copy
 
 
-def test_a_question_about_you_asks_for_a_direct_answer_then_moments_then_a_reflection(fake_ai: FakeAI) -> None:
+def test_a_question_about_you_is_about_how_you_work_not_one_project(fake_ai: FakeAI) -> None:
     fake_ai.answer(GOOD)
     reflect_answer(None, box())  # type: ignore[arg-type]
     prompt = fake_ai.prompts[0]
-    assert "answering the question directly" in prompt and "one or two real moments" in prompt
+    assert "about YOU, not about a project" in prompt and "never retold as a story" in prompt
     assert "The impact" not in prompt  # the XYZ shape is for stories
+
+
+def test_a_question_about_you_puts_your_own_words_before_the_projects() -> None:
+    facts = drafting.gather_reflective_facts(None, QUESTION, about_first=True)  # type: ignore[arg-type]
+    sources = [h.ref.split(":")[0] if h.ref.startswith("about:") else h.source for h in facts]
+    assert sources[0] == "about" and sources.index("about") < sources.index("project")
+    assert [h.ref for h in facts if h.ref.startswith("about:")][:2] == ["about:why_software_engineering", "about:goals"]
+    assert len([h for h in facts if h.ref.startswith("about:")]) == 4  # all four: up to 6 are allowed here, 3 otherwise
+
+
+def test_other_answers_on_the_form_go_into_the_prompt(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    reflect_answer(None, box(), earlier=["I enjoy building tools that save people time every single day."])  # type: ignore[arg-type]
+    prompt = fake_ai.prompts[0]
+    assert "I enjoy building tools that save people time" in prompt and "{{" not in prompt
+
+
+def test_a_repeat_of_an_earlier_answer_is_only_a_warning(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    result = reflect_answer(None, box(), earlier=[GOOD])  # type: ignore[arg-type]
+    assert result.ok  # still drafted: you review every open answer
+    assert "repeats wording from another answer" in result.note
+    assert "uses the same project as another answer" in result.note
+
+
+def test_a_fresh_form_has_no_repeat_warning(fake_ai: FakeAI) -> None:
+    fake_ai.answer(GOOD)
+    result = reflect_answer(None, box())  # type: ignore[arg-type]
+    assert "another answer on this form" not in result.note
+
+
+def test_answer_form_passes_earlier_long_answers_to_later_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    from engine.forms import answers
+
+    seen: list[list[str]] = []
+    long_text = "word " * 20
+
+    def fake_field(conn: object, f: FormField, values: object, **kw: object) -> answers.FieldAnswer:
+        seen.append(list(kw["earlier"]))  # type: ignore[call-overload]
+        return answers.FieldAnswer(f.label, long_text, "draft", True)
+
+    monkeypatch.setattr(answers, "profile_values", lambda conn: {})
+    monkeypatch.setattr(answers, "answer_field", fake_field)
+    monkeypatch.setattr(answers.safety, "log_action", lambda *a, **k: None)
+    answers.answer_form(None, [box("One?"), box("Two?")])  # type: ignore[arg-type]
+    assert seen == [[], [long_text]]
 
 
 def test_a_story_question_asks_for_impact_then_what_you_did_then_a_reflection(fake_ai: FakeAI) -> None:
