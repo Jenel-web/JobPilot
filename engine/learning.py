@@ -72,11 +72,13 @@ def triage_question(
     field_type: str = "",
     options: tuple[str, ...] = (),
     settings: Settings | None = None,
+    record: bool = True,
 ) -> Triage:
     """Look up a form question in the answer bank and file it: matched or unknown.
 
     The answer engine calls this for every non-personal field. It never changes
     ``answers.json``; it only records suggestions and unknown questions in the database.
+    With ``record=False`` (a preview) it only looks up: nothing is written and the ids stay ``None``.
 
     Raises:
         LearningError: ``question`` is blank (a field with no readable label is
@@ -87,9 +89,9 @@ def triage_question(
         raise LearningError("A question with no text cannot be learned.")
     match = rag.match_saved_question(conn, text, settings=settings)
     if match.matched and match.hit is not None:
-        suggestion = suggest_wording(conn, text, match.hit.ref, match.hit.score, page_url)
+        suggestion = suggest_wording(conn, text, match.hit.ref, match.hit.score, page_url) if record else None
         return Triage("matched", match, suggestion_id=suggestion)
-    unknown = record_unknown(conn, text, page_url, field_type, options)
+    unknown = record_unknown(conn, text, page_url, field_type, options) if record else None
     return Triage("unknown", match, unknown_id=unknown)
 
 

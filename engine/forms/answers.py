@@ -357,7 +357,7 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
 
 # ---- the answer engine -----------------------------------------------------------------------
 
-AnswerSource = Literal["personal", "bank", "draft", "none"]
+AnswerSource = Literal["personal", "bank", "draft", "resume", "none"]
 
 
 @dataclass(frozen=True)
@@ -385,7 +385,37 @@ def _needs_you(label: str, note: str, unknown_id: int | None = None) -> FieldAns
     return FieldAnswer(label, "", "none", True, note, unknown_id=unknown_id)
 
 
-EARLIER_MIN_WORDS = 15  # an answer this long counts as "already said" for the next open question on the form
+_RESUME_FILE = re.compile(r"\b(resume|cv|curriculum vitae)\b")
+_COVER_LETTER = re.compile(r"\bcover letter\b")
+_GENERIC_FILE = re.compile(r"(attach|attachment|upload|choose|browse|select|add)( a| your)?( file| files| document)?")
+
+
+def file_answer(field: FormField, has_job_post: bool) -> FieldAnswer:
+    """Decide a ``file`` field: say which file is wanted. The engine never picks or opens a file itself.
+
+    * Resume / CV: ``source="resume"`` with an empty value. In Phase 4 the filler uploads the file the
+      resume picker chose from the job post. Flagged while there is no job post to pick from.
+    * A bare "Attach" / "Upload": probably the resume, but it could be anything, so it is a flagged guess.
+    * Cover letter, photo, anything else: you upload it yourself (nothing to upload yet).
+
+    File fields are never looked up in the answer bank and never added to the unknown questions list:
+    no saved text can fill a file input.
+    """
+    words = _words(field.label)
+    if _COVER_LETTER.search(words):
+        return _needs_you(field.label, "cover letter file: needs you (nothing to upload yet)")
+    if _RESUME_FILE.search(words):
+        if has_job_post:
+            return FieldAnswer(field.label, "", "resume", False, "resume upload: the picker chooses A or B from the job post")
+        return FieldAnswer(field.label, "", "resume", True, "resume upload: needs a job post to pick the resume (Phase 4)")
+    if _GENERIC_FILE.fullmatch(words):
+        return FieldAnswer(
+            field.label, "", "resume", True, "guess: a bare attach button, probably the resume; check what it asks for"
+        )
+    return _needs_you(field.label, "file upload: needs you (only the resume is uploaded by the bot)")
+
+
+EARLIER_MIN_WORDS = 15 # an answer this long counts as "already said" for the next open question on the form
 
 RELOCATION_PATTERN = re.compile(r"\brelocat\w*|\bwilling to move\b|\bmove (?:to|for) (?:this|the|a)\b")
 
@@ -431,6 +461,7 @@ def answer_field(
     settings: Settings | None = None,
     earlier: list[str] | None = None,
     job_text: str | None = None,
+    record: bool = True,
 ) -> FieldAnswer:
     """Decide the answer for ONE field. Reads and decides only: nothing is typed or clicked.
 
@@ -441,6 +472,7 @@ def answer_field(
         earlier: long answers already written on this form, so a new open answer does not repeat them.
         job_text: the job post's text. A relocation question is answered YES or NO from where the job is
             (:mod:`engine.forms.jobpost`); ``None`` means no job post was given (saved answers are used as before).
+        record: False for a preview: nothing is written to the unknown questions list or the suggested wordings.
 
     Raises:
         learning.LearningError, rag.RagError, sqlite3.Error: the lookup failed
@@ -448,6 +480,9 @@ def answer_field(
     """
     if field.needs_you:
         return _needs_you(field.label, "no readable label: needs you")
+
+    if field.type == "file":
+        return file_answer(field, has_job_post=bool(job_text))
 
     personal = fill_personal(field, values)
     if personal is not None:
@@ -460,7 +495,8 @@ def answer_field(
         return _relocation_answer(conn, field, job_text or "", job_scope, job_city, settings)
 
     triage = learning.triage_question(
-        conn, field.label, page_url=page_url, field_type=field.type, options=tuple(field.options), settings=settings
+        conn, field.label, page_url=page_url, field_type=field.type, options=tuple(field.options), settings=settings,
+        record=record,
     )
     hit = triage.match.hit
     row = lookup_answer(conn, hit.ref, job_scope=job_scope, job_city=job_city) if hit is not None else None
@@ -583,8 +619,11 @@ def answer_form(
     page_url: str = "",
     settings: Settings | None = None,
     job_text: str | None = None,
+    record: bool = True,
 ) -> list[FieldAnswer]:
     """Answer every field, in page order. One failing field never stops the others.
+
+    ``record=False`` makes it a preview: unknown questions and suggested wordings are not saved.
 
     Logs one ``read`` row to ``action_log`` (a count only: values can hold phone or email).
     """
@@ -595,7 +634,7 @@ def answer_form(
         try:
             answer = answer_field(
                 conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings,
-                earlier=list(earlier), job_text=job_text,
+                earlier=list(earlier), job_text=job_text, record=record,
             )
             results.append(answer)
             if answer.source in ("draft", "bank") and len(answer.value.split()) >= EARLIER_MIN_WORDS:
