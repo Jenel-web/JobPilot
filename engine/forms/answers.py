@@ -385,6 +385,9 @@ def _needs_you(label: str, note: str, unknown_id: int | None = None) -> FieldAns
     return FieldAnswer(label, "", "none", True, note, unknown_id=unknown_id)
 
 
+EARLIER_MIN_WORDS = 15  # an answer this long counts as "already said" for the next open question on the form
+
+
 def answer_field(
     conn: sqlite3.Connection,
     field: FormField,
@@ -394,6 +397,7 @@ def answer_field(
     job_city: str = "",
     page_url: str = "",
     settings: Settings | None = None,
+    earlier: list[str] | None = None,
 ) -> FieldAnswer:
     """Decide the answer for ONE field. Reads and decides only: nothing is typed or clicked.
 
@@ -401,6 +405,7 @@ def answer_field(
         values: your personal values (:func:`profile_values`).
         job_scope / job_city: where the job is, so the right location-scoped answer is used.
         page_url: remembered with unknown questions and suggested wordings.
+        earlier: long answers already written on this form, so a new open answer does not repeat them.
 
     Raises:
         learning.LearningError, rag.RagError, sqlite3.Error: the lookup failed
@@ -427,7 +432,7 @@ def answer_field(
         if row["kind"] == "open" and field.type in drafting.DRAFTABLE_TYPES and not is_sensitive(field.label):
             if is_company_question(field.label):
                 return _saved_open(field, row, score, "company question: saved text used; the AI needs the job post to adapt it (Phase 4)")
-            return _rewritten_answer(conn, field, row, score, settings)
+            return _rewritten_answer(conn, field, row, score, settings, earlier)
         return _matched_answer(field, row, score)
 
     # No close saved question (or no saved row for this job's location).
@@ -446,7 +451,9 @@ def answer_field(
     if is_company_question(field.label):
         return _needs_you(field.label, "company question: needs the job post (Phase 4), so answer it yourself for now", triage.unknown_id)
     if wants_opinion(field.label):
-        draft = drafting.reflect_answer(conn, field, settings=settings, single_project=is_story(field.label))
+        draft = drafting.reflect_answer(
+            conn, field, settings=settings, single_project=is_story(field.label), earlier=earlier
+        )
         kind_of_note = "AI interpretation (an opinion drawn from your projects, edit freely)"
     else:
         draft = drafting.draft_answer(conn, field, settings=settings)
@@ -466,13 +473,19 @@ def _warning_text(note: str) -> str:
 
 
 def _rewritten_answer(
-    conn: sqlite3.Connection, field: FormField, row: sqlite3.Row, score: float, settings: Settings | None
+    conn: sqlite3.Connection,
+    field: FormField,
+    row: sqlite3.Row,
+    score: float,
+    settings: Settings | None,
+    earlier: list[str] | None = None,
 ) -> FieldAnswer:
     """A matched ``open`` answer, adapted to this form's wording by the AI (flagged). Falls back to the saved text."""
     reflective = wants_opinion(field.label)
     if reflective:
         result = drafting.reflect_answer(
-            conn, field, row["answer"], row["kind"], settings=settings, single_project=is_story(field.label)
+            conn, field, row["answer"], row["kind"], settings=settings, single_project=is_story(field.label),
+            earlier=earlier,
         )
     else:
         result = drafting.rewrite_open(conn, field, row["answer"], row["kind"], settings=settings)
@@ -538,11 +551,16 @@ def answer_form(
     """
     values = profile_values(conn)
     results: list[FieldAnswer] = []
+    earlier: list[str] = []  # long open answers written so far on this page, so the next one sounds different
     for f in fields:
         try:
-            results.append(
-                answer_field(conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings)
+            answer = answer_field(
+                conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings,
+                earlier=list(earlier),
             )
+            results.append(answer)
+            if answer.source in ("draft", "bank") and len(answer.value.split()) >= EARLIER_MIN_WORDS:
+                earlier.append(answer.value)
         except (learning.LearningError, drafting.DraftError, RagError, sqlite3.Error, RuntimeError, ValueError, OSError) as exc:
             results.append(_needs_you(f.label, f"error: {type(exc).__name__}: {exc}"))
     flagged = sum(r.flagged for r in results)

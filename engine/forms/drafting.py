@@ -42,6 +42,9 @@ _LIMITS = {"textarea": (4, 1200), "text": (1, 250)}
 _REFLECT_LIMITS = {"textarea": (8, 1500), "text": (2, 300)}  # default box sizes; the sentence budget comes from the size
 REFLECT_PROJECTS = 2  # the best-matching projects sent for a reflective question: two are enough, and fewer notes
 # keep the answer focused
+ABOUT_FIRST_LINES = 6  # about_me lines sent for a question about you (3 for other reflective questions)
+SAME_RUN_WORDS = 6  # this many words in a row shared with an earlier answer on the form = "repeats wording"
+EARLIER_CHARS = 350 # each earlier answer on the form is shown to the model cut at this length
 MAX_FACT_CHARS = 1600  # one fact is cut here before it goes in a prompt
 
 class DraftError(Exception):
@@ -191,6 +194,7 @@ def gather_reflective_facts(
     *,
     count: int = REFLECT_PROJECTS,
     include_result: bool = False,
+    about_first: bool = False,
 ) -> list[rag.Hit]:
     """Facts for a reflective question: the best ``count`` projects, plus your summary, skills, goals and own words.
 
@@ -201,6 +205,10 @@ def gather_reflective_facts(
     them into resume-style bullets. Projects are called by their SHORT name. ``include_result`` adds the measurable
     result (used for long answers). From the profile come the summary, skills, target roles, and the 3 ``about_me``
     lines closest to the question.
+
+    ``about_first`` is for a question about YOU ("what makes you unique", "your strengths"): the answer should be
+    about how you work, so the ``about_me`` lines come FIRST and there are more of them (:data:`ABOUT_FIRST_LINES`
+    instead of 3). Projects are then only passing evidence.
     """
     hits = rag.retrieve(conn, label, 4096, sources=("project",), settings=settings)
     stored = _stored_projects(conn)
@@ -253,8 +261,11 @@ def gather_reflective_facts(
     if not facts:
         return []
     profile = rag.retrieve(conn, label, 40, sources=("profile",), settings=settings)
-    about = [h for h in profile if h.ref.startswith("about:")][:3]  # the 3 closest of your own-words lines
-    return facts + [h for h in profile if h.ref in ("summary", "skills", "preferences")] + about
+    about = [h for h in profile if h.ref.startswith("about:")][: ABOUT_FIRST_LINES if about_first else 3]
+    basics = [h for h in profile if h.ref in ("summary", "skills", "preferences")]
+    if about_first:
+        return about + basics + facts  # how you work first, the projects last
+    return facts + basics + about
 
 
 # ---- checking a reply -------------------------------------------------------------------------------------
@@ -517,9 +528,10 @@ _SHAPE_STORY = (
     "handled it when it went wrong. (3) One reflective sentence about what this shows about how you think, work or decide."
 )
 _SHAPE_ABOUT = (
-    "Write it as one short paragraph. Start by answering the question directly, in one sentence, from how you think or "
-    "work. Then back it with one or two real moments from the projects, told in your own words (what happened and what "
-    "you did). End with a reflective sentence about what those moments show about how you work or decide."
+    "This question is about YOU, not about a project. Write one short paragraph about how you work: how you think, "
+    "decide and approach problems, using the notes about you first. Start by answering the question directly in one "
+    "sentence. Then explain it from your way of working. A project may appear only as a short piece of evidence "
+    "(one clause), never retold as a story. End with a reflective sentence about how you work or decide."
 )
 
 
@@ -601,6 +613,24 @@ def _answer_warnings(text: str, tech: set[str], allowed_sentences: int) -> list[
     return found
 
 
+def _format_earlier(earlier: list[str]) -> str:
+    """The answers already written on this form, one per line, each cut short, for the prompt."""
+    lines = [f'- "{" ".join(text.split())[:EARLIER_CHARS]}"'.replace("\n", " ") for text in earlier if text.strip()]
+    return "\n".join(lines) if lines else "(none yet)"
+
+
+def _earlier_warnings(text: str, earlier: list[str], given: list[str]) -> list[str]:
+    """Warnings when this answer sounds like one already on the form (never a rejection: you review every answer)."""
+    found: list[str] = []
+    runs = _word_runs(text, SAME_RUN_WORDS)
+    if any(runs & _word_runs(other, SAME_RUN_WORDS) for other in earlier):
+        found.append("repeats wording from another answer on this form")
+    shared = [name for name in given if _mentions_project(text, name) and any(_mentions_project(o, name) for o in earlier)]
+    if shared:
+        found.append("uses the same project as another answer on this form (" + ", ".join(shared) + ")")
+    return found
+
+
 def reflect_answer(
     conn: sqlite3.Connection,
     field: FormField,
@@ -609,6 +639,7 @@ def reflect_answer(
     *,
     settings: Settings | None = None,
     single_project: bool = False,
+    earlier: list[str] | None = None,
 ) -> DraftResult:
     """Answer a REFLECTIVE or STORY question ("what are your strengths", "tell me about a mistake").
 
@@ -618,6 +649,10 @@ def reflect_answer(
     you. It may reword the notes and add a reflective sentence, but no new fact: a number or a name that is not in
     the notes rejects the answer. ``saved`` is an optional ``open`` answer, treated as one more fact about you.
     ``DraftResult.note`` lists warnings (stock phrases, praise, ...) that do NOT reject the answer.
+
+    A question about you (not ``single_project``) puts your ``about_me`` notes first: it should describe how you work.
+    ``earlier`` is the open answers already written on the same form. They go into the prompt so the model avoids
+    their wording and main project, and a repeat is only a warning.
 
     Raises:
         DraftError: the question is sensitive, a saved answer is not ``open``, or the field is not a text box.
@@ -629,7 +664,11 @@ def reflect_answer(
         raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
     sentences, chars = _limits_for(field, reflective=True)
     budget = int(sentences)
-    facts = gather_reflective_facts(conn, field.label, settings, count=1 if single_project else REFLECT_PROJECTS, include_result=True)
+    earlier = earlier or []
+    facts = gather_reflective_facts(
+        conn, field.label, settings,
+        count=1 if single_project else REFLECT_PROJECTS, include_result=True, about_first=not single_project,
+    )
     if not any(h.source == "project" for h in facts):
         return _rejected("no projects found to draw from")
     prompt = load_prompt(
@@ -642,6 +681,7 @@ def reflect_answer(
         max_sentences=sentences,
         max_chars=chars,
         voice=_voice_notes(conn) or "(none given)",
+        earlier=_format_earlier(earlier),
     )
     try:
         reply = ai.ask_ai("reflect_text", prompt, settings=settings)
@@ -673,5 +713,6 @@ def reflect_answer(
     if cut:
         warnings.append(f"cut after the last whole sentence that fits the {chars}-character box")
     given = sorted({_project_name(h.ref) for h in facts if h.source == "project"})
-    used = [n for n in given if _mentions_project(text, n)] or given
+    warnings += _earlier_warnings(text, earlier, given)
+    used =[n for n in given if _mentions_project(text, n)] or given
     return DraftResult(text, float(reply["confidence"]), "; ".join(used), "; ".join(warnings))
