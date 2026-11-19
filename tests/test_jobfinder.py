@@ -141,6 +141,20 @@ def test_a_one_heading_post_with_a_few_similar_job_cards_is_still_a_post() -> No
     assert looks_like_job_post(page)
 
 
+def test_a_prosple_page_with_no_main_area_and_its_own_headings_is_a_post() -> None:
+    """Real miss (EastWest on Prosple, Nov 20): the headings were Your Role / About You / Qualifications & other requirements."""
+    menu = "Search Jobs\nAdvice\nTop 100 Employers\nForum\nPhilippines\nEastwest Bank\nAdd a review\nSave\nOverview\nApply\n"
+    body = (
+        "Your Role\nKey responsibilities include:\n" + "\n".join(f"Support the team with task number {n} each week." for n in range(25))
+        + "\nAbout You\nThe company is looking for:\n" + "\n".join(f"A student with skill number {n}." for n in range(25))
+        + "\nQualifications & other requirements\nDegree or Certificate\nStudy field\nPhilippine Citizen\n"
+    )
+    page = menu + body
+    assert count_headings(page) >= 2
+    assert looks_like_job_post(page)
+    assert not looks_like_job_post(menu + "Apply\nSave\n" * 3)
+
+
 def test_the_real_heading_styles_are_still_recognised() -> None:
     for heading in (
         "Position Responsibilities:", "Required Qualifications:", "Your Role And Responsibilities", "Job Description",
@@ -185,6 +199,27 @@ def test_post_is_on_the_form_page(context: BrowserContext, conn: sqlite3.Connect
     assert result.post.label == "Apply - Acme (this page)"
     row = conn.execute("SELECT kind, details FROM action_log").fetchone()
     assert (row["kind"], row["details"]) == ("read", "job post: form_page")  # a label only, never the text
+
+
+def test_the_post_text_is_the_main_content_without_the_site_menu(context: BrowserContext) -> None:
+    """Real case (Prosple, Nov 20): the page text began with the site menu and the signed-in name."""
+    page_html = (
+        "<html><head><title>Backend Intern - Acme</title></head><body>"
+        "<header><nav>Search Jobs | Advice | Forum | Signed in: Maria Santos</nav></header>"
+        f"<main>{POST_BODY}</main><footer>Terms | Privacy | Cookies</footer></body></html>"
+    )
+    PAGES["http://careers.acme.test/job/main"] = page_html
+    tab = open_tab(context, "http://careers.acme.test/job/main")
+    result = find_job_post(tab, settings=MOCK)
+    assert result.post is not None
+    assert "Required Qualifications" in result.post.text
+    assert "Maria Santos" not in result.post.text and "Search Jobs" not in result.post.text
+    assert "Privacy" not in result.post.text
+
+
+def test_a_page_without_a_main_area_falls_back_to_the_whole_page(context: BrowserContext) -> None:
+    tab = open_tab(context, "http://careers.acme.test/job/123")  # POST_HTML has no <main>
+    assert "Required Qualifications" in jobfinder.tab_text(tab)
 
 
 def test_post_is_in_the_opener_tab(context: BrowserContext) -> None:

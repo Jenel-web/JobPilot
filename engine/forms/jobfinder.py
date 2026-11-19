@@ -96,9 +96,10 @@ class FindResult:
 # Each pattern must match the WHOLE line (``fullmatch``): a filter label such as "Unpaid with benefits" or
 # "Experience requirement" on a search page is not a heading. Found on a real Prosple search page (Nov 20).
 _HEADINGS = (
-    re.compile(r"(?:[\w&/-]+ ){0,3}responsibilities"),  # "Your Role And Responsibilities", "Position Responsibilities"
-    re.compile(r"(?:[\w&/-]+ ){0,3}qualifications"),  # "Required Qualifications"
+    re.compile(r"(?:[\w&/-]+ ){0,3}responsibilities(?: include)?"),  # "Position Responsibilities", "Key responsibilities include:"
+    re.compile(r"(?:[\w&/-]+ ){0,3}qualifications(?: (?:&|and) (?:other )?requirements)?"),  # "Required Qualifications"
     re.compile(r"(?:[\w&/-]+ ){0,2}requirements"),  # "Requirements", "Minimum Requirements"
+    re.compile(r"your role|about you|the role|who you are|the company is looking for"),  # Prosple: "Your Role", "About You"
     re.compile(r"job description|role description|about the (?:job|role|position)"),
     re.compile(r"(?:here(?:'s|’s| is) )?what you(?:'ll| will| could| would)? (?:be doing|do|work on|bring|need)(?: to have)?"),
     re.compile(r"(?:required|preferred|key|desired) skills"),
@@ -205,12 +206,34 @@ def _readable(url: str) -> bool:
     return site_of(url) not in BLOCKED_SITES
 
 
-def tab_text(tab: Page) -> str:
-    """The visible text of a tab, or an empty string if it cannot be read (closed, still loading)."""
+MIN_MAIN_WORDS = 100  # a <main>/<article> shorter than this is probably not the whole description
+
+# The page's main content: the longest <main>, <article> or role=main. Site menus, headers (with your name
+# when you are signed in) and footers sit outside it, so they never reach the resume picker.
+_MAIN_JS = (
+    "() => [...document.querySelectorAll('main, article, [role=main]')]"
+    ".map(e => e.innerText || '').sort((a, b) => b.length - a.length)[0] || ''"
+)
+
+
+def _texts(tab: Page) -> list[str]:
+    """The tab's text, best first: its main content (when it has enough words), then the whole body.
+
+    Returns an empty list if the tab cannot be read (closed, still loading).
+    """
     try:
-        return tab.inner_text("body", timeout=READ_TIMEOUT_MS)[:MAX_TEXT_CHARS].strip()
+        body = tab.inner_text("body", timeout=READ_TIMEOUT_MS).strip()
+        main = str(tab.evaluate(_MAIN_JS)).strip()
     except PlaywrightError:
-        return ""
+        return []
+    texts = [main] if len(main.split()) >= MIN_MAIN_WORDS else []
+    return [t[:MAX_TEXT_CHARS] for t in (*texts, body) if t]
+
+
+def tab_text(tab: Page) -> str:
+    """The text of a tab (main content if it has any, else the whole page), or "" if it cannot be read."""
+    texts = _texts(tab)
+    return texts[0] if texts else ""
 
 
 def _title(tab: Page) -> str:
@@ -228,10 +251,10 @@ def _read_post(tab: Page, source: Source, settings: Settings | None) -> JobPost 
         safety.check("read", tab.url, settings=settings)
     except safety.SafetyError:
         return None
-    text = tab_text(tab)
-    if not looks_like_job_post(text):
-        return None
-    return JobPost(text, source, _title(tab), tab.url)
+    for text in _texts(tab):  # main content first; if only the whole page reads like a post, use that
+        if looks_like_job_post(text):
+            return JobPost(text, source, _title(tab), tab.url)
+    return None
 
 
 def _target_id(tab: Page) -> str:

@@ -61,6 +61,8 @@ All commands
     python -m engine.cli forms elaborate --question "Do you know Docker?" [--saved Yes] [--min-score 0.7]   try one question, no page needed
     python -m engine.cli forms elaborate --fixture F [--as-text]   show which short yes/no answers get elaborated, the notes used (with scores) and the result
     python -m engine.cli forms fill [--resume A|B] [--post FILE] [--fixture NAME] [--fast]   fill the open page, outline what needs you, stop before Submit
+    python -m engine.cli forms fill [--tab TEXT] [--post FILE] [--resume A|B] [--mode mock|dry_run] [--fast]   fill the form tab, then STOP (never submits)
+    python -m engine.cli forms fill --fixture F   try it on a saved page in a test window (saves nothing)
     python -m engine.cli resume pick --post FILE   pick resume A or B for a saved job post (a .txt file)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
@@ -121,9 +123,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     filling = forms.add_parser("fill", help="fill the open page (or a saved page with --fixture), then stop before Submit")
     filling.add_argument("--resume", choices=("A", "B", "a", "b"), help="resume to upload (without it, resume fields stay empty; or use --post)")
-    filling.add_argument("--post", help="text file with the job post: used for company questions and to pick the resume if --resume is missing")
+    filling.add_argument("--post", help="text file with the job post, used instead of looking through your tabs (picks the resume if --resume is missing)")
     filling.add_argument("--fixture", help="fill a saved page in a visible test browser instead of the bot's browser (a path, or a name in fixtures/forms/)")
     filling.add_argument("--fast", action="store_true", help="skip the 1-4 s pauses (for a quick look at a saved page)")
+    filling.add_argument("--tab", help="fill the first tab whose address contains this text (default: the tab you are looking at)")
+    filling.add_argument(
+        "--mode", choices=("mock", "dry_run"), help="run mode for THIS command only (settings.json is not changed; live is never allowed here)"
+    )
     questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
         dest="action", required=True
     )
@@ -412,11 +418,13 @@ def _answer_fixture(conn, fixture: str, record: bool = False) -> int:  # type: i
 
 
 def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
-    """Read the open page, decide every answer, type them in, outline what needs you, and STOP. Never submits.
+    """Fill the open page and STOP before Submit. Never submits.
 
-    Without ``--fixture`` it works on the page open in the bot's browser (real pages need run_mode = dry_run).
-    With ``--fixture`` it opens a saved page in a visible test browser so you can watch it fill.
+    Without ``--fixture`` it works on the form tab in the bot's browser (real pages need run_mode = dry_run).
+    With ``--fixture`` it opens a saved page in a visible test browser, and saves nothing to the database.
+    The job post comes from ``--post FILE`` if given, else from the finder (form page, opener tab, same-site tab).
     """
+    import dataclasses
     import time
     from datetime import datetime
     from pathlib import Path
@@ -425,13 +433,15 @@ def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
 
     from engine import rag, safety
     from engine.ai import AIError
-    from engine.forms.answers import answer_form
-    from engine.forms.filler import fill_page, load_resume_file
-    from engine.forms.reader import connect_to_bot_browser, find_current_page, read_fields
-    from engine.matcher import PickError, pick_resume
+    from engine.forms.jobfinder import post_from_pasted
+    from engine.forms.orchestrator import fill_current_page
+    from engine.forms.reader import connect_to_bot_browser, find_current_page
+    from engine.matcher import PickError
     from engine.settings import ROOT, load_settings
 
     settings = load_settings()
+    if args.mode:  # this command only: settings.json is never written, and `live` is not offered
+        settings = dataclasses.replace(settings, run_mode=args.mode)
     path = None  # the saved page to open, when --fixture is used (checked first: a typo should not need a database)
     if args.fixture:
         path = Path(args.fixture)
@@ -441,14 +451,7 @@ def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
             print(f"Error: fixture not found: {path}", file=sys.stderr)
             return 1
     try:
-        job_text = Path(args.post).read_text(encoding="utf-8") if args.post else None
-        resume_id = args.resume.upper() if args.resume else None
-        if resume_id is None and job_text:
-            pick = pick_resume(conn, job_text, settings)
-            if pick is not None:
-                resume_id = pick.resume
-                print(f"Resume picked from the job post: {pick.resume}  ({pick.reason})")
-        resume = load_resume_file(conn, resume_id) if resume_id else None
+        post = post_from_pasted(Path(args.post).read_text(encoding="utf-8")) if args.post else None
         try:  # a search index that does not match the run mode would leave most fields empty: stop with a clear message
             rag.retrieve(conn, "ready check", 1, settings=settings)
         except rag.RagError as exc:
@@ -464,19 +467,21 @@ def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
                 page.goto(path.resolve().as_uri())
                 page.wait_for_timeout(500)
             else:
-                page = find_current_page(connect_to_bot_browser(p))
-            safety.check("fill", page.url, settings=settings)  # before reading or asking the AI anything
-            fields = read_fields(page)
-            print(f"{page.url}\nRead {len(fields)} fields. Deciding answers...")
-            answers = answer_form(
-                conn, fields, page_url=page.url, settings=settings, job_text=job_text, record=not args.fixture
+                browser = connect_to_bot_browser(p)
+                if args.tab:
+                    matches = [pg for ctx in browser.contexts for pg in ctx.pages if args.tab in pg.url]
+                    if not matches:
+                        print(f"Error: no open tab has {args.tab!r} in its address.", file=sys.stderr)
+                        return 1
+                    page = matches[0]
+                else:
+                    page = find_current_page(browser)
+            print(f"{page.url}\nFilling (random 1-4 s pauses; it never clicks Submit)...")
+            outcome = fill_current_page(
+                conn, page, settings=settings, post=post, resume_id=args.resume.upper() if args.resume else None,
+                save=path is None, sleep=(lambda seconds: None) if args.fast else time.sleep, screenshot_path=shot,
             )
-            print("Filling (random 1-4 s pauses; it never clicks Submit)...")
-            report = fill_page(
-                page, fields, answers, conn=conn, resume=resume, settings=settings,
-                sleep=(lambda seconds: None) if args.fast else time.sleep, screenshot_path=shot,
-            )
-            _print_fill_report(report)
+            _print_outcome(outcome, saved=path is None)
             if owned is not None:
                 try:
                     input("\nLook at the page, then press Enter here to close the test window... ")
@@ -487,6 +492,28 @@ def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _print_outcome(outcome, saved: bool) -> None:  # type: ignore[no-untyped-def]
+    """Say which job post and resume were used, what was skipped, then the fill report."""
+    if outcome.post is not None:
+        print(f"Job post used: {outcome.post.label}")
+    else:
+        others = "; ".join(f"[{t.index}] {t.title[:40] or t.url[:40]}" for t in outcome.tabs)
+        print("Job post used: NONE found." + (f" Your other tabs: {others}" if others else ""))
+    if outcome.resume_id:
+        print(f"Resume: {outcome.resume_id}" + (f"  ({outcome.resume_reason})" if outcome.resume_reason else ""))
+    for message in outcome.messages:
+        print(f"  ! {message}")
+    if outcome.report is None:
+        return
+    _print_fill_report(outcome.report)
+    if outcome.unknown_ids:
+        print(f"{len(outcome.unknown_ids)} question(s) have no saved answer: see `python -m engine.cli questions list`.")
+    if outcome.fill_id is not None:
+        print(f"Saved to the filled pages history as #{outcome.fill_id} (status: filled).")
+    elif not saved:
+        print("Preview run on a saved page: nothing was saved to the database.")
 
 
 def _print_fill_report(report) -> None:  # type: ignore[no-untyped-def]
