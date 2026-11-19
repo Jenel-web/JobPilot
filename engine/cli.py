@@ -58,6 +58,7 @@ All commands
     python -m engine.cli forms read       list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
     python -m engine.cli forms answer --fixture F   read a saved page, print the engine's answer per field (types nothing; add --record to save unknowns)
+    python -m engine.cli resume pick --post FILE   pick resume A or B for a saved job post (a .txt file)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
 
@@ -93,6 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     asking.add_argument("--source", choices=("profile", "project", "resume", "answer"), action="append")
     evaluating = rag.add_parser("eval", help="run every eval question and show the top chunks")
     evaluating.add_argument("--file", default="tests/fixtures/eval_questions.json")
+    resume = sub.add_parser("resume", help="resume commands").add_subparsers(dest="action", required=True)
+    picking = resume.add_parser("pick", help="pick resume A or B for a saved job post")
+    picking.add_argument("--post", required=True, help="text file with the job post, e.g. data/job_posts/x.txt")
     browser = sub.add_parser("browser", help="the bot's browser").add_subparsers(dest="action", required=True)
     opener = browser.add_parser("open", help="open the bot's browser window")
     opener.add_argument("--url", help="optional page to start on")
@@ -126,6 +130,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Loaded profile, {counts['resumes']} resumes and {counts['answers']} answers.")
         elif args.command == "rag":
             return _rag(conn, args)
+        elif args.command == "resume":
+            return _pick_resume(conn, args.post)
         elif args.command == "questions":
             return _questions(conn, args)
         elif args.command == "forms":
@@ -143,6 +149,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     finally:
         conn.close()
+    return 0
+
+
+def _pick_resume(conn, post_path: str) -> int:  # type: ignore[no-untyped-def]
+    """Read a job post file and print which resume fits it, with the evidence."""
+    from pathlib import Path
+
+    from engine.matcher import PickError, pick_resume
+
+    try:
+        text = Path(post_path).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {post_path}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        pick = pick_resume(conn, text)
+    except PickError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if pick is None:
+        print("No job post, no pick.")
+        return 0
+    print(f"Pick: resume {pick.resume}")
+    print(f"Reason: {pick.reason}")
+    print("Evidence:")
+    for line in pick.evidence:
+        print(f"  - {line}")
     return 0
 
 

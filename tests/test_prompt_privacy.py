@@ -219,11 +219,7 @@ def test_all_three_forms_in_one_session_send_no_private_data(conn: sqlite3.Conne
     assert_no_private_data(recorder.calls, "all three forms", allowed)
 
 
-@pytest.mark.skipif(
-    not hasattr(matcher, "pick_resume"),
-    reason="the resume picker is not built yet (ROADMAP Phase 3, step 4). Expected as engine.matcher.pick_resume(conn, job_text, settings=...)",
-)
 def test_resume_picker_sends_no_private_data_to_the_ai(conn: sqlite3.Connection, recorder: PromptRecorder) -> None:
     job_text = "Junior Java developer. You will build Android apps with Kotlin and write unit tests."
-    matcher.pick_resume(conn, job_text, settings=MOCK)  # type: ignore[attr-defined]
+    matcher.pick_resume(conn, job_text, settings=MOCK)
     assert_no_private_data(recorder.calls, "resume picker")
