@@ -19,7 +19,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 | `engine/ai.py` (`ask_ai`, mock + Ollama, Pydantic, one retry) | Done | Tasks: `form_answer`, `resume_pick` (v0), `match`, `email` (v1/v2) |
 | `engine/settings.py` + `settings.json` | Done | `run_mode` and `ai_provider` only |
 | `fixtures/ai/` | Done for now | `form_answer`, `resume_pick`, `match`, `email` |
-| Tests | 525 pass, 0 skipped | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
+| Tests | 567 pass, 0 skipped | `test_ai.py` (ai + settings, including the new v0 tasks). The old-plan matcher tests were removed |
 | Ollama | Ready | `llama3.1:8b` and `nomic-embed-text` pulled |
 | `engine/db.py`, `profile.py`, `secrets.py`, `safety.py`, `cli.py` | Done (Phase 1) | Real data loads into `data/jobpilot.db` |
 | `engine/forms/browser.py` | Done (Phase 2 step 1) | Launcher; you have not tried it yet |
@@ -44,7 +44,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 
 **Still open in Phase 0:** nothing except your commit.
 
-**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Now: Phase 3 (picker built). `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Unknown-questions list and approved-wording learning are built (`engine/learning.py`). `answer_field()` is built and calls `learning.triage_question()` for every non-personal field. `prompts/form.md` and the Ollama draft/rewrite paths are built (step 3). The `forms answer --fixture` command (step 5), the prompt-privacy test and relocation elaboration are built, and the 5 job posts are collected (Nov 18). The resume picker is built (Nov 19): `pick_resume(conn, job_text, settings)` in `engine/matcher.py`, CLI `python -m engine.cli resume pick --post <file>`, prompt in `prompts/resume.md`. **Left in Phase 3:** running the picker on the 5 sample posts with real Ollama (manual check), your manual checks. Finding the job post text across browser tabs is a Phase 4 step (decided Nov 12).
+**Current position:** v0, Phase 2 done (3 forms: Angkas/Workable, Indie Campers/Greenhouse iframe, a synthetic one; Google Form skipped by choice). Phase 3 done. `rag.py` is built and tuned (right saved question first 25/26 on the eval). The `llama3.1:8b` match judge was tested and put on hold (too unreliable on this PC). `mxbai-embed-large` was compared and lost to the current `nomic-embed-text` (6/6 vs 4-5/6 on held-out questions). Matching frozen at good enough (Nov 11). The personal-field detector is built. **You:** add `first_name`, `middle_name`, `last_name` to `data/profile.json`. Unknown-questions list and approved-wording learning are built (`engine/learning.py`). `answer_field()` is built and calls `learning.triage_question()` for every non-personal field. `prompts/form.md` and the Ollama draft/rewrite paths are built (step 3). The `forms answer --fixture` command (step 5), the prompt-privacy test and relocation elaboration are built, and the 5 job posts are collected (Nov 18). The resume picker is built (Nov 19): `pick_resume(conn, job_text, settings)` in `engine/matcher.py`, CLI `python -m engine.cli resume pick --post <file>`, prompt in `prompts/resume.md`. **Phase 3 is done (Nov 19):** you judged the retrieval output, the 3 form tables, the drafted answers and the picker yourself and accepted them. Note for the record: the picker scored 3/5 on the sample posts (gate was 4/5); you accepted it, and evidence lines sometimes echo the job post. Revisit if the picker misses on real applications. **Now: Phase 4.** Finding the job post text across browser tabs is a Phase 4 step (decided Nov 12).
 
 **Progress log** (newest last; Claude Code adds a line after every working step)
 
@@ -90,6 +90,7 @@ Written Nov 9, 2026 for Jenel. This is the working checklist. For library docs a
 - 2026-11-19: resume picker built. `pick_resume` retrieves the 3 closest chunks of each resume (`rag.retrieve`, sources=resume), sends the scrubbed post + chunks labelled only "Resume A/B" to `ask_ai("resume_pick")`, returns `ResumePick` (resume, reason, evidence). Empty post = no pick, no AI call. CLI `resume pick --post`. `tests/test_matcher.py` (incl. swapped file names change nothing) and the picker privacy test now run. 525 tests pass. Not yet tried on the 5 real posts with Ollama.
 - 2026-11-19: general elaboration. `wants_elaboration()` + `_elaborated_answer()` in `answers.py`; `drafting.elaborate_short()` (stance must match the saved yes/no, no new number/name/private data, notes must score >= 0.6 `ELABORATE_MIN_SCORE`, search or AI failure = plain saved answer, unflagged); new `ELABORATE_SHORT` prompt. `tests/test_elaboration.py` (28 tests); two guards checked by breaking them. 553 tests pass (settings-file test fails only while `settings.json` is `dry_run`). Untested with real Ollama; the 0.6 cutoff is a guess to tune.
 - 2026-11-19: `python -m engine.cli forms elaborate --fixture NAME [--as-text]` (preview, saves nothing): shows each short saved yes/no, the notes found with scores, and the result. First real-Ollama run on the Angkas form (as text boxes): the 0.6 cutoff is too low and logistics questions (laptop, hybrid) get irrelevant or invented sentences. Fixed the same day by your decision: only experience/knowledge questions are elaborated (`is_experience_question()`); logistics questions (hybrid, laptop...) keep the plain Yes; notes cutoff 0.65 (set after seeing that real scores run 0.5-0.72 even for Spring Boot; you will check results yourself, and `--min-score` tries other values). Also `forms elaborate --question "..." [--saved Yes]` tries one question without a page. 566 tests pass.
+- 2026-11-19: Phase 3 closed by your decision. You reviewed retrieval, the form tables, drafted answers and `rag eval` and judged the performance fine. Picker was 3/5 on the sample posts (gate 4/5), accepted; watch it in real use. 567 tests pass. CLAUDE.md moved to Phase 4.
 
 
 ---
@@ -238,7 +239,7 @@ Manual: compare the printed field list with what you see on screen for each of t
 - [x] Write about 10 **held-out** questions without looking at `also_asked_as`, so the eval measures understanding, not memorised wordings. (Done Nov 15: 10 added to `tests/fixtures/eval_questions.json` as `ho-01`..`ho-10`: 6 reworded, 1 legal, 1 personal, 2 new open; 60 questions in total. Never copy these into `also_asked_as`; the eval warns if you do.)
 - [x] Write project descriptions that are specific and true (technologies, what you built). The AI may only use these. (Done Nov 11: taken from your portfolio, 5 projects with result, problem, solution and hardest part in `profile.json`. Check them once and fix anything that is not exactly true.)
 - [x] Collect 5 real job posts as text files and write down which resume you would send for each, to test the resume picker. (Done: `data/job_posts/`, answers in `expected_resume.json`.) Resume content decides, so make sure each resume's text really shows the skills you want it chosen for.
-- [ ] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
+- [x] Judge retrieval output yourself in step 2. If the wrong chunk comes first, say so, because only you know what's correct.
 - [x] Decide the confidence cutoff for "flagged" (started at 0.7; now 0.85 after the prefix change, see "Matching decisions" below).
 - [x] Approve adding `sqlite-vec` (approved and installed Nov 10, 2026).
 
@@ -289,11 +290,11 @@ python -m pytest -q
 ```
 
 Manual:
-- [ ] Review the table for all 3 forms. Every field has the right source label.
-- [ ] No legal or eligibility field was answered by AI.
-- [ ] At least 7 of the 8 reworded questions found the right saved answer.
-- [ ] Resume picker chose correctly on all 5 sample posts (run `resume pick --post data/job_posts/<file>.txt` in `dry_run`) (4 of 5 is acceptable; investigate the miss).
-- [ ] No invented facts in drafted answers (read every one).
+- [x] Review the table for all 3 forms. Every field has the right source label.
+- [x] No legal or eligibility field was answered by AI.
+- [x] At least 7 of the 8 reworded questions found the right saved answer.
+- [x] Resume picker chose correctly on all 5 sample posts (run `resume pick --post data/job_posts/<file>.txt` in `dry_run`) (4 of 5 is acceptable; investigate the miss).
+- [x] No invented facts in drafted answers (read every one).
 
 **Done when:** the eval set passes (reworded questions 7/8, legal 4/4 not AI-answered, personal 4/4 by code), the picker is right on 4+ of 5 posts, the privacy test passes, and you can explain how a field gets its answer.
 
