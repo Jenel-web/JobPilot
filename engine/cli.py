@@ -60,6 +60,7 @@ All commands
     python -m engine.cli forms answer --fixture F   read a saved page, print the engine's answer per field (types nothing; add --record to save unknowns)
     python -m engine.cli forms elaborate --question "Do you know Docker?" [--saved Yes] [--min-score 0.7]   try one question, no page needed
     python -m engine.cli forms elaborate --fixture F [--as-text]   show which short yes/no answers get elaborated, the notes used (with scores) and the result
+    python -m engine.cli forms fill [--resume A|B] [--post FILE] [--fixture NAME] [--fast]   fill the open page, outline what needs you, stop before Submit
     python -m engine.cli resume pick --post FILE   pick resume A or B for a saved job post (a .txt file)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
@@ -118,6 +119,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     elaborating.add_argument(
         "--as-text", action="store_true", help="treat yes/no radios, dropdowns and checkboxes as text boxes (a what-if)"
     )
+    filling = forms.add_parser("fill", help="fill the open page (or a saved page with --fixture), then stop before Submit")
+    filling.add_argument("--resume", choices=("A", "B", "a", "b"), help="resume to upload (without it, resume fields stay empty; or use --post)")
+    filling.add_argument("--post", help="text file with the job post: used for company questions and to pick the resume if --resume is missing")
+    filling.add_argument("--fixture", help="fill a saved page in a visible test browser instead of the bot's browser (a path, or a name in fixtures/forms/)")
+    filling.add_argument("--fast", action="store_true", help="skip the 1-4 s pauses (for a quick look at a saved page)")
     questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
         dest="action", required=True
     )
@@ -149,6 +155,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _capture_form(conn, args.name)
             if args.action == "answer":
                 return _answer_fixture(conn, args.fixture, args.record)
+            if args.action == "fill":
+                return _fill_form(conn, args)
             if args.action == "elaborate":
                 if args.min_score is not None:
                     from engine.forms import drafting
@@ -401,6 +409,96 @@ def _answer_fixture(conn, fixture: str, record: bool = False) -> int:  # type: i
     for row in rows:
         print(line.format(*row))
     return 0
+
+
+def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
+    """Read the open page, decide every answer, type them in, outline what needs you, and STOP. Never submits.
+
+    Without ``--fixture`` it works on the page open in the bot's browser (real pages need run_mode = dry_run).
+    With ``--fixture`` it opens a saved page in a visible test browser so you can watch it fill.
+    """
+    import time
+    from datetime import datetime
+    from pathlib import Path
+
+    from playwright.sync_api import sync_playwright
+
+    from engine import rag, safety
+    from engine.ai import AIError
+    from engine.forms.answers import answer_form
+    from engine.forms.filler import fill_page, load_resume_file
+    from engine.forms.reader import connect_to_bot_browser, find_current_page, read_fields
+    from engine.matcher import PickError, pick_resume
+    from engine.settings import ROOT, load_settings
+
+    settings = load_settings()
+    path = None  # the saved page to open, when --fixture is used (checked first: a typo should not need a database)
+    if args.fixture:
+        path = Path(args.fixture)
+        if not path.is_absolute() and not path.exists():
+            path = ROOT / "fixtures" / "forms" / (args.fixture if args.fixture.endswith(".html") else f"{args.fixture}.html")
+        if not path.is_file():
+            print(f"Error: fixture not found: {path}", file=sys.stderr)
+            return 1
+    try:
+        job_text = Path(args.post).read_text(encoding="utf-8") if args.post else None
+        resume_id = args.resume.upper() if args.resume else None
+        if resume_id is None and job_text:
+            pick = pick_resume(conn, job_text, settings)
+            if pick is not None:
+                resume_id = pick.resume
+                print(f"Resume picked from the job post: {pick.resume}  ({pick.reason})")
+        resume = load_resume_file(conn, resume_id) if resume_id else None
+        try:  # a search index that does not match the run mode would leave most fields empty: stop with a clear message
+            rag.retrieve(conn, "ready check", 1, settings=settings)
+        except rag.RagError as exc:
+            print(f"Error: {exc}\nNothing was filled. Run mode is {settings.run_mode!r}: the index must be built in the same mode.", file=sys.stderr)
+            return 1
+        shot = ROOT / "data" / "screenshots" / f"fill-{datetime.now():%Y%m%d-%H%M%S}.png"
+        with sync_playwright() as p:
+            owned = None
+            if path is not None:
+                owned = p.chromium.launch(headless=False)  # a throwaway test window, not the bot's profile
+                page = owned.new_page()
+                safety.check("navigate", path.resolve().as_uri(), settings=settings)
+                page.goto(path.resolve().as_uri())
+                page.wait_for_timeout(500)
+            else:
+                page = find_current_page(connect_to_bot_browser(p))
+            safety.check("fill", page.url, settings=settings)  # before reading or asking the AI anything
+            fields = read_fields(page)
+            print(f"{page.url}\nRead {len(fields)} fields. Deciding answers...")
+            answers = answer_form(
+                conn, fields, page_url=page.url, settings=settings, job_text=job_text, record=not args.fixture
+            )
+            print("Filling (random 1-4 s pauses; it never clicks Submit)...")
+            report = fill_page(
+                page, fields, answers, conn=conn, resume=resume, settings=settings,
+                sleep=(lambda seconds: None) if args.fast else time.sleep, screenshot_path=shot,
+            )
+            _print_fill_report(report)
+            if owned is not None:
+                try:
+                    input("\nLook at the page, then press Enter here to close the test window... ")
+                except EOFError:
+                    pass
+                owned.close()
+    except (RuntimeError, ValueError, OSError, safety.SafetyError, PickError, AIError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _print_fill_report(report) -> None:  # type: ignore[no-untyped-def]
+    """Print the result of a fill: the counts, each field that needs a look, and the screenshot."""
+    print(f"\n{report.summary()}")
+    for r in report.results:
+        if r.flagged:
+            kind = "NEEDS YOU" if r.outcome != "filled" else "CHECK"
+            print(f"  ▲ {kind:<9} {_shorten(r.label or '(no label)', 50)}  {_shorten(r.note, 80)}")
+    if report.screenshot_path:
+        print(f"Screenshot: {report.screenshot_path}")
+    print("Stopped before Submit. Nothing was sent. Review the page, fix the outlined fields, then submit yourself.")
 
 
 def _elaborate_question(conn, question: str, saved: str) -> int:  # type: ignore[no-untyped-def]

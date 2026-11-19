@@ -91,6 +91,7 @@ class FormField(BaseModel):
     name: str = ""  # the input's name attribute, if any
     indexes: list[int] = []  # positions of its input(s) in its frame (the filler uses these)
     frame: str = ""  # address of the embedded frame it lives in; empty = the outer page
+    frame_number: int = 0  # position of that frame in ``page.frames`` (0 = outer page). Needed because several frames can share one address (about:srcdoc)
     # Hints the page gives about the expected value (used to recognise personal fields
     # and to pick a phone number format). Empty / 0 when the page gives none.
     autocomplete: str = ""  # e.g. "given-name", "email", "tel-national", "address-level2"
@@ -126,7 +127,7 @@ def read_fields(page: Page) -> list[FormField]:
     remembers which frame it came from (``FormField.frame``; empty = the outer page).
     """
     fields: list[FormField] = []
-    for frame in page.frames:
+    for number, frame in enumerate(page.frames):
         is_main = frame == page.main_frame
         if not is_main and any(host in frame.url.lower() for host in _NOISE_FRAME_HOSTS):
             continue
@@ -136,6 +137,7 @@ def read_fields(page: Page) -> list[FormField]:
             continue
         for field in build_fields(raw):
             field.frame = "" if is_main else frame.url
+            field.frame_number = 0 if is_main else number
             fields.append(field)
     return fields
 

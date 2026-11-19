@@ -40,6 +40,8 @@ def check(kind: str, target: str = "", *, settings: Settings | None = None) -> N
         raise SafetyError(f"'{kind}' is never done automatically in v0: you submit yourself")
     if settings.run_mode == "mock" and kind == "navigate" and target.lower().startswith(("http://", "https://")):
         raise SafetyError("Mock mode only opens saved fixture pages, not real websites")
+    if settings.run_mode == "mock" and kind in ("fill", "upload") and target.lower().startswith(("http://", "https://")):
+        raise SafetyError("Mock mode only fills saved fixture pages, not real websites (set run_mode to dry_run to try a real page)")
 
 
 def log_action(

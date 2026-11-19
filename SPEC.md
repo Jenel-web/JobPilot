@@ -1074,12 +1074,12 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 
 **Checklist**
 
-- [ ] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
+- [x] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
 - [ ] **Job post finder** (see "Finding the job post" in Part 1): form page → opener tab → same-site tab → ask you (pick a tab or paste). Read-only; shows the job post used with a Change button; no job post = no resume upload, flagged. Mock-mode tests with saved pages
 - [ ] **On-page Fill button** (Part 2, 1b): floating panel injected into the bot's browser (`add_init_script`, shadow DOM), wired to the engine with `expose_binding`; shows job post (Change), progress and result; never clicks or covers Submit. Mockup first; test on saved HTML in mock mode
-- [ ] `safety.check()` before every fill; every fill logged to `action_log`
-- [ ] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
-- [ ] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked
+- [x] `safety.check()` before every fill; every fill logged to `action_log`
+- [x] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
+- [x] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked
 - [ ] Screenshot of the filled form; save a row in `fills`: URL, job and company, resume, flagged count, screenshot path, status `filled`
 - [ ] Unknown questions saved to `unknown_questions` with their source page
 - [ ] `engine/api.py` (FastAPI, `127.0.0.1` only): endpoints for fill, unknown questions, answers, filled pages

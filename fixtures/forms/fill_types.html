@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fill types (synthetic test form)</title></head>
+<body>
+<!-- Made-up form for the filler tests: a date, number and url input, a length limit, a custom dropdown,
+     radios hidden behind styled labels, a select with untidy option text, and three things that LOOK like
+     Submit/Next/Apply. No personal data. -->
+<form>
+  <label for="start">Date you can start</label>
+  <input id="start" name="start_date" type="date">
+
+  <label for="web">Portfolio link</label>
+  <input id="web" name="portfolio" type="url">
+
+  <label for="yrs">Years of experience</label>
+  <input id="yrs" name="years" type="number">
+
+  <label for="pitch">One-line pitch</label>
+  <input id="pitch" name="pitch" type="text" maxlength="12">
+
+  <label for="month">Preferred start month</label>
+  <input id="month" role="combobox" type="text" aria-expanded="false">
+  <input type="text">
+
+  <label for="country">Country</label>
+  <select id="country" name="country">
+    <option value="">Choose...</option>
+    <option value="ph">  Philippines  </option>
+    <option value="sg">Singapore</option>
+  </select>
+
+  <fieldset>
+    <legend>Work arrangement</legend>
+    <label><input type="radio" name="arr" value="remote" style="opacity:0;position:absolute"> Remote</label>
+    <label><input type="radio" name="arr" value="onsite" style="opacity:0;position:absolute"> On-site</label>
+  </fieldset>
+
+  <label for="cv">Resume</label>
+  <input id="cv" name="resume" type="file">
+
+  <button type="button" id="next">Next</button>
+  <a href="#apply" role="button" id="apply-link">Apply now</a>
+  <input type="submit" id="send" value="Apply">
+</form>
+</body>
+</html>
