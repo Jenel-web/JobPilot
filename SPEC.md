@@ -274,7 +274,7 @@ The same Fill control also appears on the job page itself, so you don't have to 
 ```
 
 - Clicking **Fill this page** calls the Python engine through Playwright `expose_binding`, which runs the same steps as the dashboard button: reader → job post finder → answer engine → resume picker → filler. No HTTP call is made from the page, so websites can never trigger a fill.
-- It shows the job post used (✎ = Change), progress, and the result summary. It can be collapsed to a small tab and dragged aside.
+- It shows the job post used (✎ = Change), progress, and the result summary. It can be collapsed to a small tab and dragged aside. **It opens by itself when the page looks like an application form** (decided by code, e.g. the form reader finds fillable fields, no AI; decided Nov 20) and stays a collapsed tab on every other page.
 - It never clicks Submit, and it is never placed over the site's Submit button.
 - It exists only in the bot's browser profile, never in your everyday Chrome. The dashboard keeps Unknown questions, Answer bank and Filled pages history.
 - It uses the design tokens (colours, fonts) from `design/tokens.css`; its look is mocked up before it's built.

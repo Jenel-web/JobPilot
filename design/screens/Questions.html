@@ -3,110 +3,269 @@
 <head>
 <meta charset="utf-8">
 <title>JobPilot Questions</title>
-<script src="./support.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Mockup sheet: six frames of the Questions screen. Every value comes from tokens.css. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--jp-line-soft);font-family:var(--jp-font-sans);color:var(--jp-ink);display:flex;flex-direction:column;gap:40px;padding:32px 0;align-items:center}
+.label{width:1440px;font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.label b{color:var(--jp-ink);font-weight:600}
+.frame{position:relative;width:1440px;background:var(--jp-ground);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jp-line)}
+.topbar{height:var(--jp-topbar);flex:0 0 var(--jp-topbar);display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:var(--jp-surface);border-bottom:1px solid var(--jp-line)}
+.logo{font-family:var(--jp-font-serif);font-size:20px;font-weight:500}
+.mode{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--jp-radius-control);background:var(--jp-status-queued-bg);color:var(--jp-status-queued);font-size:13px;font-weight:600;letter-spacing:.02em}
+.sm{font-size:13px;color:var(--jp-ink-2)}
+.body{flex:1;display:flex;min-height:0}
+nav{width:var(--jp-sidebar);flex:0 0 var(--jp-sidebar);background:var(--jp-surface);border-right:1px solid var(--jp-line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;height:var(--jp-row);padding:0 10px;border-radius:var(--jp-radius-control)}
+.nav.on{background:var(--jp-brand-tint);color:var(--jp-brand);font-weight:600}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
+.count.amber{background:var(--jp-amber)}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:24px 28px;position:relative}
+h1{margin:0;font-family:var(--jp-font-serif);font-weight:500;font-size:28px;line-height:1.15}
+.sub{margin:6px 0 0;font-size:14px;color:var(--jp-ink-2)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.tabs{display:flex;gap:6px;font-size:14px}
+.tab{padding:8px 14px;border-radius:var(--jp-radius-control);background:var(--jp-surface);border:1px solid var(--jp-line)}
+.tab.on{border-color:var(--jp-brand);color:var(--jp-brand);font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--jp-radius-control);font-size:14px;font-weight:500;border:1px solid var(--jp-line-strong);background:var(--jp-surface);color:var(--jp-ink);white-space:nowrap}
+.btn.primary{background:var(--jp-brand);border-color:var(--jp-brand);color:#fff;font-weight:600}
+.btn.danger{background:var(--jp-danger);border-color:var(--jp-danger);color:#fff;font-weight:600}
+.btn.link{border-color:transparent;background:transparent;color:var(--jp-brand);padding:0 8px}
+.btn.focus{outline:2px solid var(--jp-ink);outline-offset:2px}
+.card{display:flex;flex-direction:column;gap:12px;padding:20px 22px;border-radius:var(--jp-radius-card);background:var(--jp-surface);border:1px solid var(--jp-line)}
+.card.q{border-left:3px solid var(--jp-amber)}
+.card.small{gap:8px;padding:16px 18px}
+.seen{font-size:13px;color:var(--jp-ink-2)}
+.seen a{color:var(--jp-brand);font-weight:500;text-decoration:none}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-status-new-bg);color:var(--jp-status-new);font-size:13px;font-weight:500}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--jp-amber-text)}
+.flag svg{width:14px;height:14px;fill:var(--jp-amber)}
+.input{height:36px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-surface);font-size:14px}
+/* DataTable */
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--jp-surface)}
+.tablewrap{border:1px solid var(--jp-line);border-radius:var(--jp-radius-card);overflow:hidden;background:var(--jp-surface)}
+th{height:var(--jp-row);text-align:left;font-size:13px;font-weight:500;color:var(--jp-ink-2);padding:0 14px;border-bottom:1px solid var(--jp-line);background:var(--jp-surface)}
+td{height:var(--jp-row);padding:6px 14px;border-bottom:1px solid var(--jp-line-soft);line-height:1.35;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr.sel td{background:var(--jp-brand-tint)}
+td.act,td:nth-child(6){white-space:nowrap}
+td{height:56px}
+.sm2{height:32px;padding:0 12px;font-size:13px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td b{font-weight:600}
+/* Drawer: 520px from the right, overlay shadow */
+.drawer{position:absolute;top:0;right:0;bottom:0;width:var(--jp-drawer);background:var(--jp-surface);border-left:1px solid var(--jp-line);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:16px}
+.drawer h2{margin:0;font-size:20px;font-weight:600}
+.drawer .x{position:absolute;top:18px;right:20px;font-size:20px;color:var(--jp-ink-2)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field .k{font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.field .v{font-size:14px;line-height:1.45}
+.field .v.big{font-size:16px;font-weight:600}
+.box{padding:12px 14px;border-radius:var(--jp-radius-control);background:var(--jp-ground);border:1px solid var(--jp-line)}
+.actions{margin-top:auto;display:flex;gap:8px;padding-top:16px;border-top:1px solid var(--jp-line-soft)}
+.note{font-size:13px;color:var(--jp-ink-2);line-height:1.45}
+/* Banner */
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-radius:var(--jp-radius-card);font-size:14px}
+.banner.danger{background:var(--jp-danger-bg);border:1px solid var(--jp-danger-border)}
+.banner.amber{background:var(--jp-amber-bg);border:1px solid var(--jp-amber-border);color:var(--jp-amber-text)}
+/* Toast */
+.toast{position:absolute;right:24px;bottom:24px;background:var(--jp-ink);color:#fff;font-size:14px;padding:12px 16px;border-radius:var(--jp-radius-card)}
+/* ConfirmDialog */
+.overlay{position:absolute;inset:0;background:rgba(23,32,27,.35);display:flex;align-items:center;justify-content:center}
+.dialog{width:480px;background:var(--jp-surface);border-radius:var(--jp-radius-card);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:14px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog ul{margin:0;padding-left:20px;font-size:14px;line-height:1.6}
+.dialog .row{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+/* EmptyState */
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 24px;border:1px dashed var(--jp-line-strong);border-radius:var(--jp-radius-card);background:var(--jp-surface);text-align:center}
+.empty p{margin:0;font-size:14px;color:var(--jp-ink-2);max-width:420px;line-height:1.5}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--jp-ink-2)}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--jp-status-queued)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+</style>
 </head>
 <body>
-<x-dc>
-<helmet>
-<style>
-body{margin:0}
-</style>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
-</helmet>
-<div style="width:1440px;height:900px;box-sizing:border-box;background:#F4F6F3;color:#17201B;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+<!--
+  Questions screen, v0. Tabs: Waiting | Wordings | Answered.
+  Frames: 1 Waiting (cards now show "seen N times, on N pages")
+          2 Wordings tab, inline Approve/Reject
+          3 Wordings tab + ConfirmDialog for a protected wording
+          4 After Approve: Toast + "Re-indexing" status line
+          5 Engine error: Banner
+          6 Empty state
+-->
 
-  <div style="height:56px;flex:0 0 56px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:#FFFFFF;border-bottom:1px solid #D9E0DB">
-    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:500">JobPilot</span>
-    <span style="display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:6px;background:#E8EFFD;color:#1D4ED8;font-size:13px;font-weight:600;letter-spacing:0.02em">DRY RUN</span>
-    <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4A5650"><span style="width:8px;height:8px;border-radius:50%;background:#15803D"></span>Running</span>
-    <span style="flex:1"></span>
-    <span style="font-size:13px;color:#4A5650">Quota 38 / 250</span>
-    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#B42318;color:#FFFFFF;font-size:12px;font-weight:600">4</span>
-    <span style="display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid #C9D3CD;border-radius:6px;font-size:13px;background:#FFFFFF">Pause</span>
-    <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:6px;background:#B42318;color:#FFFFFF;font-size:13px;font-weight:600">STOP</span>
-  </div>
-
-  <div style="flex:1;display:flex;min-height:0">
-    <nav style="width:220px;flex:0 0 220px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9E0DB;padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px">
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Home</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px">Review batch <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#1D4ED8;color:#FFFFFF;font-size:12px;font-weight:600">9</span></div>
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Applications</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:6px;background:#E3F1EA;color:#1F6B4F;font-weight:600">Questions <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#B45309;color:#FFFFFF;font-size:12px;font-weight:600">3</span></div>
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Emails</div>
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Profile</div>
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Settings</div>
-      <div style="display:flex;align-items:center;height:36px;padding:0 10px;border-radius:6px">Activity log</div>
-      <span style="flex:1"></span>
-      <div style="font-size:13px;color:#4A5650;padding:0 10px;line-height:1.6">Sun, Nov 4<br>Runs 9 AM to 11 PM<br>Version 1.0</div>
+<!-- ============ Frame 1: Waiting ============ -->
+<div class="label"><b>1 · Waiting tab.</b> Unknown question cards now show how often and where the question was seen (links open the page it came from).</div>
+<div class="frame" style="height:900px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">7</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
     </nav>
-
-    <main style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:22px 28px;box-sizing:border-box;overflow:hidden">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px;line-height:1.15">Questions</h1>
-          <p style="margin:0;font-size:14px;color:#4A5650">3 waiting · blocking 5 jobs</p>
-        </div>
-        <div style="display:flex;gap:6px;font-size:14px">
-          <span style="padding:8px 14px;border-radius:6px;background:#FFFFFF;border:1px solid #1F6B4F;color:#1F6B4F;font-weight:600">Waiting (3)</span>
-          <span style="padding:8px 14px;border-radius:6px;background:#FFFFFF;border:1px solid #D9E0DB">Answered (41)</span>
-        </div>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">3 waiting · 4 new wordings to check</p></div>
+        <div class="tabs"><span class="tab on">Waiting (3)</span><span class="tab">Wordings (4)</span><span class="tab">Answered (41)</span></div>
       </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;min-height:0">
-
-        <div style="display:flex;flex-direction:column;gap:12px;padding:20px 22px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB;border-left:3px solid #B45309">
-          <span style="font-size:13px;color:#4A5650">Salary and pay · asked by 3 jobs: Acme PH (Makati), Appify (Taguig), +1</span>
+      <div class="grid2">
+        <div class="card q">
+          <span class="sm">Salary and pay</span>
           <span style="font-size:18px;font-weight:600;line-height:1.35">What is your expected monthly salary?</span>
-          <div style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:6px;background:#F4F6F3;border:1px dashed #C9D3CD">
-            <span style="font-size:12px;color:#4A5650;font-weight:500">AI suggestion</span>
+          <span class="seen">Seen 3 times · on 3 pages: <a href="#">acme.com/careers/apply</a>, <a href="#">appify.ph/apply</a>, <a href="#">+1 more</a></span>
+          <div class="box" style="border-style:dashed;display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:12px;font-weight:500;color:var(--jp-ink-2)">AI suggestion</span>
             <span style="font-size:14px">PHP 20,000–25,000 for Metro Manila internships</span>
-            <span style="display:inline-flex;align-self:flex-start;height:28px;align-items:center;padding:0 10px;border-radius:6px;border:1px solid #C9D3CD;background:#FFFFFF;font-size:13px;font-weight:500">Use this</span>
+            <span class="btn" style="align-self:flex-start;height:28px;padding:0 10px;font-size:13px">Use this</span>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <span style="font-size:13px;font-weight:600">Location scope</span>
-            <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;align-items:center;font-size:14px">
-              <span style="height:36px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF">A specific city · Metro Manila</span>
-              <span style="height:36px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-variant-numeric:tabular-nums">PHP 18,000</span>
-              <span style="height:36px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF">Remote, abroad</span>
-              <span style="height:36px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid #C9D3CD;border-radius:6px;background:#FFFFFF;font-variant-numeric:tabular-nums">USD 600</span>
+            <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px">
+              <span class="input">A specific city · Metro Manila</span><span class="input">PHP 18,000</span>
+              <span class="input">Remote, abroad</span><span class="input">USD 600</span>
             </div>
-            <span style="font-size:13px;color:#1F6B4F;font-weight:500">+ Add another location answer</span>
+            <span style="font-size:13px;color:var(--jp-brand);font-weight:500">+ Add another location answer</span>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:12px;border-top:1px solid #E3E9E5">
-            <span style="font-size:13px;color:#4A5650">Saved answers are reused on future forms.</span>
-            <span style="display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:6px;background:#1F6B4F;color:#FFFFFF;font-size:14px;font-weight:600">Save answer</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:12px;border-top:1px solid var(--jp-line-soft)">
+            <span class="sm">Saved answers are reused on future forms.</span><span class="btn primary">Save answer</span>
           </div>
         </div>
-
         <div style="display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;flex-direction:column;gap:8px;padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
-            <span style="font-size:13px;color:#4A5650">Availability and schedule · asked by 1 job: Kumu</span>
-            <span style="font-size:15px;font-weight:600">What is your available start date?</span>
-            <span style="font-size:13px;color:#8A4A07">AI guess: January 2027. Check this.</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px;padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
-            <span style="font-size:13px;color:#4A5650">Legal and eligibility · asked by 1 job: Pulse Labs</span>
-            <span style="font-size:15px;font-weight:600">Are you legally allowed to work in the Philippines?</span>
-            <span style="font-size:13px;color:#4A5650">You must answer this yourself.</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px;padding:16px 18px;border-radius:10px;background:#FFFFFF;border:1px solid #D9E0DB">
-            <span style="font-size:13px;color:#4A5650">Open-ended · asked by 1 job: Taguig Tech</span>
-            <span style="font-size:15px;font-weight:600">Why do you want to work here?</span>
-            <span style="font-size:13px;color:#4A5650">Waiting for your answer.</span>
-          </div>
+          <div class="card small"><span class="sm">Availability and schedule</span><span style="font-size:15px;font-weight:600">What is your available start date?</span><span class="seen">Seen 1 time · on 1 page: <a href="#">kumu.ph/jobs/apply</a></span><span style="font-size:13px;color:var(--jp-amber-text)">AI guess: January 2027. Check this.</span></div>
+          <div class="card small"><span class="sm">Legal and eligibility</span><span style="font-size:15px;font-weight:600">Are you legally allowed to work in the Philippines?</span><span class="seen">Seen 2 times · on 2 pages: <a href="#">pulselabs.io/apply</a>, <a href="#">+1 more</a></span><span class="sm">You must answer this yourself.</span></div>
+          <div class="card small"><span class="sm">Open-ended</span><span style="font-size:15px;font-weight:600">Why do you want to work here?</span><span class="seen">Seen 1 time · on 1 page: <a href="#">taguigtech.com/careers</a></span><span class="sm">Waiting for your answer.</span></div>
         </div>
-
       </div>
     </main>
   </div>
 </div>
-</x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
-class Component extends DCLogic {
-renderVals() {
-return {};
-}
-}
-</script>
+
+<!-- ============ Frame 2: Wordings ============ -->
+<div class="label"><b>2 · Wordings tab.</b> DataTable, most seen first. Each row has its own Approve and Reject buttons (rows are 56 px tall so 32 px buttons fit). The saved answer is shown in the row. Scores are plain numbers (no bar: not defined in the design system).</div>
+<div class="frame" style="height:900px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">7</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">4 new wordings waiting · most seen first</p></div>
+        <div class="tabs"><span class="tab">Waiting (3)</span><span class="tab on">Wordings (4)</span><span class="tab">Answered (41)</span></div>
+      </div>
+      <p class="note" style="margin:0;max-width:600px">A form asked a saved question in new words. Nothing is saved until you approve it, because a wrong match would become a permanent 1.0 match.</p>
+      <div class="tablewrap"><table><colgroup><col style="width:22%"><col style="width:21%"><col style="width:17%"><col style="width:7%"><col style="width:6%"><col style="width:12%"><col style="width:15%"></colgroup><thead><tr><th>New wording</th><th>Matches saved question</th><th>Saved answer</th><th class="num">Score</th><th class="num">Seen</th><th>Kind</th><th></th></tr></thead><tbody><tr class="sel"><td><b>How much pay do you want?</b><br><span class="seen"><a href="#">acme.com/careers/apply +2</a></span></td><td>What is your expected monthly salary?</td><td>PHP 18,000 (Metro Manila) · USD 600 (remote, abroad)</td><td class="num">0.91</td><td class="num">4</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>When could you begin?</b><br><span class="seen"><a href="#">appify.ph/apply +1</a></span></td><td>When can you start?</td><td>January 2027</td><td class="num">0.91</td><td class="num">3</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>Are you authorised to work in the country?</b><br><span class="seen"><a href="#">pulselabs.io/apply +1</a></span></td><td>Are you legally allowed to work in the Philippines?</td><td><span style="color:var(--jp-ink-2)">Hidden (protected)</span></td><td class="num">0.88</td><td class="num">2</td><td><span class="chip">protected</span> <span class="flag" style="margin-left:6px" title="Matches a protected answer. Check the two questions mean the same thing."><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>Tell us what makes you a good fit</b><br><span class="seen"><a href="#">taguigtech.com/careers</a></span></td><td>Why should we hire you?</td><td>(open: written fresh each time)</td><td class="num">0.87</td><td class="num">1</td><td><span class="chip">open</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr></tbody></table></div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 3: protected ============ -->
+<div class="label"><b>3 · Protected wording.</b> The protected row shows only its kind (never the saved answer) and an amber FlagMarker. Approve on it opens a ConfirmDialog; Cancel has default focus, the risky button is red.</div>
+<div class="frame" style="height:900px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">7</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">4 new wordings waiting · most seen first</p></div>
+        <div class="tabs"><span class="tab">Waiting (3)</span><span class="tab on">Wordings (4)</span><span class="tab">Answered (41)</span></div>
+      </div>
+      <p class="note" style="margin:0;max-width:600px">A form asked a saved question in new words. Nothing is saved until you approve it, because a wrong match would become a permanent 1.0 match.</p>
+      <div class="tablewrap"><table><colgroup><col style="width:22%"><col style="width:21%"><col style="width:17%"><col style="width:7%"><col style="width:6%"><col style="width:12%"><col style="width:15%"></colgroup><thead><tr><th>New wording</th><th>Matches saved question</th><th>Saved answer</th><th class="num">Score</th><th class="num">Seen</th><th>Kind</th><th></th></tr></thead><tbody><tr class=""><td><b>How much pay do you want?</b><br><span class="seen"><a href="#">acme.com/careers/apply +2</a></span></td><td>What is your expected monthly salary?</td><td>PHP 18,000 (Metro Manila) · USD 600 (remote, abroad)</td><td class="num">0.91</td><td class="num">4</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>When could you begin?</b><br><span class="seen"><a href="#">appify.ph/apply +1</a></span></td><td>When can you start?</td><td>January 2027</td><td class="num">0.91</td><td class="num">3</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class="sel"><td><b>Are you authorised to work in the country?</b><br><span class="seen"><a href="#">pulselabs.io/apply +1</a></span></td><td>Are you legally allowed to work in the Philippines?</td><td><span style="color:var(--jp-ink-2)">Hidden (protected)</span></td><td class="num">0.88</td><td class="num">2</td><td><span class="chip">protected</span> <span class="flag" style="margin-left:6px" title="Matches a protected answer. Check the two questions mean the same thing."><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>Tell us what makes you a good fit</b><br><span class="seen"><a href="#">taguigtech.com/careers</a></span></td><td>Why should we hire you?</td><td>(open: written fresh each time)</td><td class="num">0.87</td><td class="num">1</td><td><span class="chip">open</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr></tbody></table></div>
+    </main>
+  </div>
+  <div class="overlay">
+        <div class="dialog">
+          <h3>Approve a protected wording?</h3>
+          <p style="margin:0;font-size:14px;line-height:1.5">This answer is protected. Do you confirm both questions mean exactly the same?</p>
+          <div class="box" style="font-size:14px;line-height:1.5"><b>New:</b> Are you authorised to work in the country?<br><b>Saved:</b> Are you legally allowed to work in the Philippines?</div>
+          <p style="margin:0;font-size:14px">If you confirm:</p>
+          <ul>
+            <li>The new wording is added to <b>answers.json</b> (a backup is made first).</li>
+            <li>It will be answered with your saved protected answer, word for word.</li>
+            <li>The engine re-indexes the answer bank.</li>
+          </ul>
+          <div class="row"><span class="btn focus">Cancel</span><span class="btn danger">Yes, they mean the same</span></div>
+        </div>
+      </div>
+</div>
+
+<!-- ============ Frame 4: after approve ============ -->
+<div class="label"><b>4 · After Approve.</b> The row leaves the table, a Toast confirms, and a status line shows the re-index until it finishes (then it disappears).</div>
+<div class="frame" style="height:520px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">6</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">3 new wordings waiting · most seen first</p></div>
+        <div class="tabs"><span class="tab">Waiting (3)</span><span class="tab on">Wordings (3)</span><span class="tab">Answered (42)</span></div>
+      </div>
+      <span class="status"><i></i>Re-indexing the answer bank…</span>
+      <div class="tablewrap"><table><colgroup><col style="width:22%"><col style="width:21%"><col style="width:17%"><col style="width:7%"><col style="width:6%"><col style="width:12%"><col style="width:15%"></colgroup><thead><tr><th>New wording</th><th>Matches saved question</th><th>Saved answer</th><th class="num">Score</th><th class="num">Seen</th><th>Kind</th><th></th></tr></thead><tbody><tr class=""><td><b>When could you begin?</b><br><span class="seen"><a href="#">appify.ph/apply +1</a></span></td><td>When can you start?</td><td>January 2027</td><td class="num">0.91</td><td class="num">3</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>Are you authorised to work in the country?</b><br><span class="seen"><a href="#">pulselabs.io/apply +1</a></span></td><td>Are you legally allowed to work in the Philippines?</td><td><span style="color:var(--jp-ink-2)">Hidden (protected)</span></td><td class="num">0.88</td><td class="num">2</td><td><span class="chip">protected</span> <span class="flag" style="margin-left:6px" title="Matches a protected answer. Check the two questions mean the same thing."><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr><tr class=""><td><b>Tell us what makes you a good fit</b><br><span class="seen"><a href="#">taguigtech.com/careers</a></span></td><td>Why should we hire you?</td><td>(open: written fresh each time)</td><td class="num">0.87</td><td class="num">1</td><td><span class="chip">open</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr></tbody></table></div>
+      <div class="toast">Added to answers.json (backup made)</div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 5: error ============ -->
+<div class="label"><b>5 · Engine error.</b> A Banner with the engine's message in plain words and exactly one fix button. It stays until fixed.</div>
+<div class="frame" style="height:420px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">7</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">4 new wordings waiting · most seen first</p></div>
+        <div class="tabs"><span class="tab">Waiting (3)</span><span class="tab on">Wordings (4)</span><span class="tab">Answered (41)</span></div>
+      </div>
+      <div class="banner danger"><span><b style="font-weight:600">Couldn't approve "How much pay do you want?".</b> The saved question "What is your expected monthly salary?" is no longer in answers.json.</span><span class="btn">Reload answers</span></div>
+      <div class="tablewrap"><table><colgroup><col style="width:22%"><col style="width:21%"><col style="width:17%"><col style="width:7%"><col style="width:6%"><col style="width:12%"><col style="width:15%"></colgroup><thead><tr><th>New wording</th><th>Matches saved question</th><th>Saved answer</th><th class="num">Score</th><th class="num">Seen</th><th>Kind</th><th></th></tr></thead><tbody><tr class=""><td><b>How much pay do you want?</b><br><span class="seen"><a href="#">acme.com/careers/apply +2</a></span></td><td>What is your expected monthly salary?</td><td>PHP 18,000 (Metro Manila) · USD 600 (remote, abroad)</td><td class="num">0.91</td><td class="num">4</td><td><span class="chip">fixed</span></td><td class="act"><span class="btn primary sm2">Approve</span> <span class="btn sm2">Reject</span></td></tr></tbody></table></div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 6: empty ============ -->
+<div class="label"><b>6 · Empty state.</b> Dashed border, one sentence, one button.</div>
+<div class="frame" style="height:420px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i style="background:var(--jp-status-submitted)"></i>Running</span><span style="flex:1"></span><span class="sm">Quota 38 / 250</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Home</div><div class="nav">Review batch</div><div class="nav">Applications</div>
+      <div class="nav on">Questions <span class="count amber">3</span></div>
+      <div class="nav">Emails</div><div class="nav">Profile</div><div class="nav">Settings</div><div class="nav">Activity log</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Questions</h1><p class="sub">No new wordings waiting</p></div>
+        <div class="tabs"><span class="tab">Waiting (3)</span><span class="tab on">Wordings (0)</span><span class="tab">Answered (45)</span></div>
+      </div>
+      <div class="empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--jp-ink-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20l1.2-4.6A8.4 8.4 0 1 1 21 11.5z"/></svg>
+        <p>No new wordings waiting. When a form words a question in a new way, it appears here.</p>
+        <span class="btn">See answered questions</span>
+      </div>
+    </main>
+  </div>
+</div>
+
 </body>
 </html>
