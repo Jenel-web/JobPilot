@@ -20,6 +20,7 @@ import pytest
 from engine import ai, cli, learning, rag
 from engine.db import connect, init_db
 from engine.forms import answers as answers_module
+from engine.forms import drafting
 from engine.forms.answers import FieldAnswer, answer_field, answer_form
 from engine.forms.reader import FormField
 from engine.profile import load_answers
@@ -197,3 +198,40 @@ def test_cli_missing_fixture_is_an_error(
 ) -> None:
     seen = run_cli(monkeypatch, conn, "--fixture", "does_not_exist")
     assert seen["exit"] == 1 and "not found" in capsys.readouterr().err
+
+
+# ---- forms elaborate -----------------------------------------------------------------------
+
+
+def test_elaborate_command_shows_the_notes_and_result_and_saves_nothing(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_answer_form(connection: object, fields: list[FormField], **kwargs: object) -> list[FieldAnswer]:
+        seen.update(kwargs, types={f.type for f in fields})
+        note = "saved 'Yes' elaborated from your notes (EconLens PH): check it"
+        return [FieldAnswer(f.label, "Yes. I used Docker.", "bank", True, note, kind="fixed", matched_question="Q") for f in fields]
+
+    monkeypatch.setattr(cli, "connect", lambda: conn)
+    monkeypatch.setattr(answers_module, "answer_form", fake_answer_form)
+    monkeypatch.setattr(drafting, "gather_facts", lambda *a, **k: [rag.Hit(1, "project", "EconLens PH", "Docker.", 0.8)])
+    monkeypatch.chdir(ROOT)
+    assert cli.main(["forms", "elaborate", "--fixture", "sample_form", "--as-text"]) == 0
+    out = capsys.readouterr().out
+    assert seen["record"] is False and seen["types"] <= {"text", "textarea", "email", "tel", "file", "url", "number", "date"}
+    assert "ELABORATED" in out and "[used]" in out and "Yes. I used Docker." in out
+
+
+def test_elaborate_question_option_skips_the_ai_for_a_logistics_question(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "connect", lambda: conn)
+    monkeypatch.setattr(drafting, "gather_facts", lambda *a, **k: [])
+
+    def boom(*a: object, **k: object) -> None:
+        raise AssertionError("the AI must not be called for a logistics question")
+
+    monkeypatch.setattr(ai, "ask_ai", boom)
+    assert cli.main(["forms", "elaborate", "--question", "Are you open to a hybrid setup?"]) == 0
+    assert "NOT elaborated" in capsys.readouterr().out

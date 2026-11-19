@@ -58,6 +58,8 @@ All commands
     python -m engine.cli forms read       list the fields of the page open in the bot's browser (read-only)
     python -m engine.cli forms capture N   save the open page as fixtures/forms/N.html (personal data removed)
     python -m engine.cli forms answer --fixture F   read a saved page, print the engine's answer per field (types nothing; add --record to save unknowns)
+    python -m engine.cli forms elaborate --question "Do you know Docker?" [--saved Yes] [--min-score 0.7]   try one question, no page needed
+    python -m engine.cli forms elaborate --fixture F [--as-text]   show which short yes/no answers get elaborated, the notes used (with scores) and the result
     python -m engine.cli resume pick --post FILE   pick resume A or B for a saved job post (a .txt file)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
@@ -108,6 +110,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     answering = forms.add_parser("answer", help="read a saved page and show the answer engine's decision per field")
     answering.add_argument("--fixture", required=True, help="saved page: a path, or a name in fixtures/forms/")
     answering.add_argument("--record", action="store_true", help="also save unknown questions and suggested wordings")
+    elaborating = forms.add_parser("elaborate", help="show how short saved yes/no answers are elaborated on a saved page")
+    elaborating.add_argument("--fixture", help="saved page: a path, or a name in fixtures/forms/")
+    elaborating.add_argument("--question", help="instead of a page: type ONE question (as a free-text box)")
+    elaborating.add_argument("--min-score", type=float, help="try another notes cutoff for this run (default: ELABORATE_MIN_SCORE)")
+    elaborating.add_argument("--saved", default="Yes", help="with --question: the saved answer to elaborate (default Yes)")
+    elaborating.add_argument(
+        "--as-text", action="store_true", help="treat yes/no radios, dropdowns and checkboxes as text boxes (a what-if)"
+    )
     questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
         dest="action", required=True
     )
@@ -139,6 +149,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _capture_form(conn, args.name)
             if args.action == "answer":
                 return _answer_fixture(conn, args.fixture, args.record)
+            if args.action == "elaborate":
+                if args.min_score is not None:
+                    from engine.forms import drafting
+
+                    drafting.ELABORATE_MIN_SCORE = args.min_score  # this run only
+                if args.question:
+                    return _elaborate_question(conn, args.question, args.saved)
+                if not args.fixture:
+                    print("Error: give --fixture NAME or --question TEXT", file=sys.stderr)
+                    return 1
+                return _elaborate_fixture(conn, args.fixture, args.as_text)
             return _read_forms(conn, args.json)
         elif args.command == "profile":
             print(json.dumps(profile_summary(conn), indent=2, ensure_ascii=False))
@@ -379,6 +400,99 @@ def _answer_fixture(conn, fixture: str, record: bool = False) -> int:  # type: i
     print(line.format(*("-" * w for w in widths)))
     for row in rows:
         print(line.format(*row))
+    return 0
+
+
+def _elaborate_question(conn, question: str, saved: str) -> int:  # type: ignore[no-untyped-def]
+    """Try ONE question as a free-text box with a given saved answer: the checks, the notes (with scores) and the result.
+
+    It skips the saved-question search: you say what the saved answer is. Nothing is typed or saved.
+    """
+    from engine.forms import drafting
+    from engine.forms.answers import is_experience_question, is_sensitive
+    from engine.forms.reader import FormField
+
+    field = FormField(label=question, type="textarea")
+    stance = drafting.short_yes_no(saved)
+    checks = [
+        ("saved answer is a short yes/no (3 words or fewer)", stance is not None),
+        ("question is about experience or knowledge", is_experience_question(question)),
+        ("question is not sensitive", not is_sensitive(question)),
+    ]
+    for text, ok in checks:
+        print(f"  [{'ok' if ok else 'NO'}] {text}")
+    try:
+        notes = drafting.gather_facts(conn, question)
+    except Exception as exc:  # a missing index must not hide the checks
+        notes = []
+        print(f"  notes unavailable: {exc}")
+    for h in notes:
+        used = "used" if h.score >= drafting.ELABORATE_MIN_SCORE else "below cutoff"
+        print(f"  note {h.score:.2f} [{used}] {h.source}:{h.ref}  {_shorten(' '.join(h.text.split()), 90)}")
+    if not all(ok for _, ok in checks):
+        print(f"\nResult: NOT elaborated. The engine would use the plain saved answer: {saved!r}")
+        return 0
+    result = drafting.elaborate_short(conn, field, saved)
+    if result.source == "rules":
+        print(f"\nResult: NOT elaborated ({result.note}). Plain saved answer: {saved!r}")
+    else:
+        print(f"\nResult (ELABORATED, would be flagged): {result.text}\n  used: {result.source}  {result.note}")
+    return 0
+
+
+def _elaborate_fixture(conn, fixture: str, as_text: bool = False) -> int:  # type: ignore[no-untyped-def]
+    """Show, per field of a saved page, whether a short saved yes/no is elaborated, and why. Types nothing, saves nothing.
+
+    For every field whose saved answer is a short yes/no it prints the notes the search found (with scores; those under
+    the cutoff are not used) and what the engine would put in the box. ``as_text`` pretends yes/no radios, dropdowns
+    and checkboxes are free-text boxes, so you can try the feature on a form that has none.
+    """
+    from pathlib import Path
+
+    from engine.forms import drafting
+    from engine.forms.answers import answer_form
+    from engine.forms.reader import read_fixture
+    from engine.settings import ROOT
+
+    path = Path(fixture)
+    if not path.is_absolute() and not path.exists():
+        path = ROOT / "fixtures" / "forms" / (fixture if fixture.endswith(".html") else f"{fixture}.html")
+    if not path.is_file():
+        print(f"Error: fixture not found: {path}", file=sys.stderr)
+        return 1
+    path = path.resolve()
+    try:
+        fields = read_fixture(path)
+        if as_text:
+            fields = [
+                f.model_copy(update={"type": "textarea", "options": []}) if f.type in ("radio", "select", "checkbox") else f
+                for f in fields
+            ]
+        answers = answer_form(conn, fields, page_url=path.as_uri(), record=False)
+    except (OSError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    shown = 0
+    for field, a in zip(fields, answers):
+        elaborated = a.note.startswith("saved ") and "elaborated from your notes" in a.note
+        if not (elaborated or a.note.startswith("not elaborated")):
+            continue
+        shown += 1
+        print(f"\n[{shown}] {a.label}\n    matched saved question: {a.matched_question}  (score {a.confidence:.2f})")
+        try:
+            notes = drafting.gather_facts(conn, field.label)
+        except Exception as exc:  # a missing index must not hide the result
+            notes = []
+            print(f"    notes: unavailable ({exc})")
+        for h in notes:
+            used = "used" if h.score >= drafting.ELABORATE_MIN_SCORE else "below cutoff"
+            print(f"    note {h.score:.2f} [{used}] {h.source}:{h.ref}  {_shorten(' '.join(h.text.split()), 90)}")
+        print(f"    result ({'ELABORATED, flagged' if elaborated else 'plain saved answer'}): {a.value}\n    why: {a.note}")
+    if not shown:
+        print(f"{path.name}: no field has a short saved yes/no answer in a text box." + ("" if as_text else " Try --as-text."))
+    else:
+        print(f"\n{path.name}: {shown} field(s) considered. Preview only: nothing typed, nothing saved. Cutoff {drafting.ELABORATE_MIN_SCORE}.")
     return 0
 
 

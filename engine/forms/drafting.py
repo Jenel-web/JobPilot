@@ -800,3 +800,90 @@ def elaborate_relocation(
         return DraftResult(plain, 1.0, "rules", f"{problem}: plain wording used")
     warnings = _STOCK.search(text)
     return DraftResult(text, float(reply["confidence"]), "preferences; about_me", f"stock phrase {warnings.group(0)!r}" if warnings else "")
+
+
+# ---- short saved yes/no answers in a text box ---------------------------------------------------------------
+#
+# A saved answer of "Yes" is fine for a radio, but a free-text box ("Do you know Docker? Please explain") wants a
+# reason. The YES or NO stays exactly as saved; the model only adds 1-2 sentences taken from your notes. Anything
+# doubtful falls back to the saved text, which is what the engine used before elaboration existed.
+
+ELABORATE_MAX_WORDS = 3  # a saved answer longer than this is a real answer, not a bare yes/no
+ELABORATE_MIN_SCORE = 0.65  # a note must be at least this close to the question to be used (your choice, Nov 19)
+ELABORATE_SENTENCES = 2
+_YES_NO = re.compile(r"\s*(yes|no)\b", re.I)
+
+
+def short_yes_no(saved: str) -> str | None:
+    """``"yes"`` or ``"no"`` if the saved answer is a bare yes/no of at most 3 words ("Yes", "No, not yet"); else None."""
+    words = saved.split()
+    match = _YES_NO.match(saved)
+    if not match or not 0 < len(words) <= ELABORATE_MAX_WORDS:
+        return None
+    return match.group(1).lower()
+
+
+def _elaboration_problem(text: str, confidence: object, stance: str, allowed: str) -> str:
+    """Why a reply cannot be used ("" if it is fine)."""
+    if not text or not isinstance(confidence, (int, float)) or confidence <= 0:
+        return "the AI gave no answer"
+    if rag.scrub(text) != text:
+        return "the AI included an email, phone or ID number"
+    if _AI_TALK.search(text):
+        return "the AI answered like an assistant"
+    start = _YES_NO.match(text)
+    if not start or start.group(1).lower() != stance:
+        return f"the reply does not start with the saved {stance!r}"
+    bad = _ungrounded_number(text, allowed) or _ungrounded_name(text, allowed)
+    if bad:
+        return f"{bad!r} is not in your notes"
+    return ""
+
+
+def elaborate_short(
+    conn: sqlite3.Connection, field: FormField, saved: str, *, settings: Settings | None = None
+) -> DraftResult:
+    """Add 1-2 sentences of real reasons to a short saved yes/no, for a free-text box. Never rejects.
+
+    The result's ``text`` is the elaboration when it is safe; otherwise it is ``saved`` unchanged and ``note``
+    says why. ``source`` is ``"rules"`` for the fallback, else the notes used.
+
+    Raises:
+        DraftError: the field is not a text box, the question is sensitive, or ``saved`` is not a short yes/no.
+    """
+    _refuse_if_sensitive(field.label)
+    if field.type not in DRAFTABLE_TYPES:
+        raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
+    stance = short_yes_no(saved)
+    if stance is None:
+        raise DraftError(f"Only a short yes/no is elaborated, not {saved!r}")
+
+    def fallback(why: str) -> DraftResult:
+        return DraftResult(saved, 1.0, "rules", f"{why}: saved answer used")
+
+    try:
+        facts = [h for h in gather_facts(conn, field.label, settings) if h.score >= ELABORATE_MIN_SCORE]
+    except (rag.RagError, ai.AIError, sqlite3.Error) as exc:  # elaboration is optional: never worse than the saved answer
+        return fallback(f"notes unavailable ({exc})")
+    if not facts:
+        return fallback("no notes close enough to this question")
+    _, chars = _limits_for(field, reflective=True)
+    prompt = load_prompt(
+        "ELABORATE_SHORT",
+        saved=" ".join(saved.split()).replace('"', "'"),
+        question=" ".join(field.label.split()).replace('"', "'"),
+        facts=format_facts(facts),
+        max_sentences=str(ELABORATE_SENTENCES),
+        max_chars=chars,
+    )
+    try:
+        reply = ai.ask_ai("reflect_text", prompt, settings=settings)
+    except (ai.AIError, NotImplementedError) as exc:
+        return fallback(f"AI unavailable ({exc})")
+    text, _ = _fit_to_box(" ".join(str(reply.get("answer", "")).split()), int(chars))
+    problem = _elaboration_problem(text, reply.get("confidence", 0), stance, " ".join([field.label, saved, *(h.text for h in facts)]))
+    if problem:
+        return fallback(problem)
+    used = sorted({_project_name(h.ref) if h.source == "project" else h.ref for h in facts})
+    warning = _STOCK.search(text)
+    return DraftResult(text, float(reply["confidence"]), "; ".join(used), f"stock phrase {warning.group(0)!r}" if warning else "")

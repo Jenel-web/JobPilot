@@ -507,6 +507,8 @@ def answer_field(
             if is_company_question(field.label):
                 return _saved_open(field, row, score, "company question: saved text used; the AI needs the job post to adapt it (Phase 4)")
             return _rewritten_answer(conn, field, row, score, settings, earlier)
+        if wants_elaboration(field, row["kind"], row["answer"]):
+            return _elaborated_answer(conn, field, row, score, settings)
         return _matched_answer(field, row, score)
 
     # No close saved question (or no saved row for this job's location).
@@ -572,6 +574,51 @@ def _rewritten_answer(
         return FieldAnswer(field.label, result.text, "bank", True, note, **common)
     note = f"AI rewrite not used ({result.note}): saved text used"
     return FieldAnswer(field.label, row["answer"], "bank", True, note, **common)
+
+
+EXPERIENCE_PATTERN = re.compile(
+    r"\b(?:familiar\w*|experienc\w*|knowledg\w*|proficien\w*|skilled|exposure|hands[- ]on|understand\w*|know)\b"
+    r"|\bworked (?:with|on)\b|\bhave you (?:ever )?(?:used|built|developed|worked)\b"
+)
+
+
+def is_experience_question(label: str) -> bool:
+    """True if the question asks about your knowledge or experience ("Do you have experience with Docker?").
+
+    Logistics and willingness questions ("Are you open to hybrid?", "Do you have your own laptop?") are not:
+    their plain Yes/No is already the right answer, and project notes would only add noise.
+    """
+    return bool(EXPERIENCE_PATTERN.search(_words(label)))
+
+
+def wants_elaboration(field: FormField, kind: str, saved: str) -> bool:
+    """True for a ``fixed`` bare yes/no (3 words or fewer) to an experience/knowledge question, in a free-text box.
+
+    Radios and dropdowns get the plain answer; ``protected`` and ``open`` answers and sensitive questions
+    (work authorization, GPA, "have you ever"...) are never expanded.
+    """
+    return (
+        kind == "fixed"
+        and field.type in drafting.DRAFTABLE_TYPES
+        and not is_sensitive(field.label)
+        and is_experience_question(field.label)
+        and drafting.short_yes_no(saved) is not None
+    )
+
+
+def _elaborated_answer(
+    conn: sqlite3.Connection, field: FormField, row: sqlite3.Row, score: float, settings: Settings | None
+) -> FieldAnswer:
+    """A short saved yes/no with 1-2 sentences of real reasons from your notes (flagged).
+
+    If nothing safe came back, the plain saved answer is used, unflagged, exactly as before elaboration existed.
+    """
+    result = drafting.elaborate_short(conn, field, row["answer"], settings=settings)
+    common = {"kind": row["kind"], "confidence": score, "matched_question": row["question"]}
+    if result.source == "rules":
+        return FieldAnswer(field.label, row["answer"], "bank", False, f"not elaborated ({result.note})", **common)
+    note = f"saved {row['answer']!r} elaborated from your notes ({result.source}): check it" + _warning_text(result.note)
+    return FieldAnswer(field.label, result.text, "bank", True, note, **common)
 
 
 def _pick(field: FormField, saved: str) -> str:
