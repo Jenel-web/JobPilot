@@ -212,3 +212,55 @@ def test_old_database_gets_the_new_columns() -> None:
     init_db(old)
     assert learning.record_unknown(old, "Old question?") > 0
     old.close()
+
+
+# ---- answering an unknown question (stage 4.4a) ------------------------------------------------
+
+
+def _unknown(conn: sqlite3.Connection, text: str = "Do you have a driving licence?") -> int:
+    return learning.record_unknown(conn, text, "https://x.test/a", "radio")
+
+
+def test_answer_unknown_writes_file_db_and_marks_answered(conn: sqlite3.Connection, answers_file: Path) -> None:
+    uid = _unknown(conn)
+    backup = learning.answer_unknown(conn, uid, answer="Yes", kind="fixed", answers_path=answers_file)
+    assert backup.exists() and "driving" not in backup.read_text(encoding="utf-8")  # backup = file BEFORE the change
+    assert any(e["question"] == "Do you have a driving licence?" for e in json.loads(answers_file.read_text(encoding="utf-8")))
+    row = conn.execute("SELECT * FROM unknown_questions WHERE id = ?", (uid,)).fetchone()
+    assert row["status"] == "answered" and row["answer_id"]
+    assert learning.open_unknowns(conn) == []
+
+
+def test_answer_unknown_twice_or_missing_is_refused(conn: sqlite3.Connection, answers_file: Path) -> None:
+    uid = _unknown(conn)
+    learning.answer_unknown(conn, uid, answer="Yes", kind="fixed", answers_path=answers_file)
+    with pytest.raises(learning.AlreadyDecided):
+        learning.answer_unknown(conn, uid, answer="No", kind="fixed", answers_path=answers_file)
+    with pytest.raises(learning.NotFound):
+        learning.answer_unknown(conn, 999, answer="No", kind="fixed", answers_path=answers_file)
+
+
+def test_bad_answer_leaves_question_open_and_file_untouched(conn: sqlite3.Connection, answers_file: Path) -> None:
+    uid = _unknown(conn)
+    before = answers_file.read_text(encoding="utf-8")
+    with pytest.raises(learning.LearningError):
+        learning.answer_unknown(conn, uid, answer="Yes", kind="bogus", answers_path=answers_file)
+    assert answers_file.read_text(encoding="utf-8") == before
+    assert len(learning.open_unknowns(conn)) == 1
+
+
+def test_error_kinds_are_distinguishable(conn: sqlite3.Connection, answers_file: Path) -> None:
+    with pytest.raises(learning.NotFound):
+        learning.reject_wording(conn, 999)
+    learning.suggest_wording(conn, "Any convictions?", CRIME, 0.9)
+    with pytest.raises(learning.ProtectedNotConfirmed):
+        learning.approve_wording(conn, 1, answers_path=answers_file)
+
+
+def test_reindex_after_change_ok_and_warning(conn: sqlite3.Connection, answers_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from engine.settings import Settings
+
+    assert learning.reindex_after_change(conn, Settings(run_mode="mock"), answers_file) is None
+    monkeypatch.setattr(rag, "reindex", lambda *a, **k: (_ for _ in ()).throw(rag.RagError("Ollama is off")))
+    warning = learning.reindex_after_change(conn, Settings(run_mode="mock"), answers_file)
+    assert warning is not None and "Ollama is off" in warning and "rag reindex" in warning
