@@ -1,8 +1,8 @@
 """Throwaway viewer: what did "Fill this page" save? Read-only. Delete when done (don't commit it).
 
 Usage:
-    python show_fills.py          # the last 5 fills, the open unknown questions, the last 12 log rows
-    python show_fills.py 12       # the last 12 fills
+    python -m scripts.show_fills          # the last 5 fills, the open unknown questions, the last 12 log rows
+    python -m scripts.show_fills 12       # the last 12 fills
 """
 
 import json

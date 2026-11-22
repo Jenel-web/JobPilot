@@ -1,7 +1,7 @@
 """Throwaway helper: list the tabs open in the bot's browser, so you know what to type after --tab.
 Prints only addresses and titles, never page text. Delete when done (don't commit it).
 
-Usage:  python list_tabs.py
+Usage:  python -m scripts.list_tabs
 """
 
 from playwright.sync_api import sync_playwright
