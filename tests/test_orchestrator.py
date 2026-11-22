@@ -17,7 +17,7 @@ import pytest
 from playwright.sync_api import Browser, Page, Route, sync_playwright
 from tests.test_filler import bad_clicks, install_recorder
 
-from engine import matcher, safety
+from engine import matcher, rag, safety
 from engine.ai import ResumePick
 from engine.db import connect, init_db
 from engine.forms import answers as answers_module
@@ -268,3 +268,91 @@ def test_the_command_cannot_run_live() -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main(["forms", "fill", "--mode", "live"])
     assert exc.value.code == 2  # argparse: not one of the allowed choices
+
+
+# ---- the real answer engine (no spy): unknown questions are really saved, and a rerun does not duplicate them ------
+
+
+@pytest.fixture
+def real_engine(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> Spy:
+    """The REAL ``answer_form`` and finder logic. Only the picker is faked and the AI is offline (every draft fails).
+
+    The search index is built with the mock embedder from one saved answer (an empty index is an error, as in real
+    use). Mock vectors cannot judge meaning, so the questions on the test pages stay unmatched: they are unknown.
+
+    With the AI offline, a new question can never be drafted, so it ends on the unknown questions list: that is
+    what these tests check. (Mock mode, an in-memory database and the mock embedder: no network.)
+    """
+    from engine import ai
+    from engine.ai import AIError
+
+    s = Spy()
+
+    def offline(task: str, prompt: str, **kwargs: Any) -> Any:
+        raise AIError("offline in this test")
+
+    def fake_pick(conn: sqlite3.Connection, text: str, settings: Settings | None = None) -> ResumePick | None:
+        s.pick_texts.append(text)
+        return ResumePick(resume="A", reason="test pick", evidence=["x"])
+
+    conn.execute("INSERT INTO answers (question, answer, kind) VALUES ('When can you start?', '2 weeks notice', 'fixed')")
+    conn.commit()
+    rag.reindex(conn, MOCK)
+    monkeypatch.setattr(ai, "ask_ai", offline)
+    monkeypatch.setattr(matcher, "pick_resume", fake_pick)
+    return s
+
+
+def _unknown_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM unknown_questions ORDER BY id").fetchall()
+
+
+def test_unknown_questions_are_really_saved_with_their_source_page(
+    conn: sqlite3.Connection, page: Page, real_engine: Spy, tmp_path: Path
+) -> None:
+    out = run(conn, page, tmp_path, post=JobPost(POST_TEXT, "opener", "Backend Intern", "http://x.test/job"))
+
+    rows = _unknown_rows(conn)
+    assert [r["question_text"] for r in rows] == ["Do you have a driver's licence?"]
+    assert rows[0]["status"] == "open" and rows[0]["times_seen"] == 1
+    assert rows[0]["page_url"] == page.url  # remembered with the page it came from
+    assert out.unknown_ids == [rows[0]["id"]]  # the orchestrator reports the rows the engine really saved
+    assert page.input_value("input[name=dl]") == ""  # and the field is left for you
+
+
+def test_filling_the_same_page_twice_does_not_duplicate_unknown_questions(
+    conn: sqlite3.Connection, page: Page, real_engine: Spy, tmp_path: Path
+) -> None:
+    first = run(conn, page, tmp_path, post=JobPost(POST_TEXT, "opener"))
+    second = run(conn, page, tmp_path, post=JobPost(POST_TEXT, "opener"))
+
+    rows = _unknown_rows(conn)
+    assert len(rows) == 1 and rows[0]["times_seen"] == 2  # one row, counted twice
+    assert first.unknown_ids == second.unknown_ids == [rows[0]["id"]]
+    assert conn.execute("SELECT count(*) FROM fills").fetchone()[0] == 2  # each fill is its own history row
+
+
+@pytest.mark.parametrize("name", ["sample_form", "angkas_workable", "indiecampers_greenhouse"])
+def test_the_whole_chain_on_each_saved_form(
+    conn: sqlite3.Connection, page: Page, real_engine: Spy, tmp_path: Path, name: str
+) -> None:
+    """Each saved form (a synthetic one, Workable, a Greenhouse iframe): fills, saves, never clicks, reruns cleanly."""
+    page.set_content((Path(__file__).resolve().parent.parent / "fixtures" / "forms" / f"{name}.html").read_text(encoding="utf-8"))
+    page.wait_for_timeout(300)
+    install_recorder(page)
+    post = JobPost(POST_TEXT, "opener", "Backend Intern", "http://x.test/job")
+
+    first = run(conn, page, tmp_path, post=post)
+    assert first.report is not None and first.report.filled > 0
+    assert first.fill_id is not None and first.resume_id == "A"
+    saved = {r["id"]: r for r in _unknown_rows(conn)}
+    assert saved and first.unknown_ids  # this form has questions the bank cannot answer, and they were saved
+    assert set(first.unknown_ids) <= set(saved)  # every id the outcome reports is a real row
+    assert all(r["page_url"] == page.url and r["status"] == "open" for r in saved.values())
+
+    second = run(conn, page, tmp_path, post=post)
+    again = _unknown_rows(conn)
+    assert len(again) == len(saved)  # a rerun adds no new rows...
+    assert second.unknown_ids == first.unknown_ids  # ...it finds the same ones
+    assert all(r["times_seen"] == 2 for r in again if r["id"] in first.unknown_ids)  # ...and counts them again
+    assert bad_clicks(page) == [], "the fill clicked something that is not a field"
