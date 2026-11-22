@@ -14,7 +14,7 @@ import json
 import sqlite3
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Kind = Literal["fixed", "open", "protected"]
 FillStatus = Literal["filled", "submitted", "abandoned"]
@@ -217,3 +217,63 @@ class AnswerDeleteOut(ChangeInfo):
     deleted_id: int
     question: str
     removed_wordings: int  # other wordings that went with it
+
+
+# ---- "Fill this page" jobs (stage 4.4e) -----------------------------------------------------------------
+
+
+class FillIn(BaseModel):
+    """Optional choices for one fill. An empty body means: the tab you are looking at, the job post found for you, the picker's resume."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    tab: str | None = Field(default=None, min_length=1, max_length=300)  # part of a tab's address, to fill that tab
+    post_text: str | None = Field(default=None, min_length=1, max_length=200_000)  # a job post you pasted ("Change")
+    resume: Literal["A", "B"] | None = None  # skips the picker
+
+
+class FillPostOut(BaseModel):
+    """The job post a fill used, so the screen can say "Used: Backend Intern (opener tab)" and offer Change."""
+
+    label: str
+    source: str
+    tab_title: str
+    tab_url: str
+
+
+class TabOut(BaseModel):
+    """One of your other open tabs, for "Which one is the job post?"."""
+
+    index: int
+    title: str
+    url: str
+
+
+class FillResultOut(BaseModel):
+    """What one fill did. Field labels and counts only, never typed values."""
+
+    url: str
+    fill_id: int | None  # the history row; None when nothing was filled (see ``messages``)
+    filled: int
+    needs_you: int
+    failed: int
+    flagged: int
+    flagged_fields: list[FlaggedField]
+    screenshot_path: str | None
+    post: FillPostOut | None
+    tabs: list[TabOut]
+    resume_id: str | None
+    resume_reason: str
+    unknown_ids: list[int]
+    messages: list[str]
+
+
+class FillJobOut(BaseModel):
+    """A fill job: ``running``, then ``done`` (with ``result``) or ``error`` (with ``error``)."""
+
+    job_id: str
+    status: Literal["running", "done", "error"]
+    started_at: str
+    finished_at: str | None
+    result: FillResultOut | None
+    error: str | None

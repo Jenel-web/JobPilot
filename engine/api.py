@@ -36,6 +36,8 @@ from fastapi.responses import JSONResponse
 from engine import db, learning
 from engine.api_deps import get_conn, get_settings
 from engine.api_models import AnswerOut, FillOut, FillStatus, Kind, UnknownOut, WordingOut
+from engine.api_fill import JobManager, bot_browser_runner, install_fill_handlers
+from engine.api_fill import router as fill_router
 from engine.api_write import install_error_handlers, router as write_router
 from engine.forms.history import list_fills
 from engine.profile import ANSWERS_PATH
@@ -154,8 +156,12 @@ def create_app(
         """The filled pages history, newest first. ``?status=filled`` shows what still needs a decision."""
         return [FillOut.from_row(r) for r in list_fills(conn, status, limit)]
 
+    app.state.fill_jobs = JobManager()  # "Fill this page" jobs, one at a time (4.4e)
+    app.state.fill_runner = bot_browser_runner  # tests swap this for a stub
     app.include_router(write_router)  # the endpoints that change things (4.4d)
+    app.include_router(fill_router)  # POST /fill, GET /fill/{job_id}
     install_error_handlers(app)
+    install_fill_handlers(app)
     return app
 
 
