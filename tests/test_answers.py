@@ -72,7 +72,6 @@ def test_short_labels_are_recognised(label: str, expected: str) -> None:
         "Referrer email",  # someone else's
         "Emergency contact phone",
         "Name of the employee who referred you",
-        "School name",
         "Company name",
         "Username",
         "Headline",
@@ -153,8 +152,15 @@ def test_fill_uses_profile_values() -> None:
 
 
 def test_missing_value_is_left_blank_and_flagged() -> None:
+    fill = fill_personal(field("Middle name"), {**VALUES, "middle_name": ""})
+    assert fill is not None and fill.value == "" and fill.flagged and "middle name" in fill.note
+
+
+def test_no_portfolio_uses_your_github_flagged_and_nothing_gives_empty() -> None:
     fill = fill_personal(field("Portfolio"), VALUES)
-    assert fill is not None and fill.value == "" and fill.flagged and "portfolio" in fill.note
+    assert fill is not None and fill.value == VALUES["github"] and fill.flagged and "GitHub" in fill.note
+    none = fill_personal(field("Portfolio"), {**VALUES, "github": ""})
+    assert none is not None and none.value == "" and none.flagged and "portfolio" in none.note
 
 
 def test_dropdown_picks_the_matching_option() -> None:

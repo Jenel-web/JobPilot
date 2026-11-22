@@ -1,0 +1,148 @@
+<!doctype html>
+<!--
+  Synthetic test page: custom dropdowns built from <div>s, modelled on careers.shopee.sg (Shopee's "shopee-select"):
+  a box you click, a hidden popup with a search box, and option <div>s. Also one ARIA combobox whose list is drawn
+  at the end of <body> (like many React libraries), a long list that only shows 3 options until you search, a
+  multi-choice list, a list holding a <button> that must never be clicked, and a broken <label for>.
+  No real site, no personal data.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Custom dropdowns</title>
+<style>
+  .item { margin: 12px; width: 420px; }
+  .jp-selector { border: 1px solid #999; padding: 6px; min-height: 18px; cursor: pointer; }
+  .jp-popper { border: 1px solid #ccc; padding: 4px; }
+  .jp-option { padding: 3px; cursor: pointer; }
+  .aria-box { border: 1px solid #999; padding: 6px; cursor: pointer; }
+  #edu-list li { padding: 3px; cursor: pointer; }
+</style>
+</head>
+<body>
+<form id="apply" onsubmit="event.preventDefault(); window.__submitted = true;">
+  <div class="item"><label for="firstName">First Name*</label><div><div><input type="text" placeholder="As in NRIC/Passport" maxlength="50"></div></div></div>
+
+  <div class="item"><label for="countryId">Contact Number*</label>
+    <div>
+      <div class="jp-select" data-display="code" data-options='["Singapore +65", "Malaysia +60", "Philippines +63", "United States +1"]'>
+        <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">Select</div></div>
+        <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="Select"></div><div class="jp-select__options"></div></div>
+      </div>
+      <input type="text" id="phone" placeholder="Contact Number">
+    </div>
+  </div>
+
+  <div class="item"><label>Current Location*</label>
+    <div class="jp-select" data-options='["Singapore", "Malaysia", "Philippines", "Vietnam"]'>
+      <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">Select</div></div>
+      <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="Select"></div><div class="jp-select__options"></div></div>
+    </div>
+  </div>
+
+  <div class="item"><label>School*</label>
+    <div class="jp-select" data-virtual="1" data-options='["Aalborg University", "Aalto University", "Aarhus University", "Ateneo de Manila University", "De La Salle University", "Polytechnic University of the Philippines", "University of the Philippines Diliman"]'>
+      <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">School</div></div>
+      <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="School"></div><div class="jp-select__options"></div></div>
+    </div>
+  </div>
+
+  <div class="item"><label>Skills</label>
+    <div class="jp-select jp-select--multiple" data-virtual="1" data-options='["JavaScript", "Java", "C++", "C", "SQL", "Python", "Go"]'>
+      <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">Select up to 3 skills</div></div>
+      <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="Select up to 3 skills"></div><div class="jp-select__options"></div></div>
+    </div>
+  </div>
+
+  <div class="item"><label>How did you know about this role?*</label>
+    <div class="jp-select" data-options='["Campus Emails", "Prosple", "Friends"]' data-button="Add another channel">
+      <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">Channel</div></div>
+      <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="Channel"></div><div class="jp-select__options"></div></div>
+    </div>
+  </div>
+
+  <div class="item"><label>Course of Study*</label>
+    <div class="jp-select" data-virtual="1" data-options='["Accounting", "Architecture", "Biology", "Computer Science", "Information Systems", "Information Technology", "Marketing"]'>
+      <div class="jp-selector" tabindex="0"><div class="jp-selector__inner placeholder">Course of Study</div></div>
+      <div class="jp-popper" style="display:none"><div class="jp-select__filter"><input type="text" placeholder="Course of Study"></div><div class="jp-select__options"></div></div>
+    </div>
+  </div>
+
+  <div class="item"><label id="edu-l">Education Level*</label>
+    <div role="combobox" aria-labelledby="edu-l" aria-controls="edu-list" aria-expanded="false" tabindex="0" class="aria-box"><span class="value">Choose one</span></div>
+  </div>
+
+  <button type="submit" id="send">Submit</button>
+</form>
+
+<ul id="edu-list" role="listbox" style="display:none">
+  <li role="option">High School</li>
+  <li role="option">Bachelor's Degree</li>
+  <li role="option">Master's Degree</li>
+</ul>
+
+<script>
+  document.querySelectorAll('.jp-select').forEach(sel => {
+    const popper = sel.querySelector('.jp-popper');
+    const inner = sel.querySelector('.jp-selector__inner');
+    const list = sel.querySelector('.jp-select__options');
+    const filter = popper.querySelector('input');
+    const all = JSON.parse(sel.dataset.options);
+    const virtual = sel.dataset.virtual === '1';
+    const multi = sel.classList.contains('jp-select--multiple');
+    const chosen = [];
+    const pick = o => {
+      if (multi) {
+        if (!chosen.includes(o)) chosen.push(o);
+        inner.textContent = chosen.join(', ');
+      } else {
+        inner.textContent = sel.dataset.display === 'code' ? o.split(' ').pop() : o;  // the phone box shows only "+63"
+        popper.style.display = 'none';
+      }
+      inner.classList.remove('placeholder');
+      sel.dataset.value = multi ? chosen.join('|') : o;
+    };
+    const render = q => {
+      list.innerHTML = '';
+      let items = all.filter(o => o.toLowerCase().includes((q || '').toLowerCase()));
+      if (virtual) items = items.slice(0, 3);  // a long list draws only a few options until you search
+      for (const o of items) {
+        const d = document.createElement('div');
+        d.className = 'jp-option';
+        d.textContent = o;
+        d.addEventListener('click', () => pick(o));
+        list.appendChild(d);
+      }
+      if (sel.dataset.button) {  // a real <button> inside the list: the filler must never click it
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'jp-option';
+        b.textContent = sel.dataset.button;
+        b.addEventListener('click', () => { window.__buttonClicked = true; });
+        list.appendChild(b);
+      }
+    };
+    sel.querySelector('.jp-selector').addEventListener('click', () => {
+      const open = popper.style.display !== 'none';
+      popper.style.display = open ? 'none' : 'block';
+      if (!open) { filter.value = ''; render(''); }
+    });
+    filter.addEventListener('input', () => render(filter.value));
+    render('');
+  });
+
+  const box = document.querySelector('.aria-box');
+  const lb = document.getElementById('edu-list');
+  box.addEventListener('click', () => {
+    const open = lb.style.display !== 'none';
+    lb.style.display = open ? 'none' : 'block';
+    box.setAttribute('aria-expanded', String(!open));
+  });
+  lb.querySelectorAll('[role=option]').forEach(o => o.addEventListener('click', () => {
+    box.querySelector('.value').textContent = o.textContent;
+    lb.style.display = 'none';
+    box.setAttribute('aria-expanded', 'false');
+  }));
+</script>
+</body>
+</html>

@@ -6,8 +6,11 @@ For every field on the page it returns a :class:`FormField`: the question
 How the label is found (first match wins):
     1. a ``<label for=...>`` or a wrapping ``<label>``
     2. ``aria-labelledby`` / ``aria-label``
-    3. the placeholder
-    4. short text just before the input ("nearby text")
+    3. the one ``<label>`` in the field's own small block (form libraries often break ``<label for>``)
+    4. the placeholder
+    5. short text just before the input ("nearby text")
+Custom dropdowns built from ``<div>``s (no ``<select>``) are found by their class names and roles and read as ONE
+``dropdown`` field with the options listed in the page (see ``CUSTOM_HELPERS_JS``).
 Radio buttons and checkboxes that belong together (one ``<fieldset>`` with a
 ``<legend>``, or the same ``name``) become ONE field whose options are the
 choices. A field with no readable label keeps an empty label: it is reported as
@@ -33,19 +36,71 @@ from engine.settings import Settings
 
 FieldType = Literal["text", "email", "tel", "url", "number", "date", "textarea", "select", "dropdown", "radio", "checkbox", "file"]
 
+# How a CUSTOM dropdown is recognised (shared with the filler, which must find the same elements again).
+# Many sites (Shopee, Element UI, Ant Design...) build dropdowns from <div>s instead of a <select>: a box you click,
+# a hidden text input, and a list of option <div>s. These helpers find them by their class names and roles.
+#   * a dropdown: an element whose class ends in "select", "dropdown" or "combobox" (or role=combobox, not an input),
+#     that holds a text input or option elements and no real <select>. Date, time and language pickers are excluded.
+#   * an option: role=option, or a class ending in "option" (or "menu-item", "list-item", "select-item"...).
+# Only the OUTERMOST match counts, so one dropdown is one field. ``CUSTOM_HELPERS_JS`` defines ``findCustoms()``.
+CUSTOM_HELPERS_JS = r"""
+  const isShown = e => { const st = getComputedStyle(e), r = e.getBoundingClientRect(); return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0; };
+  const SELECT_CLASS = /(^|[-_])(select|dropdown|combobox)$/i;
+  const NOT_SELECT = /date|time|month|year|calendar|colou?r|language|lang-/i;
+  const OPTION_CLASS = /(^|[-_])option$|(menu|list|select|dropdown)[-_]+item$/i;
+  const isOption = e => e.getAttribute('role') === 'option' || [...e.classList].some(c => OPTION_CLASS.test(c));
+  const looksCustom = e => {
+    if (['INPUT', 'SELECT', 'TEXTAREA', 'OPTION'].includes(e.tagName)) return false;
+    const cls = [...e.classList];
+    const byClass = cls.some(c => SELECT_CLASS.test(c)) && !cls.some(c => NOT_SELECT.test(c));
+    const byRole = e.getAttribute('role') === 'combobox';
+    if (!byClass && !byRole) return false;
+    if (e.querySelector('select')) return false;  // a real <select> inside: that one is read instead
+    // A box you can type into is showing (a phone widget, react-select's role=combobox input): the normal input
+    // reading handles those. A custom dropdown's own search box is hidden until it opens, or read-only.
+    if ([...e.querySelectorAll('input')].some(i => i.getAttribute('role') === 'combobox'
+        || (!['hidden', 'checkbox', 'radio'].includes(i.type) && !i.readOnly && isShown(i)))) return false;
+    return byRole || !!e.querySelector('input') || [...e.querySelectorAll('*')].some(isOption);
+  };
+  const findCustoms = () => {
+    const all = [...document.querySelectorAll('div, span, section')].filter(looksCustom);
+    return all.filter(e => !all.some(o => o !== e && o.contains(e)));
+  };
+"""
+
 # Runs inside the page. Returns raw facts about each input; Python groups and cleans them.
 # ``index`` is the element's position in this exact query, so the Phase 4 filler can find it again.
-_EXTRACT_JS = r"""
-() => {
+# A custom dropdown gets ``cindex`` instead: its position in ``findCustoms()``.
+_EXTRACT_JS = "() => {\n" + CUSTOM_HELPERS_JS + r"""
   const clean = s => (s || '').replace(/\s+/g, ' ').trim();
   const textOf = id => { const el = id && document.getElementById(id); return el ? clean(el.innerText) : ''; };
   // aria-labelledby may list a name AND descriptions ("Photo", "Choose file"): the first non-empty one is the name.
   const byIds = v => (v || '').split(' ').map(textOf).find(t => t) || '';
+  const CONTROL = 'input:not([type=hidden]), select, textarea';
+  // The ONE <label> in the small block around the field. Form libraries often break <label for> (the input has
+  // no matching id), but the label still sits in the field's own block. Two or more labels = we left the block.
+  const blockLabelOf = e => {
+    let p = e.parentElement;
+    for (let i = 0; i < 6 && p; i++, p = p.parentElement) {
+      if (['FORM', 'BODY', 'HTML', 'FIELDSET'].includes(p.tagName)) break;
+      const labels = [...p.querySelectorAll('label')].filter(l => {
+        if (l.querySelector(CONTROL)) return false;  // a label wrapping a box (one radio choice) is not the question
+        const target = l.htmlFor && document.getElementById(l.htmlFor);
+        if (target && target !== e && target.matches(CONTROL)) return false;  // it names another field
+        return !!clean(l.innerText);
+      });
+      // The first line only: some labels carry a help sentence under the question ("Resume*" + "We will read it...").
+      if (labels.length === 1) return (labels[0].innerText.split(/\n/).map(t => t.trim()).find(Boolean)) || '';
+      if (labels.length > 1) return '';
+    }
+    return '';
+  };
   const labelOf = e => {
     if (e.id) { const l = document.querySelector('label[for="' + CSS.escape(e.id) + '"]'); const t = l && clean(l.innerText); if (t) return t; }
     const w = e.closest('label'); const wt = w && clean(w.innerText); if (wt) return wt;
     const lb = byIds(e.getAttribute('aria-labelledby')); if (lb) return lb;
     const al = clean(e.getAttribute('aria-label')); if (al) return al;
+    const bl = clean(blockLabelOf(e)); if (bl) return bl;
     const ph = clean(e.getAttribute('placeholder')); if (ph) return ph;
     let p = e;
     for (let i = 0; i < 3 && p; i++, p = p.parentElement) {
@@ -64,19 +119,48 @@ _EXTRACT_JS = r"""
   const SKIP = new Set(['hidden', 'submit', 'button', 'image', 'reset', 'password', 'search']);
   const shown = e => {
     if (e.type === 'file' || e.type === 'radio' || e.type === 'checkbox') return true;  // often visually hidden
-    const st = getComputedStyle(e), r = e.getBoundingClientRect();
-    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+    return isShown(e);
   };
-  return [...document.querySelectorAll('input, textarea, select')].map((e, index) => ({
-    index, tag: e.tagName.toLowerCase(), type: (e.type || '').toLowerCase(), name: e.name || '', role: e.getAttribute('role') || '',
-    bare: !(e.id || e.name || e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.getAttribute('placeholder')),
-    label: labelOf(e), group: groupOf(e),
-    required: !!(e.required || e.getAttribute('aria-required') === 'true'),
-    options: e.tagName === 'SELECT' ? [...e.options].filter(o => o.value !== '').map(o => clean(o.text)).filter(t => t) : [],
-    autocomplete: clean(e.getAttribute('autocomplete')).toLowerCase(), placeholder: clean(e.getAttribute('placeholder')),
-    maxLength: e.maxLength > 0 ? e.maxLength : 0, pattern: e.getAttribute('pattern') || '',
-    skip: SKIP.has((e.type || '').toLowerCase()) || e.disabled || !shown(e),
-  })).filter(r => !r.skip);
+  const customs = findCustoms();
+  const inCustom = e => customs.some(c => c.contains(e));
+  const entries = [];
+  [...document.querySelectorAll('input, textarea, select')].forEach((e, index) => {
+    const type = (e.type || '').toLowerCase();
+    if (SKIP.has(type) || e.disabled || !shown(e) || inCustom(e)) return;
+    entries.push({node: e, item: {
+      index, cindex: -1, tag: e.tagName.toLowerCase(), type, name: e.name || '', role: e.getAttribute('role') || '',
+      bare: !(e.id || e.name || e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.getAttribute('placeholder')),
+      label: labelOf(e), group: groupOf(e),
+      required: !!(e.required || e.getAttribute('aria-required') === 'true') || /\*\s*$/.test(labelOf(e)),
+      options: e.tagName === 'SELECT' ? [...e.options].filter(o => o.value !== '').map(o => clean(o.text)).filter(t => t) : [],
+      autocomplete: clean(e.getAttribute('autocomplete')).toLowerCase(), placeholder: clean(e.getAttribute('placeholder')),
+      maxLength: e.maxLength > 0 ? e.maxLength : 0, pattern: e.getAttribute('pattern') || '',
+    }});
+  });
+  customs.forEach((c, cindex) => {
+    if (!isShown(c)) return;
+    const options = [];
+    for (const o of c.querySelectorAll('*')) {
+      if (!isOption(o) || o.closest('button, a, [role=button]')) continue;  // a button in a list is an action, not a choice
+      const t = clean(o.innerText || o.textContent);
+      if (t && !options.includes(t)) options.push(t);
+      if (options.length >= 1000) break;
+    }
+    const ph = clean((c.querySelector('[class*=placeholder]') || {}).innerText)
+      || clean([...c.querySelectorAll('input')].map(i => i.getAttribute('placeholder')).find(Boolean));
+    const label = labelOf(c);
+    const classes = [c, ...c.querySelectorAll('[class]')].slice(0, 40).map(x => typeof x.className === 'string' ? x.className : '').join(' ');
+    entries.push({node: c, item: {
+      index: -1, cindex, tag: 'div', type: 'dropdown', name: '', role: c.getAttribute('role') || '', bare: false,
+      label, group: '', options, placeholder: ph, autocomplete: '', maxLength: 0, pattern: '',
+      required: /\*\s*$/.test(clean(label)) || c.getAttribute('aria-required') === 'true',
+      multi: /(^|[-_\s])(multiple|multi|tags)([-_\s]|$)/i.test(classes) || c.getAttribute('aria-multiselectable') === 'true'
+        || /select up to|one or more|all that apply/i.test(ph),
+      maxChoices: parseInt(((ph + ' ' + label).match(/up to (\d+)/i) || [])[1] || '0', 10),
+    }});
+  });
+  entries.sort((a, b) => (a.node.compareDocumentPosition(b.node) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  return entries.map(x => x.item);
 }
 """
 
@@ -90,6 +174,9 @@ class FormField(BaseModel):
     options: list[str] = []  # choices for select / radio / checkbox groups
     name: str = ""  # the input's name attribute, if any
     indexes: list[int] = []  # positions of its input(s) in its frame (the filler uses these)
+    custom_index: int = -1  # a custom (<div>-built) dropdown: its position in ``findCustoms()``; -1 = not one
+    multi: bool = False  # a custom dropdown that takes several choices (e.g. "Select up to 8 skills")
+    max_choices: int = 0  # how many choices it takes, when the page says ("up to 8"); 0 = not said
     frame: str = ""  # address of the embedded frame it lives in; empty = the outer page
     frame_number: int = 0  # position of that frame in ``page.frames`` (0 = outer page). Needed because several frames can share one address (about:srcdoc)
     # Hints the page gives about the expected value (used to recognise personal fields
@@ -149,6 +236,21 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
     same_name = Counter((i["type"], i["name"]) for i in raw if i["name"])
     previous: dict[str, Any] | None = None
     for item in raw:
+        if item.get("cindex", -1) >= 0:  # a <div>-built dropdown: options were read from its option elements
+            previous = item
+            fields.append(
+                FormField(
+                    label=clean_label(item["label"]),
+                    type="dropdown",
+                    required=item["required"],
+                    options=item["options"],
+                    custom_index=item["cindex"],
+                    multi=bool(item.get("multi")),
+                    max_choices=int(item.get("maxChoices") or 0),
+                    placeholder=item.get("placeholder", ""),
+                )
+            )
+            continue
         # Custom dropdowns (react-select and similar) are two inputs: the real question
         # (role=combobox) plus a bare helper box right after it. Keep only the real one.
         helper = previous is not None and previous.get("role") == "combobox" and item.get("bare") and item["tag"] == "input"

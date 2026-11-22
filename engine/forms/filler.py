@@ -5,15 +5,17 @@ decides every value, and this module puts the values into the page.
 
 What it does, field by field (in page order):
     1. ``safety.check("fill")`` (or ``"upload"``), then a random 1-4 s pause so it types like a person.
-    2. Fills the field by its type: text, select, radio, checkbox, date, resume upload.
+    2. Fills the field by its type: text, select, radio, checkbox, date, resume upload, and custom dropdowns
+       (click the box, search when it has a search box, click the matching option, check it was taken).
     3. Writes one ``action_log`` row (the label and the outcome, never the value).
     4. A guess (``flagged``) gets a solid outline and a small tag in the page; a field it could
        not fill gets a dashed outline and a tag that says why. Known answers stay plain.
 
 What it NEVER does (CLAUDE.md rule 5):
     * click Submit, Apply, Next or any other button. It only touches inputs, selects and
-      textareas, and it checks each element is the kind it expects right before using it, because
-      the page may have changed since the reader looked at it.
+      textareas, plus the box and the options of a custom dropdown the reader found. It checks each
+      element is the kind it expects right before using it, because the page may have changed since the
+      reader looked at it. A ``<button>``, link or ``role=button`` is never clicked, even inside a dropdown.
     * navigate, retry, or move to the next step of a multi-step form. You press Fill again.
 
 How a field is found again: the reader saved ``frame`` (which embedded frame) and ``indexes``
@@ -35,11 +37,11 @@ from pathlib import Path
 from typing import Literal
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Frame, Locator, Page
+from playwright.sync_api import ElementHandle, Frame, Locator, Page
 
 from engine import safety
-from engine.forms.answers import FieldAnswer, pick_option
-from engine.forms.reader import FormField
+from engine.forms.answers import FieldAnswer, _option_key, pick_option
+from engine.forms.reader import CUSTOM_HELPERS_JS, FormField
 from engine.settings import ROOT, Settings
 
 DELAY_RANGE = (1.0, 4.0)  # seconds between actions (CLAUDE.md: random human-like delays)
@@ -47,6 +49,49 @@ ACTION_TIMEOUT_MS = 5000  # a field that does not react in 5 s is reported, not 
 _FIELDS = "input, textarea, select"  # the SAME query the reader used to number the inputs
 _NEVER_TOUCH = ("button", "submit", "image", "reset", "hidden", "password")
 _DATE_FORMATS = ("%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y", "%d %B %Y", "%d %b %Y", "%Y/%m/%d")
+OPEN_WAIT_MS = 300  # after opening a custom dropdown, before its options are read
+SEARCH_WAIT_MS = 700  # after typing into a dropdown's search box (sites filter or fetch as you type)
+MULTI_LIMIT = 8  # most choices put into a multi-choice dropdown when the page does not say ("up to 8")
+MULTI_TRIES = 20  # most values tried in one multi-choice dropdown (each one is searched for)
+
+# Custom dropdowns. The same finder as the reader (``CUSTOM_HELPERS_JS``), so ``custom_index`` points at the same box.
+_FIND_CUSTOM_JS = "(cindex) => {\n" + CUSTOM_HELPERS_JS + "\n  return findCustoms()[cindex] || null;\n}"
+_COMBO_BOX_JS = r"""
+(input) => input.closest('[class*=container], [class*=select], [class*=dropdown], [class*=combobox]') || input.parentElement
+"""
+# The options you can see right now: inside the box first, then a list the box points to (aria-controls / aria-owns),
+# then any open role=option list on the page (many libraries draw the menu at the end of <body>).
+_OPTIONS_JS = "(box) => {\n" + CUSTOM_HELPERS_JS + r"""
+  const pressable = e => e.closest('button, a, [role=button]');
+  const usable = e => isOption(e) && isShown(e) && !pressable(e) && e.getAttribute('aria-disabled') !== 'true';
+  let opts = [...box.querySelectorAll('*')].filter(usable);
+  if (!opts.length) {
+    for (const el of [box, ...box.querySelectorAll('[aria-controls], [aria-owns]')]) {
+      const id = el.getAttribute('aria-controls') || el.getAttribute('aria-owns');
+      const list = id && document.getElementById(id);
+      if (list) opts.push(...[...list.querySelectorAll('*')].filter(usable));
+    }
+  }
+  if (!opts.length) opts = [...document.querySelectorAll('[role=option]')].filter(usable);
+  return opts.filter(o => !opts.some(other => other !== o && o.contains(other)));  // the innermost option element
+}
+"""
+# What the box shows as its value: its text without the option list and the inputs.
+_SHOWN_JS = "(box) => {\n" + CUSTOM_HELPERS_JS + r"""
+  const copy = box.cloneNode(true);
+  for (const e of [...copy.querySelectorAll('*')]) if (isOption(e) || e.tagName === 'INPUT') e.remove();
+  return (copy.textContent || '').replace(/\s+/g, ' ').trim();
+}
+"""
+# The part you click to open it, and its search box (only once it is open and showing).
+_TRIGGER_JS = r"""
+(box) => box.querySelector('[role=combobox], [class*=selector], [class*=trigger], [class*=control], [tabindex]') || box
+"""
+_SEARCH_JS = r"""
+(box) => [...box.querySelectorAll('input')].find(i => !['hidden', 'checkbox', 'radio', 'file'].includes(i.type) && !i.readOnly
+  && i.getBoundingClientRect().width > 0 && getComputedStyle(i).visibility !== 'hidden') || null
+"""
+
 _YES = {"yes", "y", "true", "agree", "accept", "accepted", "checked", "ok", "1"}
 _NO = {"no", "n", "false", "unchecked", "decline", "0"}
 
@@ -277,8 +322,6 @@ class _Filler:
         name = f.label or "(no label)"
         if f.needs_you:
             return self._leave(f,"the page gave no readable question")
-        if f.type == "dropdown":
-            return self._leave(f,"custom dropdown: its options are not read yet")
         if f.type == "file":
             if a.source != "resume":
                 return self._leave(f,a.note or "only the resume is uploaded by the bot")
@@ -350,6 +393,8 @@ class _Filler:
             return self._upload(f, frame)
         if f.type == "select":
             return self._select(f, a, frame)
+        if f.type == "dropdown":
+            return self._dropdown(f, a, frame)
         if f.type in ("radio", "checkbox"):
             return self._choose(f, a, frame)
         if f.type == "date":
@@ -433,11 +478,138 @@ class _Filler:
         if el.is_checked() != wanted:
             raise _PageChanged("the box did not change")
 
+    # -- custom dropdowns --
+
+    def _dropdown_box(self, frame: Frame, f: FormField) -> tuple[ElementHandle, ElementHandle | None]:
+        """``(the dropdown's box, its own text input or None)``. A <div> dropdown is found again by ``custom_index``."""
+        if f.custom_index >= 0:
+            handle = frame.evaluate_handle(_FIND_CUSTOM_JS, f.custom_index)
+            box = handle.as_element()
+            if box is None:
+                raise _PageChanged("the custom dropdown is no longer on the page")
+            return box, None
+        el = self._element(frame, f)  # a react-select style role=combobox input: it is the box AND the search box
+        handle = el.element_handle(timeout=ACTION_TIMEOUT_MS)
+        box = handle.evaluate_handle(_COMBO_BOX_JS).as_element()
+        return (box or handle), handle
+
+    def _options(self, box: ElementHandle) -> list[tuple[str, ElementHandle]]:
+        """The options showing right now, as ``(text, element)``."""
+        found = box.evaluate_handle(_OPTIONS_JS)
+        out: list[tuple[str, ElementHandle]] = []
+        for handle in found.get_properties().values():
+            element = handle.as_element()
+            if element is not None:
+                text = " ".join(element.inner_text().split())
+                if text:
+                    out.append((text, element))
+        return out
+
+    def _open_dropdown(self, box: ElementHandle, own_input: ElementHandle | None) -> None:
+        """Click the dropdown's box so its list shows (only if it is not showing already)."""
+        if self._options(box):
+            return
+        trigger = own_input or box.evaluate_handle(_TRIGGER_JS).as_element() or box
+        trigger.click(timeout=ACTION_TIMEOUT_MS)
+        self.page.wait_for_timeout(OPEN_WAIT_MS)
+
+    def _search(self, box: ElementHandle, own_input: ElementHandle | None, query: str) -> bool:
+        """Type ``query`` into the dropdown's search box, if it has one. Returns False when there is none."""
+        search = own_input or box.evaluate_handle(_SEARCH_JS).as_element()
+        if search is None:
+            return False
+        search.fill(query, timeout=ACTION_TIMEOUT_MS)
+        self.page.wait_for_timeout(SEARCH_WAIT_MS)
+        return True
+
+    def _clear_search(self, box: ElementHandle, own_input: ElementHandle | None) -> None:
+        """Remove what was typed into the search box, so no stray text is left in the form."""
+        search = own_input or box.evaluate_handle(_SEARCH_JS).as_element()
+        if search is not None:
+            try:
+                search.fill("", timeout=ACTION_TIMEOUT_MS)
+            except PlaywrightError:
+                pass
+
+    def _click_option(self, element: ElementHandle) -> None:
+        """Click one option of an open dropdown list (never a button or link: those are filtered out)."""
+        element.click(timeout=ACTION_TIMEOUT_MS)
+
+    def _pick_one(self, box: ElementHandle, own_input: ElementHandle | None, value: str, strict: bool) -> str:
+        """Open the list, find ``value`` (searching for it when it is not showing), click it. Returns the option or ""."""
+
+        def choose(options: list[tuple[str, ElementHandle]]) -> tuple[str, ElementHandle] | None:
+            texts = [text for text, _ in options]
+            if strict:  # skills: the very same word only ("Java" is not "JavaScript")
+                name = next((t for t in texts if _option_key(t) == _option_key(value)), "")
+            else:
+                name = pick_option(value, texts)
+            return next(((t, e) for t, e in options if t == name), None) if name else None
+
+        self._open_dropdown(box, own_input)
+        hit = choose(self._options(box))
+        if hit is None:
+            queries = [value]
+            subject = re.split(r"\s+in\s+", value)[-1].strip()  # "Bachelor of Science in IT" is listed as "IT"
+            if subject and subject.lower() != value.lower():
+                queries.append(subject)
+            first_word = next((w for w in re.findall(r"[A-Za-z0-9+#.]+", subject or value) if len(w) >= 4), "")
+            if first_word and first_word.lower() not in (q.lower() for q in queries):
+                queries.append(first_word)  # a long name may be written slightly differently in the list
+            for query in queries:
+                if not self._search(box, own_input, query):
+                    break
+                hit = choose(self._options(box))
+                if hit is not None:
+                    break
+        if hit is None:
+            self._clear_search(box, own_input)
+            return ""
+        before = _option_key(box.evaluate(_SHOWN_JS))
+        self._click_option(hit[1])
+        self.page.wait_for_timeout(OPEN_WAIT_MS)
+        after = _option_key(box.evaluate(_SHOWN_JS))
+        if after == before or not (set(_option_key(hit[0]).split()) & set(after.split())):
+            raise _PageChanged(f"the dropdown did not take {hit[0]!r}")
+        return hit[0]
+
+    def _close_dropdown(self, box: ElementHandle, own_input: ElementHandle | None) -> None:
+        """A multi-choice list stays open after a pick: click its box again to close it."""
+        try:
+            if self._options(box):
+                trigger = own_input or box.evaluate_handle(_TRIGGER_JS).as_element() or box
+                trigger.click(timeout=ACTION_TIMEOUT_MS)
+        except PlaywrightError:
+            pass
+
+    def _dropdown(self, f: FormField, a: FieldAnswer, frame: Frame) -> str:
+        """A custom dropdown: pick the option(s) the answer names. A value that is not in the list is left out."""
+        box, own_input = self._dropdown_box(frame, f)
+        values = [v.strip() for v in re.split(r"[,;\n]+", a.value)] if f.multi else [a.value.strip()]
+        values = [v for v in values if v][:MULTI_TRIES]
+        limit = (f.max_choices or MULTI_LIMIT) if f.multi else 1
+        strict = f.multi and len(values) > 1  # a list of skills: the very same word only
+        chosen: list[str] = []
+        for value in values:
+            if len(chosen) >= limit:
+                break
+            self._begin("fill")
+            option = self._pick_one(box, own_input, value, strict)
+            if option and option not in chosen:
+                chosen.append(option)
+        if f.multi:
+            self._close_dropdown(box, own_input)
+        if not chosen:
+            raise _CannotFill(f"custom dropdown: no option matching {_short(a.value, 40)!r} appeared in its list")
+        if f.multi:
+            return f"chose {len(chosen)}: {', '.join(chosen)}"
+        return "" if _option_key(chosen[0]) == _option_key(a.value) else f"chose {chosen[0]!r}"
+
     # -- showing flags --
 
     def _highlight(self, f: FormField, a: FieldAnswer, result: FieldResult) -> None:
         """Outline a flagged field and tag it. A cosmetic step: if it cannot be drawn, the report still has the facts."""
-        if not result.flagged or not f.indexes:
+        if not result.flagged or not (f.indexes or f.custom_index >= 0):
             return
         if result.outcome == "filled":
             tag = self._guess_tag(a)
@@ -453,12 +625,14 @@ class _Filler:
         frame = self._frame(f)
         if frame is None:
             return
+        args = {**amber_colors(), "tag": tag, "why": why, "dashed": dashed, "group": len(f.indexes) > 1}
         try:
-            frame.locator(_FIELDS).nth(f.indexes[0]).evaluate(
-                _HIGHLIGHT_JS,
-                {**amber_colors(), "tag": tag, "why": why, "dashed": dashed, "group": len(f.indexes) > 1},
-                timeout=ACTION_TIMEOUT_MS,
-            )
+            if f.custom_index >= 0:
+                box = frame.evaluate_handle(_FIND_CUSTOM_JS, f.custom_index).as_element()
+                if box is not None:
+                    box.evaluate(_HIGHLIGHT_JS, args)
+            else:
+                frame.locator(_FIELDS).nth(f.indexes[0]).evaluate(_HIGHLIGHT_JS, args, timeout=ACTION_TIMEOUT_MS)
         except PlaywrightError:
             pass
 

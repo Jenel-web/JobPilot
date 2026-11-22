@@ -103,13 +103,22 @@ _RECORDER = r"""
 () => {
   if (window.__jp) return;
   window.__jp = {clicks: [], submits: 0};
+  // A custom dropdown's box or one of its options (the same class/role rules as the reader's CUSTOM_HELPERS_JS).
+  const DROP = /(^|[-_])(select|dropdown|combobox)$|(^|[-_])option$|(menu|list|select|dropdown)[-_]+item$/i;
+  const inDropdown = t => {
+    for (let e = t; e && e !== document.body; e = e.parentElement) {
+      if (['option', 'listbox', 'combobox'].includes(e.getAttribute && e.getAttribute('role'))) return true;
+      if (e.classList && [...e.classList].some(c => DROP.test(c))) return true;
+    }
+    return false;
+  };
   document.addEventListener('click', e => {
     const t = e.target;
     const pressable = t.closest('button, a, [role=button], input[type=submit], input[type=button], input[type=image], input[type=reset]');
     window.__jp.clicks.push({
       tag: t.tagName.toLowerCase(), type: (t.type || '').toLowerCase(),
       text: (t.innerText || t.value || '').trim().slice(0, 40),
-      onField: !!t.closest('input, select, textarea, label'), pressable: !!pressable,
+      onField: !!t.closest('input, select, textarea, label') || inDropdown(t), pressable: !!pressable,
     });
   }, true);
   document.addEventListener('submit', () => { window.__jp.submits++; }, true);
@@ -537,9 +546,23 @@ def test_the_detector_catches_a_submit_click(page: Page) -> None:
 
 
 def test_the_filler_source_has_no_button_or_submit_code() -> None:
-    """A cheap second guard on the code itself: the only click is the JS click on a checkbox/radio input."""
+    """A cheap second guard on the code itself.
+
+    The only clicks allowed: the JS click on a checkbox/radio input, and the three custom-dropdown helpers
+    (open the box, click one option, close the box). Any other ``.click(`` in filler.py fails this test.
+    """
+    import ast
+
     source = (ROOT / "engine" / "forms" / "filler.py").read_text(encoding="utf-8")
     code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
-    assert len(re.findall(r"\.click\(", code)) == 1 and "e => e.click()" in code
+    assert code.count("e => e.click()") == 1
+    allowed = {"_open_dropdown", "_click_option", "_close_dropdown"}
+    tree = ast.parse(source)
+    for function in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        for node in ast.walk(function):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "click":
+                assert function.name in allowed, f"filler.py clicks in {function.name}(), which may not click"
+    clicks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "click"]
+    assert len(clicks) == 3, "one click each in _open_dropdown, _click_option and _close_dropdown"
     for banned in ("get_by_role", ".press(", "dispatch_event", "requestSubmit", ".submit(", "type=submit", "locator(\"button"):
         assert banned not in code, f"filler.py must not contain {banned!r}"

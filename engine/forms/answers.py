@@ -35,6 +35,8 @@ Missing values are never invented: the field stays blank and is flagged.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -51,6 +53,7 @@ PersonalKey = Literal[
     "first_name", "middle_name", "middle_initial", "last_name", "full_name",
     "email", "phone", "address", "location", "city", "country",
     "linkedin", "github", "portfolio",
+    "school", "degree", "education_level", "year_level", "grad_year", "skills",
 ]
 
 MAX_LABEL_WORDS = 5  # longer labels are questions, not personal boxes
@@ -89,6 +92,18 @@ _PATTERNS: list[tuple[PersonalKey, re.Pattern[str]]] = [
     ("city", re.compile(r"\b(city|town|municipality)\b")),
     ("country", re.compile(r"\bcountry\b")),
     ("location", re.compile(r"^(current )?location$|^where are you based$")),
+]
+
+# Education and skills, from the profile. Checked BEFORE the "someone else's details" words below, because those
+# include "school" and "university" (a school's email is not yours, but "School" alone asks for your school).
+# Whole-label patterns only, so "School email" or "Course you are applying for" never match.
+_EDUCATION_PATTERNS: list[tuple[PersonalKey, re.Pattern[str]]] = [
+    ("school", re.compile(r"^(name of (your )?)?(current |last )?(school|university|college|institution|alma mater)( name| attended)?$")),
+    ("degree", re.compile(r"^(course( of study)?|degree( program(me)?)?|program(me)?( of study)?|major|field of study|area of study|course name|degree name)$")),
+    ("education_level", re.compile(r"^(highest )?(education(al)? level|level of education|education(al)? attainment|highest (level of )?education|education)$")),
+    ("year_level", re.compile(r"^(current )?year level$|^year of study$")),
+    ("grad_year", re.compile(r"^(expected |anticipated )?(graduation|grad)( year| date)?$|^(expected )?year of graduation$")),
+    ("skills", re.compile(r"^(technical |key |relevant )?skills?( set)?$")),
 ]
 
 # Someone else's details, or a different thing that happens to contain "name"/"email".
@@ -227,6 +242,26 @@ def is_story(label: str) -> bool:
     return bool(STORY_PATTERN.search(_words(label)))
 
 
+_QUESTION_START = re.compile(
+    r"^(why|what|how|which|who|where|when|describe|tell|explain|share|list|give|briefly|in what|"
+    r"do|did|does|are|is|have|has|can|could|would|will|should)\b"
+)
+FACT_LABEL_WORDS = 8  # a label this short with no question in it names a fact ("Previous Company"), not a question
+
+
+def is_fact_label(label: str) -> bool:
+    """True if a short box asks for a FACT ("Previous / Current Company", "Designation"), not a question.
+
+    Facts come from your profile or your saved answers. The AI never drafts them: a guessed company or job title
+    would be a made-up fact (CLAUDE.md rule 4). A real question ("Why do you want to join us?") is not a fact.
+    """
+    raw = label.strip()
+    words = _words(raw)
+    if not words or raw.endswith("?"):
+        return False
+    return len(words.split()) <= FACT_LABEL_WORDS and not _QUESTION_START.match(words)
+
+
 def wants_opinion(label: str) -> bool:
     """Reflective or story: the answer is built from your projects with a reflective closing (not a fact lookup)."""
     return is_reflective(label) or is_story(label)
@@ -237,6 +272,10 @@ def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
     if field.type not in _PERSONAL_TYPES:
         return None
     label = _words(field.label)
+    if field.type != "textarea":
+        for key, pattern in _EDUCATION_PATTERNS:
+            if pattern.search(label):
+                return key, "label"
     if len(label.split()) > MAX_LABEL_WORDS or _NOT_YOURS.search(label) or _NOT_YOURS.search(_words(field.name)):
         return None  # a real question, or someone else's details
 
@@ -282,7 +321,38 @@ def profile_values(conn: sqlite3.Connection) -> dict[str, str]:
         "linkedin": row["linkedin"] or "",
         "github": row["github"] or "",
         "portfolio": row["portfolio"] or "",
+        "school": row["school"] or "",
+        "degree": row["degree"] or "",
+        "education_level": education_level(row["degree"] or ""),
+        "year_level": row["year_level"] or "",
+        "grad_year": str(row["grad_year"] or ""),
+        "skills": ", ".join(str(skill) for skill in _json_list(row["skills"])),
     }
+
+
+def _json_list(text: str | None) -> list[object]:
+    try:
+        value = json.loads(text or "[]")
+    except ValueError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def education_level(degree: str) -> str:
+    """The level of a degree, in the words forms use: "Bachelor of Science in IT" -> "Bachelor's Degree".
+
+    Decided from words in YOUR degree, never guessed: an unknown degree gives "" (you choose).
+    """
+    words = " ".join(re.sub(r"[^a-z0-9]+", " ", degree.lower()).split())  # plain words: "PhD" stays one word
+    if re.search(r"\b(phd|doctor\w*|doctorate)\b", words):
+        return "Doctorate"
+    if re.search(r"\b(master\w*|mba|msc)\b", words):
+        return "Master's Degree"
+    if re.search(r"\b(bachelor\w*|bs|bsc|ba|ab)\b", words):
+        return "Bachelor's Degree"
+    if re.search(r"\bassociate\w*\b", words):
+        return "Associate's Degree"
+    return ""
 
 
 def format_phone(stored: str, field: FormField) -> tuple[str, str]:
@@ -324,19 +394,96 @@ def format_phone(stored: str, field: FormField) -> tuple[str, str]:
     return forms[stored_kind], "no hint: written the way you stored it"
 
 
+_OPTION_STOP = frozenset({"of", "in", "the", "and", "a", "an", "for", "at", "to", "on"})
+
+
+def _option_key(text: str) -> str:
+    """Compare options by words only: "Bachelor's Degree" == "bachelors degree"; "R&D" == "r and d"."""
+    text = text.lower().replace("&", " and ").replace("'", "").replace("’", "")
+    return " ".join(re.sub(r"[^a-z0-9+]+", " ", text).split())
+
+
+def _option_tokens(text: str) -> set[str]:
+    return {t for t in _option_key(text).split() if t not in _OPTION_STOP}
+
+
 def pick_option(value: str, options: list[str]) -> str:
-    """The dropdown option that matches ``value`` (exact first, then partial), or "" if none fits."""
-    want = value.strip().lower()
+    """The option that matches ``value``, or "" when none does or two fit equally well (it never guesses).
+
+    In order:
+        1. the same words ("Bachelor's Degree" for "bachelors degree")
+        2. a yes/no answer picks the "Yes"/"No" option ("No, I do not need a visa" -> "No")
+        3. the option whose words are all in the answer, or whose words hold all of the answer:
+           "Philippines" for "Mandaluyong, Metro Manila, Philippines", "Information Technology" for
+           "Bachelor of Science in Information Technology". The most specific one wins; a tie gives "".
+    Words, not letters: "Java" never matches "JavaScript".
+    """
+    want = _option_key(value)
     if not want:
         return ""
     for option in options:
-        if option.strip().lower() == want:
+        if _option_key(option) == want:
             return option
+    stance = re.match(r"^(yes|no)\b", want)
+    if stance:
+        same = [o for o in options if _option_key(o) == stance.group(1)]
+        if len(same) == 1:
+            return same[0]
+    want_tokens = _option_tokens(value)
+    scored: list[tuple[float, str]] = []
     for option in options:
-        low = option.strip().lower()
-        if len(low) >= 3 and (low in want or want in low):
-            return option
+        tokens = _option_tokens(option)
+        if not tokens or len(_option_key(option)) < 3:
+            continue
+        if tokens <= want_tokens:  # every word of the option is in the answer
+            scored.append((len(tokens), option))
+        elif want_tokens <= tokens and len(tokens) - len(want_tokens) <= 3:  # the option is the answer plus a little
+            scored.append((len(want_tokens) - 0.1 * (len(tokens) - len(want_tokens)), option))
+    if not scored:
+        return ""
+    scored.sort(key=lambda pair: -pair[0])
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return ""  # two options fit equally well: you choose
+    return scored[0][1]
+
+
+def _same_meaning(option: str, value: str) -> bool:
+    """True if the option says the same as the value, or as one comma part of it.
+
+    Codes and numbers are ignored: "Philippines (+63)" says "Philippines". "Philippines" also says the same as
+    "Mandaluyong, Metro Manila, Philippines" (it is one part of it). Used to decide whether a pick needs a look.
+    """
+    def words(text: str) -> set[str]:
+        return {t for t in _option_tokens(text) if not re.fullmatch(r"[+\d]+", t)}
+
+    target = words(option)
+    return bool(target) and any(target == words(part) for part in [value, *value.split(",")])
+
+
+def country_code_option(stored: str, options: list[str]) -> str:
+    """The country-code option for your number ("Philippines +63" for +63 917...), or "" if none fits for sure."""
+    digits = re.sub(r"\D", "", stored)
+    if (digits.startswith("63") and len(digits) == 12) or (digits.startswith("0") and len(digits) == 11):
+        codes = ["63"]  # a Philippine mobile number (the same rule as format_phone)
+    elif stored.strip().startswith("+"):
+        codes = [digits[:3], digits[:2], digits[:1]]
+    else:
+        return ""
+    for code in codes:
+        found = [o for o in options if re.search(rf"\+\s?{code}(?!\d)", o)]
+        if len(found) == 1:
+            return found[0]
     return ""
+
+
+def bare_phone(stored: str) -> str:
+    """Your number without the country code (9171234567), for a number box next to a country-code dropdown."""
+    digits = re.sub(r"\D", "", stored)
+    if digits.startswith("63") and len(digits) == 12:
+        return digits[2:]
+    if digits.startswith("0") and len(digits) == 11:
+        return digits[1:]
+    return stored
 
 
 def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | None:
@@ -346,17 +493,32 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
         return None
     key, signal = found
     value = values.get(key, "")
+    flagged = False
+    note = ""
+    if not value and key == "portfolio" and values.get("github"):  # a developer's GitHub is a fair website answer
+        value, flagged, note = values["github"], True, "no portfolio saved: your GitHub is used"
     if not value:
         return PersonalFill(key, "", signal, True, f"no {key.replace('_', ' ')} in your profile")
-    note = ""
+    if key == "phone" and field.type in _CHOICE_TYPES:  # the country-code box next to the number
+        option = country_code_option(value, field.options)
+        if not option:
+            return PersonalFill(key, "", signal, True, "country code: no option matches your number's country")
+        return PersonalFill(key, option, signal, False, "country code from your number")
     if key == "phone":
         value, note = format_phone(value, field)
+    if key == "skills" and field.type in _CHOICE_TYPES:
+        # Every skill, in your order: the filler searches the list for each one and picks exact matches only.
+        return PersonalFill(key, value, signal, False, "your skills, in the order of your profile")
     if field.type in _CHOICE_TYPES and field.options:
         option = pick_option(value, field.options)
-        if not option:
-            return PersonalFill(key, "", signal, True, f"none of the {len(field.options)} options matches your {key}")
-        value, note = option, "matching dropdown option"
-    return PersonalFill(key, value, signal, False, note)
+        if option:
+            exact = _same_meaning(option, value)
+            return PersonalFill(key, option, signal, flagged or not exact, note or ("matching option" if exact else f"closest option to your {key.replace('_', ' ')}: check it"))
+        if field.custom_index < 0:
+            return PersonalFill(key, "", signal, True, f"none of the {len(field.options)} options matches your {key.replace('_', ' ')}")
+        # A custom dropdown often shows only part of a long list: the filler searches it for your value.
+        return PersonalFill(key, value, signal, True, f"not in the visible part of the list: it will be searched for ({key.replace('_', ' ')})")
+    return PersonalFill(key, value, signal, flagged, note)
 
 
 # ---- the answer engine -----------------------------------------------------------------------
@@ -533,6 +695,10 @@ def answer_field(
     # New non-sensitive question: the AI may draft it, but only into a text box.
     if field.type not in drafting.DRAFTABLE_TYPES:
         return _needs_you(field.label, "new question: choose this one yourself (the AI only writes into text boxes)", triage.unknown_id)
+    if field.type == "text" and is_fact_label(field.label):
+        return _needs_you(
+            field.label, "a fact about you that is not saved: add it to your answers (the AI never guesses facts)", triage.unknown_id
+        )
     if is_company_question(field.label):
         return _company_answer(conn, field, None, 0.0, "", triage.unknown_id, job_text, settings, earlier, brief_cache)
     if wants_opinion(field.label):
@@ -687,7 +853,16 @@ def _elaborated_answer(
 def _pick(field: FormField, saved: str) -> str:
     """The saved text for a text box; for a list of options, the option that matches it ("" if none)."""
     if field.type in _GROUP_TYPES and field.options:
-        return pick_option(saved, field.options)
+        if field.multi:  # "Prosple, Friends": each part is one choice
+            parts = [p.strip() for p in re.split(r"[,;\n]+", saved) if p.strip()]
+            # A custom dropdown may show only part of its list: a part not in view is kept, and the filler searches it.
+            keep = (lambda part: pick_option(part, field.options) or part) if field.custom_index >= 0 else (lambda part: pick_option(part, field.options))
+            picked = list(dict.fromkeys(p for p in map(keep, parts) if p))
+            return ", ".join(picked)
+        option = pick_option(saved, field.options)
+        if not option and field.custom_index >= 0:
+            return saved  # a custom dropdown may show only part of its list: the filler searches it
+        return option
     return saved
 
 
@@ -712,6 +887,10 @@ def _matched_answer(field: FormField, row: sqlite3.Row, score: float) -> FieldAn
 
     if not value:
         return make("", True, f"none of the {len(field.options)} options matches your saved answer")
+    if field.type in _GROUP_TYPES and field.options and any(
+        part.strip() not in field.options for part in (value.split(",") if field.multi else [value])
+    ):
+        return make(value, True, "your saved answer is not in the visible part of the list: it will be searched for")
     if kind == "protected":
         return make(value, True, "protected: used exactly as saved, never sent to the AI")
     if kind == "open":
@@ -776,6 +955,20 @@ def answer_form(
                 earlier.append(answer.value)
         except (learning.LearningError, drafting.DraftError, RagError, sqlite3.Error, RuntimeError, ValueError, OSError) as exc:
             results.append(_needs_you(f.label, f"error: {type(exc).__name__}: {exc}"))
+    _pair_phone_boxes(fields, results, values)
     flagged = sum(r.flagged for r in results)
     safety.log_action(conn, "read", page_url, f"answered {len(results)} fields, {flagged} flagged")
     return results
+
+
+def _pair_phone_boxes(fields: list[FormField], results: list[FieldAnswer], values: dict[str, str]) -> None:
+    """A phone number box that sits next to a country-code dropdown (same label) gets the number WITHOUT the code."""
+    code_boxes = {
+        f.label for f, r in zip(fields, results)
+        if f.type in _CHOICE_TYPES and r.source == "personal" and r.note == "country code from your number"
+    }
+    for i, (f, r) in enumerate(zip(fields, results)):
+        if f.type not in _CHOICE_TYPES and r.source == "personal" and f.label in code_boxes and values.get("phone"):
+            found = detect_personal(f)
+            if found and found[0] == "phone":
+                results[i] = dataclasses.replace(r, value=bare_phone(values["phone"]), note="number without the country code (chosen in the box next to it)")
