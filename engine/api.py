@@ -23,15 +23,18 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Iterator
 from pathlib import Path
+import sqlite3
 from typing import Annotated
 from urllib.parse import urlsplit
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from engine import db
+from engine import db, learning
+from engine.api_models import AnswerOut, FillOut, FillStatus, Kind, UnknownOut, WordingOut
+from engine.forms.history import list_fills
 from engine.profile import ANSWERS_PATH
 from engine.settings import Settings, load_settings
 
@@ -111,6 +114,41 @@ def create_app(
     def health(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, str]:
         """Is the engine up, and in which run mode? (Read only: this API cannot change the mode.)"""
         return {"status": "ok", "run_mode": settings.run_mode}
+
+    # ---- read endpoints (4.4c): look only, nothing here changes anything ----
+
+    @app.get("/unknown")
+    def unknown(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> list[UnknownOut]:
+        """Questions the bot could not answer, most-seen first. You answer them in the dashboard."""
+        return [UnknownOut.from_row(r) for r in learning.open_unknowns(conn)]
+
+    @app.get("/wordings")
+    def wordings(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> list[WordingOut]:
+        """New wordings waiting for your approval, most-seen first."""
+        out = []
+        for row in learning.pending_wordings(conn):
+            kinds = {r["kind"] for r in conn.execute("SELECT kind FROM answers WHERE question = ?", (row["matched_question"],))}
+            kind: Kind = "protected" if row["protected"] or "protected" in kinds else ("open" if "open" in kinds else "fixed")
+            out.append(WordingOut.from_row(row, kind))
+        return out
+
+    @app.get("/answers")
+    def answers(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> list[AnswerOut]:
+        """Every saved answer with its other wordings, ordered by question, then scope and city."""
+        aliases: dict[str, list[str]] = {}
+        for r in conn.execute("SELECT question, alias FROM answer_aliases ORDER BY alias"):
+            aliases.setdefault(r["question"], []).append(r["alias"])
+        rows = conn.execute("SELECT * FROM answers ORDER BY lower(question), location_scope, city").fetchall()
+        return [AnswerOut.from_row(r, aliases.get(r["question"], [])) for r in rows]
+
+    @app.get("/fills")
+    def fills(
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        status: FillStatus | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[FillOut]:
+        """The filled pages history, newest first. ``?status=filled`` shows what still needs a decision."""
+        return [FillOut.from_row(r) for r in list_fills(conn, status, limit)]
 
     return app
 
