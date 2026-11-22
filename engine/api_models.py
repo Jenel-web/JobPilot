@@ -14,10 +14,11 @@ import json
 import sqlite3
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 Kind = Literal["fixed", "open", "protected"]
 FillStatus = Literal["filled", "submitted", "abandoned"]
+Scope = Literal["any", "city", "remote", "abroad"]
 
 
 class UnknownOut(BaseModel):
@@ -132,3 +133,87 @@ def _json_list(text: str | None) -> list:
     except ValueError:
         return []
     return value if isinstance(value, list) else []
+
+
+# ---- what you send (request bodies) ---------------------------------------------------------------
+
+
+class UnknownAnswerIn(BaseModel):
+    """Your answer to an unknown question. ``kind`` has no default: you choose it on purpose."""
+
+    answer: str = Field(min_length=1)
+    kind: Kind
+    scope: Scope = "any"
+    city: str = ""
+
+
+class ApproveIn(BaseModel):
+    """Approving a wording. ``confirm_protected`` must be true when the saved answer is protected."""
+
+    confirm_protected: bool = False
+
+
+class AnswerIn(BaseModel):
+    """A new answer for the answer bank."""
+
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    kind: Kind
+    scope: Scope = "any"
+    city: str = ""
+
+
+class AnswerUpdateIn(BaseModel):
+    """New values for an existing answer (the question text itself does not change).
+
+    Everything but ``city`` and ``confirm_protected`` is required, so a missing field can never silently reset it.
+    """
+
+    answer: str = Field(min_length=1)
+    kind: Kind
+    scope: Scope
+    city: str = ""
+    confirm_protected: bool = False
+
+
+class FillStatusIn(BaseModel):
+    """You decide what happened to a filled page."""
+
+    status: Literal["submitted", "abandoned"]
+
+
+# ---- what comes back after a change ---------------------------------------------------------------
+
+
+class ChangeInfo(BaseModel):
+    """What happened behind a change. A failed re-index is a warning, not an error: your change is saved."""
+
+    backup: str | None = None  # the copy of answers.json made before the change (None: the file did not change)
+    reindexed: bool = False  # False for a change that needs no re-index (a rejected wording)
+    warning: str | None = None
+
+
+class UnknownAnswerOut(ChangeInfo):
+    unknown_id: int
+    answer: AnswerOut | None
+
+
+class DecisionOut(ChangeInfo):
+    """A wording you approved or rejected."""
+
+    id: int
+    wording: str
+    matched_question: str
+    status: Literal["approved", "rejected"]
+
+
+class AnswerChangeOut(ChangeInfo):
+    """An answer you added or edited, as it is now."""
+
+    answer: AnswerOut
+
+
+class AnswerDeleteOut(ChangeInfo):
+    deleted_id: int
+    question: str
+    removed_wordings: int  # other wordings that went with it

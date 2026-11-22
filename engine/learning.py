@@ -52,6 +52,10 @@ class AlreadyDecided(LearningError):
     """The suggestion or question was already approved, rejected or answered (the API answers 409)."""
 
 
+class InvalidAnswer(LearningError):
+    """The answer you gave is not valid: blank, a bad kind or scope, or ``city`` scope without a city (the API answers 422)."""
+
+
 class ProtectedNotConfirmed(LearningError):
     """A wording for a PROTECTED answer was approved without the extra confirmation (the API answers 409)."""
 
@@ -263,7 +267,8 @@ def answer_unknown(
 
     Raises:
         NotFound: no unknown question with this id.
-        AlreadyDecided: it was already answered.
+        AlreadyDecided: it was already answered, or an answer with this question and scope already exists.
+        InvalidAnswer: blank answer, bad kind or scope, or city scope without a city.
         LearningError: the answer is invalid (blank, bad kind or scope, city scope without a city) or the file is unreadable.
     """
     row = conn.execute("SELECT * FROM unknown_questions WHERE id = ?", (unknown_id,)).fetchone()
@@ -273,10 +278,15 @@ def answer_unknown(
         raise AlreadyDecided(f"Unknown question {unknown_id} was already {row['status']}.")
     question = " ".join(row["question_text"].split())
     try:
-        backup = answers_file.upsert_entry(
+        # add, never overwrite: a saved (maybe protected) answer must not be replaced by answering an unknown question
+        backup = answers_file.add_entry(
             answers_path, question=question, answer=answer, kind=kind, scope=scope, city=city
         )
         load_answers(conn, answers_path)
+    except answers_file.InvalidEntry as exc:
+        raise InvalidAnswer(str(exc)) from exc
+    except answers_file.EntryExists as exc:
+        raise AlreadyDecided(f"{exc} Edit it in the answer bank instead.") from exc
     except (answers_file.AnswersFileError, ProfileError) as exc:
         raise LearningError(str(exc)) from exc
     saved = conn.execute(

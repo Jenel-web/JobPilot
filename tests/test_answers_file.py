@@ -69,3 +69,34 @@ def test_unreadable_file_is_a_clear_error(tmp_path: Path) -> None:
     bad.write_text("{not json", encoding="utf-8")
     with pytest.raises(AnswersFileError, match="Cannot read"):
         answers_file.read_answers(bad)
+
+
+def test_backups_in_the_same_second_never_overwrite_each_other(path: Path) -> None:
+    first = answers_file.backup(path)
+    path.write_text("[]", encoding="utf-8")
+    second = answers_file.backup(path)
+    assert first != second and first.exists() and second.exists()
+    assert "Now" in first.read_text(encoding="utf-8") and second.read_text(encoding="utf-8") == "[]"
+
+
+def test_add_entry_refuses_to_overwrite(path: Path) -> None:
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(answers_file.EntryExists):
+        answers_file.add_entry(path, question="When can you start?", answer="Never", kind="open")
+    assert path.read_text(encoding="utf-8") == before and list(path.parent.glob("answers.backup-*")) == []
+
+
+def test_update_entry_changes_in_place_and_checks_collisions(path: Path) -> None:
+    answers_file.add_entry(path, question="When can you start?", answer="Later", kind="open", scope="remote")
+    answers_file.update_entry(
+        path, question="When can you start?", old_scope="any", old_city="", answer="Soon", kind="fixed", scope="city", city="Makati"
+    )
+    first = read(path)[0]
+    assert first["answer"] == "Soon" and first["location_scope"] == "city" and first["city"] == "Makati"
+    assert first["also_asked_as"] == ["Start date?"]
+    with pytest.raises(answers_file.EntryExists):  # moving onto the remote answer's key
+        answers_file.update_entry(
+            path, question="When can you start?", old_scope="city", old_city="Makati", answer="x", kind="open", scope="remote", city=""
+        )
+    with pytest.raises(answers_file.EntryNotFound):
+        answers_file.update_entry(path, question="Nope?", old_scope="any", old_city="", answer="x", kind="open", scope="any", city="")

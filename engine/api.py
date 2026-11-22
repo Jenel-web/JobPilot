@@ -21,7 +21,8 @@ The API never changes the run mode: only you do that, from the dashboard.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Iterator
+import threading
+from collections.abc import Callable
 from pathlib import Path
 import sqlite3
 from typing import Annotated
@@ -33,7 +34,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from engine import db, learning
+from engine.api_deps import get_conn, get_settings
 from engine.api_models import AnswerOut, FillOut, FillStatus, Kind, UnknownOut, WordingOut
+from engine.api_write import install_error_handlers, router as write_router
 from engine.forms.history import list_fills
 from engine.profile import ANSWERS_PATH
 from engine.settings import Settings, load_settings
@@ -84,6 +87,7 @@ def create_app(
     app = FastAPI(title="JobPilot engine", docs_url=None, redoc_url=None)
     app.state.db_path = db_path
     app.state.answers_path = answers_path
+    app.state.write_lock = threading.Lock()  # one change to answers.json at a time (see api_deps.get_write_lock)
     app.state.settings_source = (lambda: settings) if settings is not None else load_settings
 
     init = db.connect(db_path)
@@ -150,24 +154,9 @@ def create_app(
         """The filled pages history, newest first. ``?status=filled`` shows what still needs a decision."""
         return [FillOut.from_row(r) for r in list_fills(conn, status, limit)]
 
+    app.include_router(write_router)  # the endpoints that change things (4.4d)
+    install_error_handlers(app)
     return app
-
-
-# ---- dependencies the endpoints share ------------------------------------------------------------
-
-
-def get_settings(request: Request) -> Settings:
-    """The settings for this request."""
-    return request.app.state.settings_source()
-
-
-def get_conn(request: Request) -> Iterator:  # type: ignore[type-arg]
-    """One database connection per request, closed afterwards. Never shared between requests."""
-    conn = db.connect(request.app.state.db_path, check_same_thread=False)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT) -> None:
