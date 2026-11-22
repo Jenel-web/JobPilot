@@ -197,18 +197,22 @@ STORY_PATTERN = re.compile(
     r"\bproud of\b|\ba time (?:when|you)\b"
 )
 
-# Company questions need the job post to answer well. Until Phase 4 gives us the job post, the AI does not
-# touch them: an open answer you saved is used as written, otherwise the field is left for you.
+# Company questions need the job post. With one, the AI reads a company brief from it and writes (or adapts your
+# saved answer) from that brief; without one, a saved open answer is used as written, otherwise the field is left
+# for you.
 COMPANY_PATTERN = re.compile(
     r"\bwhy (?:do|would|did) you want to (?:work|join)\b|\bwhy (?:us|this (?:company|role|position|job)|our (?:company|team))\b|"
     r"\bwhy are you (?:interested|applying)\b|\bwhy (?:did|do) you apply\b|"
     r"\bwhat (?:attracts|interests|excites|draws) you (?:about|to) (?:us|this|our|the (?:company|role|position))\b|"
-    r"\bwhy do you want this (?:job|role|position|internship)\b"
+    r"\bwhy do you want this (?:job|role|position|internship)\b|"
+    r"\bwhat (?:do you know|can you tell us) about (?:us|our (?:company|team)|this (?:company|organi[sz]ation))\b|"
+    r"\bwhat do you (?:like|admire) about (?:us|our (?:company|team)|this (?:company|organi[sz]ation))\b|"
+    r"\btell us why you (?:want to (?:work|join)|are (?:interested|applying))\b"
 )
 
 
 def is_company_question(label: str) -> bool:
-    """True if the question asks why you want THIS company or role (best answered with the job post, Phase 4)."""
+    """True if the question asks why you want THIS company or role (answered from the job post's company brief)."""
     return bool(COMPANY_PATTERN.search(_words(label)))
 
 
@@ -462,6 +466,7 @@ def answer_field(
     earlier: list[str] | None = None,
     job_text: str | None = None,
     record: bool = True,
+    brief_cache: dict[str, drafting.CompanyBrief | None] | None = None,
 ) -> FieldAnswer:
     """Decide the answer for ONE field. Reads and decides only: nothing is typed or clicked.
 
@@ -473,6 +478,8 @@ def answer_field(
         job_text: the job post's text. A relocation question is answered YES or NO from where the job is
             (:mod:`engine.forms.jobpost`); ``None`` means no job post was given (saved answers are used as before).
         record: False for a preview: nothing is written to the unknown questions list or the suggested wordings.
+        brief_cache: the company brief read from ``job_text``, shared by every company question on one form so the
+            post is only read once (:func:`answer_form` passes one in).
 
     Raises:
         learning.LearningError, rag.RagError, sqlite3.Error: the lookup failed
@@ -505,7 +512,9 @@ def answer_field(
     if triage.outcome == "matched" and row is not None:
         if row["kind"] == "open" and field.type in drafting.DRAFTABLE_TYPES and not is_sensitive(field.label):
             if is_company_question(field.label):
-                return _saved_open(field, row, score, "company question: saved text used; the AI needs the job post to adapt it (Phase 4)")
+                return _company_answer(
+                    conn, field, row, score, hit.ref if hit else "", None, job_text, settings, earlier, brief_cache
+                )
             return _rewritten_answer(conn, field, row, score, settings, earlier)
         if wants_elaboration(field, row["kind"], row["answer"]):
             return _elaborated_answer(conn, field, row, score, settings)
@@ -525,7 +534,7 @@ def answer_field(
     if field.type not in drafting.DRAFTABLE_TYPES:
         return _needs_you(field.label, "new question: choose this one yourself (the AI only writes into text boxes)", triage.unknown_id)
     if is_company_question(field.label):
-        return _needs_you(field.label, "company question: needs the job post (Phase 4), so answer it yourself for now", triage.unknown_id)
+        return _company_answer(conn, field, None, 0.0, "", triage.unknown_id, job_text, settings, earlier, brief_cache)
     if wants_opinion(field.label):
         draft = drafting.reflect_answer(
             conn, field, settings=settings, single_project=is_story(field.label), earlier=earlier
@@ -541,6 +550,60 @@ def answer_field(
             confidence=draft.confidence, unknown_id=triage.unknown_id,
         )
     return _needs_you(field.label, f"AI draft rejected: {draft.note}", triage.unknown_id)
+
+
+def _company_brief(
+    job_text: str, settings: Settings | None, cache: dict[str, drafting.CompanyBrief | None] | None
+) -> drafting.CompanyBrief | None:
+    """The brief for this post, built once per form: later company questions reuse it (a failure is reused too)."""
+    if cache is None:
+        return drafting.build_company_brief(job_text, settings)
+    if job_text not in cache:
+        cache[job_text] = drafting.build_company_brief(job_text, settings)
+    return cache[job_text]
+
+
+def _company_answer(
+    conn: sqlite3.Connection,
+    field: FormField,
+    row: sqlite3.Row | None,
+    score: float,
+    matched: str,
+    unknown_id: int | None,
+    job_text: str | None,
+    settings: Settings | None,
+    earlier: list[str] | None,
+    brief_cache: dict[str, drafting.CompanyBrief | None] | None,
+) -> FieldAnswer:
+    """"Why do you want to work here?": written from the job post's company brief, your saved answer (if any) as a note.
+
+    Every way this can fall short ends the same: your saved text as written (flagged) when there is one, else an empty
+    flagged field for you. The AI never fills a gap with something it knows about the company.
+    """
+
+    def fall_back(why: str) -> FieldAnswer:
+        if row is not None:
+            return _saved_open(field, row, score, f"company question: saved text used as written ({why})")
+        return _needs_you(field.label, f"company question: {why}, so answer it yourself", unknown_id)
+
+    if not job_text:
+        return fall_back("needs the job post and none was found")
+    brief = _company_brief(job_text, settings, brief_cache)
+    if brief is None or not brief.usable:
+        return fall_back("the job post says nothing about the company or the role")
+    draft = drafting.company_answer(
+        conn, field, brief, row["answer"] if row is not None else "", job_text=job_text, settings=settings, earlier=earlier
+    )
+    if not draft.ok:
+        return fall_back(f"AI draft rejected: {draft.note}")
+    basis = "your saved answer adapted to this company" if row is not None else "written from the job post"
+    return FieldAnswer(
+        field.label, draft.text, "draft", True,
+        f"company answer, {basis} ({'role only' if brief.thin else 'company brief'}): check it before submitting"
+        + _warning_text(draft.note),
+        kind=row["kind"] if row is not None else "", confidence=draft.confidence,
+        matched_question=matched, unknown_id=unknown_id,
+    )
 
 
 def _warning_text(note: str) -> str:
@@ -657,6 +720,27 @@ def _matched_answer(field: FormField, row: sqlite3.Row, score: float) -> FieldAn
     return make(value, False, "")
 
 
+def preview_company_answer(
+    conn: sqlite3.Connection,
+    job_text: str,
+    question: str = "Why do you want to work here?",
+    *,
+    settings: Settings | None = None,
+    max_length: int | None = None,
+) -> tuple[drafting.CompanyBrief | None, FieldAnswer]:
+    """What the engine would write for a company question on this job post, without any form. Saves nothing.
+
+    Runs the real path (:func:`answer_field` with ``record=False``), so a saved answer that matches the question is
+    adapted exactly as in a fill. Returns the brief too, so you can check it against the post.
+    """
+    field = FormField(label=question, type="textarea", max_length=max_length or 0)
+    cache: dict[str, drafting.CompanyBrief | None] = {}
+    answer = answer_field(
+        conn, field, profile_values(conn), job_text=job_text, settings=settings, record=False, brief_cache=cache
+    )
+    return cache.get(job_text), answer
+
+
 def answer_form(
     conn: sqlite3.Connection,
     fields: list[FormField],
@@ -677,11 +761,12 @@ def answer_form(
     values = profile_values(conn)
     results: list[FieldAnswer] = []
     earlier: list[str] = []  # long open answers written so far on this page, so the next one sounds different
+    briefs: dict[str, drafting.CompanyBrief | None] = {}  # the company brief, read once for the whole form
     for f in fields:
         try:
             answer = answer_field(
                 conn, f, values, job_scope=job_scope, job_city=job_city, page_url=page_url, settings=settings,
-                earlier=list(earlier), job_text=job_text, record=record,
+                earlier=list(earlier), job_text=job_text, record=record, brief_cache=briefs,
             )
             results.append(answer)
             if answer.source in ("draft", "bank") and len(answer.value.split()) >= EARLIER_MIN_WORDS:

@@ -92,6 +92,23 @@ class ReflectText(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class CompanyBriefReply(BaseModel):
+    """Task ``company_brief``: notes about the company and the role, copied from a job post.
+
+    Every field may be empty: the post often says nothing about what the company does. The code
+    (``drafting.build_company_brief``) then checks each field against the post and drops what the post
+    does not support, so nothing here is trusted until it has passed that check.
+    """
+
+    company: str = ""
+    role: str = ""
+    what_they_do: str = ""
+    mission: str = ""
+    values: list[str] = Field(default_factory=list)
+    duties: list[str] = Field(default_factory=list)
+    quotes: list[str] = Field(default_factory=list)  # short exact phrases from the post that back the notes
+
+
 class ResumePick(BaseModel):
     """Task ``resume_pick``: choose resume A or B by comparing the job post with what each resume
     actually contains (skills, projects, experience), not by its file name or label.
@@ -111,6 +128,7 @@ class ResumePick(BaseModel):
 TASK_MODELS: dict[str, type[BaseModel]] = {
     "form_answer": FormAnswers,
     "reflect_text": ReflectText,
+    "company_brief": CompanyBriefReply,
     "resume_pick": ResumePick,
     "match": MatchResult,
     "email": EmailDraft,

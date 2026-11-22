@@ -75,3 +75,42 @@ def save_fill(
         fill_id = int(cursor.lastrowid or 0)
         conn.execute("UPDATE action_log SET fill_id = ? WHERE id > ? AND fill_id IS NULL", (fill_id, log_after))
     return fill_id
+
+
+class FillNotFound(Exception):
+    """No ``fills`` row has that id (the API answers 404)."""
+
+
+class FillStatusError(Exception):
+    """The status change is not allowed (the API answers 409)."""
+
+
+def list_fills(conn: sqlite3.Connection, status: str | None = None, limit: int = 100) -> list[sqlite3.Row]:
+    """The filled pages history, newest first. ``status`` filters to ``filled``, ``submitted`` or ``abandoned``."""
+    if status is None:
+        return conn.execute("SELECT * FROM fills ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return conn.execute("SELECT * FROM fills WHERE status = ? ORDER BY id DESC LIMIT ?", (status, limit)).fetchall()
+
+
+def mark_fill(conn: sqlite3.Connection, fill_id: int, status: str) -> None:
+    """Mark a ``filled`` page as ``submitted`` or ``abandoned`` (you decide, never the code on its own).
+
+    Only a row that is still ``filled`` can change, so a submitted page cannot quietly become abandoned.
+    ``submitted_at`` is set when you mark it submitted.
+
+    Raises:
+        FillNotFound: no such row.
+        FillStatusError: ``status`` is not ``submitted`` / ``abandoned``, or the row was already decided.
+    """
+    if status not in ("submitted", "abandoned"):
+        raise FillStatusError(f"A fill can only be marked 'submitted' or 'abandoned', not {status!r}.")
+    row = conn.execute("SELECT status FROM fills WHERE id = ?", (fill_id,)).fetchone()
+    if row is None:
+        raise FillNotFound(f"There is no filled page with id {fill_id}.")
+    if row["status"] != "filled":
+        raise FillStatusError(f"Filled page {fill_id} is already {row['status']}.")
+    with conn:
+        conn.execute(
+            "UPDATE fills SET status = ?, submitted_at = CASE WHEN ? = 'submitted' THEN datetime('now') END WHERE id = ?",
+            (status, status, fill_id),
+        )

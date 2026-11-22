@@ -63,6 +63,7 @@ All commands
     python -m engine.cli forms fill [--resume A|B] [--post FILE] [--fixture NAME] [--fast]   fill the open page, outline what needs you, stop before Submit
     python -m engine.cli forms fill [--tab TEXT] [--post FILE] [--resume A|B] [--mode mock|dry_run] [--fast]   fill the form tab, then STOP (never submits)
     python -m engine.cli forms fill --fixture F   try it on a saved page in a test window (saves nothing)
+    python -m engine.cli forms why-company [--tab TEXT | --post FILE] [--question TEXT] [--mode dry_run]   preview the company answer for a job post (types nothing)
     python -m engine.cli resume pick --post FILE   pick resume A or B for a saved job post (a .txt file)
     python -m engine.cli browser open      open the bot's browser (log in by hand; close the window to stop)
 """
@@ -130,6 +131,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     filling.add_argument(
         "--mode", choices=("mock", "dry_run"), help="run mode for THIS command only (settings.json is not changed; live is never allowed here)"
     )
+    company = forms.add_parser("why-company", help="preview the answer to \"Why do you want to work here?\" for a job post")
+    company.add_argument("--tab", help="read the job post from the first tab whose address contains this text (default: the tab you are looking at)")
+    company.add_argument("--post", help="text file with the job post, instead of reading a tab")
+    company.add_argument("--question", default="Why do you want to work here?", help="the question to answer")
+    company.add_argument("--max-length", type=int, help="pretend the box holds this many characters")
+    company.add_argument("--mode", choices=("mock", "dry_run"), help="run mode for THIS command only (live is never allowed here)")
     questions = sub.add_parser("questions", help="unknown questions and suggested wordings").add_subparsers(
         dest="action", required=True
     )
@@ -163,6 +170,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _answer_fixture(conn, args.fixture, args.record)
             if args.action == "fill":
                 return _fill_form(conn, args)
+            if args.action == "why-company":
+                return _why_company(conn, args)
             if args.action == "elaborate":
                 if args.min_score is not None:
                     from engine.forms import drafting
@@ -491,6 +500,70 @@ def _fill_form(conn, args) -> int:  # type: ignore[no-untyped-def]
     except (RuntimeError, ValueError, OSError, safety.SafetyError, PickError, AIError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _why_company(conn, args) -> int:  # type: ignore[no-untyped-def]
+    """Preview the company answer for a job post. Read-only: it reads one page (or a file), types and saves nothing."""
+    import dataclasses
+    from pathlib import Path
+
+    from playwright.sync_api import sync_playwright
+
+    from engine import rag, safety
+    from engine.ai import AIError
+    from engine.forms.answers import preview_company_answer
+    from engine.forms.history import private_values
+    from engine.forms.jobfinder import tab_text
+    from engine.forms.reader import connect_to_bot_browser, find_current_page
+    from engine.settings import load_settings
+
+    settings = load_settings()
+    if args.mode:  # this command only: settings.json is never written, and `live` is not offered
+        settings = dataclasses.replace(settings, run_mode=args.mode)
+    try:
+        if args.post:
+            text, source = Path(args.post).read_text(encoding="utf-8"), args.post
+        else:
+            with sync_playwright() as p:
+                browser = connect_to_bot_browser(p)
+                if args.tab:
+                    matches = [pg for ctx in browser.contexts for pg in ctx.pages if args.tab in pg.url]
+                    if not matches:
+                        print(f"Error: no open tab has {args.tab!r} in its address.", file=sys.stderr)
+                        return 1
+                    page = matches[0]
+                else:
+                    page = find_current_page(browser)
+                safety.check("read", page.url, settings=settings)
+                text, source = tab_text(page), page.url
+                safety.log_action(conn, "read", page.url, "why-company preview: job post read")
+        text = rag.scrub(text, private_values(conn)).strip()  # rule 3: nothing personal goes to the AI
+        if not text:
+            print("Error: the job post is empty (nothing could be read).", file=sys.stderr)
+            return 1
+        print(f"Job post: {source}  ({len(text)} characters, your details removed)\nRun mode: {settings.run_mode}\n")
+        brief, answer = preview_company_answer(conn, text, args.question, settings=settings, max_length=args.max_length)
+    except (RuntimeError, ValueError, OSError, safety.SafetyError, AIError, rag.RagError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print("COMPANY BRIEF (what the job post says; the code removed anything it does not back up)")
+    if brief is None:
+        print("  (no brief: the AI failed or there was no text)")
+    else:
+        for label, value in (("Company", brief.company), ("Role", brief.role), ("What they do", brief.what_they_do),
+                             ("Mission", brief.mission), ("Values", "; ".join(brief.values)),
+                             ("Duties", "; ".join(brief.duties))):
+            print(f"  {label:<13}: {value or '-'}")
+        for quote in brief.quotes:
+            print(f"  quote        : \"{quote}\"")
+        print(f"  style        : {'ROLE ONLY (the post says little about the company)' if brief.thin else 'COMPANY + WHY YOU'}")
+        for item in brief.dropped:
+            print(f"  DROPPED (not in the post): {item}")
+    print(f"\nQUESTION: {args.question}")
+    print(f"ANSWER ({answer.source}, flagged={answer.flagged}):\n  {answer.value or '(empty: you answer this one)'}")
+    print(f"NOTE: {answer.note}")
+    print("\nNothing was typed into any page and nothing was saved.")
     return 0
 
 

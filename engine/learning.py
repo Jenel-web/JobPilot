@@ -29,21 +29,31 @@ written.
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from engine import rag
-from engine.profile import ANSWERS_PATH
+from engine import answers_file, rag
+from engine.ai import AIError
+from engine.profile import ANSWERS_PATH, ProfileError, load_answers
 from engine.settings import Settings
 
 
 class LearningError(Exception):
     """Something you can fix (bad id, saved question gone, protected answer not confirmed)."""
+
+
+class NotFound(LearningError):
+    """No suggestion or unknown question has that id (the API answers 404)."""
+
+
+class AlreadyDecided(LearningError):
+    """The suggestion or question was already approved, rejected or answered (the API answers 409)."""
+
+
+class ProtectedNotConfirmed(LearningError):
+    """A wording for a PROTECTED answer was approved without the extra confirmation (the API answers 409)."""
 
 
 def normalize(text: str) -> str:
@@ -190,7 +200,7 @@ def approve_wording(
     """
     row = _pending_row(conn, suggestion_id)
     if row["protected"] and not confirm_protected:
-        raise LearningError(
+        raise ProtectedNotConfirmed(
             f"Suggestion {suggestion_id} matches a PROTECTED answer ({row['matched_question']!r}). "
             "Check that the two questions really mean the same, then approve again with --yes-protected."
         )
@@ -223,34 +233,94 @@ def reject_wording(conn: sqlite3.Connection, suggestion_id: int) -> None:
 def _pending_row(conn: sqlite3.Connection, suggestion_id: int) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM suggested_wordings WHERE id = ?", (suggestion_id,)).fetchone()
     if row is None:
-        raise LearningError(f"There is no suggestion with id {suggestion_id}.")
+        raise NotFound(f"There is no suggestion with id {suggestion_id}.")
     if row["status"] != "pending":
-        raise LearningError(f"Suggestion {suggestion_id} was already {row['status']}.")
+        raise AlreadyDecided(f"Suggestion {suggestion_id} was already {row['status']}.")
     return row
 
 
+# ---- answering an unknown question ----------------------------------------------------------
+
+
+def answer_unknown(
+    conn: sqlite3.Connection,
+    unknown_id: int,
+    *,
+    answer: str,
+    kind: str,
+    scope: str = "any",
+    city: str = "",
+    answers_path: Path = ANSWERS_PATH,
+) -> Path:
+    """Save your answer to an unknown question: into ``answers.json``, the database, and mark it answered.
+
+    Order matters: the file is written first (with a backup), because the file is the source of truth and the
+    database is rebuilt from it. Returns the backup file made. This does NOT re-index; call
+    :func:`reindex_after_change` afterwards so the new answer can be found by meaning.
+
+    Args:
+        kind: ``fixed``, ``open`` or ``protected``. There is no default: you choose, on purpose.
+
+    Raises:
+        NotFound: no unknown question with this id.
+        AlreadyDecided: it was already answered.
+        LearningError: the answer is invalid (blank, bad kind or scope, city scope without a city) or the file is unreadable.
+    """
+    row = conn.execute("SELECT * FROM unknown_questions WHERE id = ?", (unknown_id,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no unknown question with id {unknown_id}.")
+    if row["status"] != "open":
+        raise AlreadyDecided(f"Unknown question {unknown_id} was already {row['status']}.")
+    question = " ".join(row["question_text"].split())
+    try:
+        backup = answers_file.upsert_entry(
+            answers_path, question=question, answer=answer, kind=kind, scope=scope, city=city
+        )
+        load_answers(conn, answers_path)
+    except (answers_file.AnswersFileError, ProfileError) as exc:
+        raise LearningError(str(exc)) from exc
+    saved = conn.execute(
+        "SELECT id FROM answers WHERE question = ? AND location_scope = ? AND city = ?",
+        (question, scope, city.strip() if scope == "city" else ""),
+    ).fetchone()
+    with conn:
+        conn.execute(
+            "UPDATE unknown_questions SET status = 'answered', answer_id = ? WHERE id = ?",
+            (saved["id"] if saved else None, unknown_id),
+        )
+    return backup
+
+
+def reindex_after_change(
+    conn: sqlite3.Connection, settings: Settings | None = None, answers_path: Path = ANSWERS_PATH
+) -> str | None:
+    """Reload ``answers.json`` into the database and rebuild the search index. Returns a warning, or ``None`` if all is well.
+
+    Call this after ``answers.json`` changed. If the re-index fails (for example Ollama is not running), the
+    change is NOT undone: it is already safe in the file. The returned sentence tells you to re-index later.
+    """
+    try:
+        load_answers(conn, answers_path)
+        rag.reindex(conn, settings)
+    except (rag.RagError, AIError, ProfileError, sqlite3.Error) as exc:
+        return f"Saved, but the search index was not rebuilt ({exc}). Run: python -m engine.cli rag reindex"
+    return None
+
+
 # ---- answers.json, safely -----------------------------------------------------------------
+# The file helpers live in ``engine/answers_file.py``. These wrappers turn its error into ours.
 
 
 def _read_answers(path: Path) -> list[dict]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError) as exc:
-        raise LearningError(f"Cannot read {path.name}: {exc}") from exc
-    if not isinstance(data, list):
-        raise LearningError(f"{path.name} must be a list of answers.")
-    return data
+        return answers_file.read_answers(path)
+    except answers_file.AnswersFileError as exc:
+        raise LearningError(str(exc)) from exc
 
 
 def _backup(path: Path) -> Path:
-    """Copy the file to ``answers.backup-<date>-<time>.json`` next to it before changing it."""
-    target = path.with_name(f"{path.stem}.backup-{datetime.now():%Y-%m-%d-%H%M%S}{path.suffix}")
-    shutil.copy2(path, target)
-    return target
+    return answers_file.backup(path)
 
 
 def _write_answers(path: Path, entries: list[dict]) -> None:
-    """Replace the file in one step: write a temp file, then swap it in."""
-    temp = path.with_name(path.name + ".tmp")
-    temp.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(temp, path)
+    answers_file.write_answers(path, entries)

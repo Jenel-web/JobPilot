@@ -580,7 +580,7 @@ def _fit_to_box(text: str, max_chars: int) -> tuple[str, bool]:
     return kept, True
 
 
-def _answer_warnings(text: str, tech: set[str], allowed_sentences: int) -> list[str]:
+def _answer_warnings(text: str, tech: set[str], allowed_sentences: int, section: str = "WRITE") -> list[str]:
     """Everything about a reflective answer that you may want to fix. None of these rejects the answer."""
     sentences = [s for s in re.split(r"(?<=[.!?])\s+", text) if s]
     found: list[str] = []
@@ -608,7 +608,7 @@ def _answer_warnings(text: str, tech: set[str], allowed_sentences: int) -> list[
     leaked = _FACT_LABEL.search(text)
     if leaked:
         found.append(f"repeats a note label ({leaked.group(0)!r})")
-    if _copies_prompt(text, "WRITE"):
+    if _copies_prompt(text, section):
         found.append("repeats wording from the prompt")
     return found
 
@@ -716,6 +716,246 @@ def reflect_answer(
     warnings += _earlier_warnings(text, earlier, given)
     used =[n for n in given if _mentions_project(text, n)] or given
     return DraftResult(text, float(reply["confidence"]), "; ".join(used), "; ".join(warnings))
+
+
+# ---- company answers ---------------------------------------------------------------------------------------
+#
+# "Why do you want to work here?" needs facts about the company, and the AI has none: a local model asked what it
+# knows about a company will invent things. So the answer is built in two steps, and the AI only READS:
+#
+#   1. build_company_brief: the model copies notes (what they do, mission, values, duties) out of the job post.
+#      Code then drops every note the post does not support, so the brief holds only what the post says.
+#   2. company_answer: the model writes ONE first-person answer from the brief + your own notes. Code rejects a
+#      reply that invents a fact, claims experience with the company ("I heard...") or carries private data.
+#
+# A post that says nothing about the company gives a "thin" brief, and the answer is about the ROLE instead.
+
+BRIEF_POST_CHARS = 6000  # how much of the job post the brief step reads
+BRIEF_MIN_SUPPORT = 0.6  # a note is kept when at least this share of its words appear in the post
+BRIEF_QUOTE_CHARS = 200
+_STEM = re.compile(r"[a-z0-9]{4,}")
+# Claims of experience with the company. The AI cannot have any, so a reply with one is rejected.
+_EXPERIENCE_CLAIM = re.compile(
+    r"\bi(?:'ve| have)?\s+(?:heard|read|followed|seen|been following|used|tried|visited|looked at)\b|"
+    r"\bfrom what i(?:'ve| have)?\s+(?:heard|know|read|saw|seen|gathered|understand)\b|"
+    r"\bi(?:'ve| have)? (?:always )?(?:admired|known|loved|followed)\b|\bi know (?:that )?(?:you|your|they)\b|"
+    r"\bi(?:'ve| have)? learned (?:about|that) (?:you|your)\b|\bi came across\b|\bi (?:read|saw|noticed) (?:that|your|about)\b",
+    re.I,
+)
+
+_COMPANY_SHAPE_FULL = (
+    "Write it as one short paragraph, in this order. (1) Start with the company: say what it does, in plain words, "
+    "using COMPANY NOTES. (2) Say what about that appeals to you, as a short honest reaction to that specific thing "
+    "(the mission, the initiative, the way they work), not as praise. (3) Connect it to me: one true thing from MY "
+    "NOTES, for example that I like building things or a project I made, so the reader sees why I would fit. "
+    "(4) Close with one short line that I would like to work with them toward the same goal. Promise no results. "
+    "If the box has fewer sentences than steps, merge steps but keep the company first."
+)
+_COMPANY_SHAPE_ROLE = (
+    "The post says little about the company, so write about the ROLE. Write one short paragraph, in this order. "
+    "(1) Say what the job involves, using the role and duties in COMPANY NOTES, and why that kind of work interests me. "
+    "(2) Connect it to me: one true thing from MY NOTES. (3) Close with one short line that I would like to contribute "
+    "and grow in this role. Say nothing about what the company does, its mission, culture, size or reputation, because "
+    "the post did not say. If the box has fewer sentences than steps, merge steps."
+)
+
+
+@dataclass(frozen=True)
+class CompanyBrief:
+    """What a job post says about the company and the role, after code has dropped anything the post does not support.
+
+    ``dropped`` lists the notes the model produced that the post did not back (shown in the preview so you can see
+    the model trying to invent something). ``thin`` means the post says nothing about what the company does.
+    """
+
+    company: str = ""
+    role: str = ""
+    what_they_do: str = ""
+    mission: str = ""
+    values: tuple[str, ...] = ()
+    duties: tuple[str, ...] = ()
+    quotes: tuple[str, ...] = ()
+    dropped: tuple[str, ...] = ()
+
+    @property
+    def thin(self) -> bool:
+        """True when the post says nothing about what the company does or stands for: answer about the role."""
+        return not (self.what_they_do or self.mission or self.values)
+
+    @property
+    def usable(self) -> bool:
+        """True when there is something to write about: the company, or at least the role."""
+        return not self.thin or bool(self.role or self.duties)
+
+    def notes(self) -> str:
+        """The brief as the lines put in the answer prompt."""
+        lines = [
+            f"Company: {self.company}" if self.company else "",
+            f"Role: {self.role}" if self.role else "",
+            f"What they do: {self.what_they_do}" if self.what_they_do else "",
+            f"Mission: {self.mission}" if self.mission else "",
+            f"Values: {'; '.join(self.values)}" if self.values else "",
+            f"Main duties: {'; '.join(self.duties)}" if self.duties else "",
+        ]
+        return "\n".join(line for line in lines if line) or "(the post says nothing usable)"
+
+
+def _stems(text: str) -> set[str]:
+    return {w[:5] for w in _STEM.findall(text.lower())}
+
+
+def _supported(note: str, job_text: str, job_stems: set[str]) -> bool:
+    """True if a note is backed by the post: most of its words are in the post, and no number or name is new."""
+    stems = _stems(note)
+    if not stems or len(stems & job_stems) / len(stems) < BRIEF_MIN_SUPPORT:
+        return False
+    return _ungrounded_number(note, job_text) is None and _ungrounded_name(note, job_text) is None
+
+
+def _ground_brief(reply: dict, job_text: str) -> CompanyBrief:
+    """Keep only the parts of the model's notes that the post backs; list the rest as ``dropped``."""
+    job_stems = _stems(job_text)
+    flat = _norm(job_text)
+    dropped: list[str] = []
+
+    def keep(note: object, label: str) -> str:
+        text = " ".join(str(note or "").split())
+        if not text:
+            return ""
+        if _supported(text, job_text, job_stems):
+            return text
+        dropped.append(f"{label}: {text}")
+        return ""
+
+    company = " ".join(str(reply.get("company") or "").split())
+    if company and not _contains(job_text, company):
+        dropped.append(f"company: {company}")
+        company = ""
+    quotes = []
+    for quote in reply.get("quotes") or []:
+        text = " ".join(str(quote).split())
+        if text and len(text) <= BRIEF_QUOTE_CHARS and _norm(text) in flat:
+            quotes.append(text)
+        elif text:
+            dropped.append(f"quote: {text}")
+    return CompanyBrief(
+        company=company,
+        role=keep(reply.get("role"), "role"),
+        what_they_do=keep(reply.get("what_they_do"), "what they do"),
+        mission=keep(reply.get("mission"), "mission"),
+        values=tuple(v for v in (keep(x, "value") for x in (reply.get("values") or [])[:3]) if v),
+        duties=tuple(d for d in (keep(x, "duty") for x in (reply.get("duties") or [])[:3]) if d),
+        quotes=tuple(quotes[:3]),
+        dropped=tuple(dropped),
+    )
+
+
+def build_company_brief(job_text: str | None, settings: Settings | None = None) -> CompanyBrief | None:
+    """Notes about the company and the role, read from the job post. ``None`` when there is nothing to read or the AI failed.
+
+    The model only copies; :func:`_ground_brief` then removes everything the post does not say. The post must
+    already be scrubbed of your private details (the orchestrator does that before any AI sees it, rule 3).
+    """
+    if not job_text or not job_text.strip():
+        return None
+    job_text = job_text[:BRIEF_POST_CHARS]
+    prompt = load_prompt("BRIEF", post=job_text.strip())
+    try:
+        reply = ai.ask_ai("company_brief", prompt, settings=settings)
+    except (ai.AIError, NotImplementedError):
+        return None
+    dumped = json.dumps(reply, ensure_ascii=False)
+    if rag.scrub(dumped) != dumped:  # an email or phone number in the reply: do not use any of it
+        return None
+    return _ground_brief(reply, job_text)
+
+
+def company_answer(
+    conn: sqlite3.Connection,
+    field: FormField,
+    brief: CompanyBrief,
+    saved: str = "",
+    *,
+    job_text: str = "",
+    settings: Settings | None = None,
+    earlier: list[str] | None = None,
+) -> DraftResult:
+    """Answer a "why do you want to work here?" question from the company brief and your own notes.
+
+    A full brief gives: what the company does, why that appeals to you, one true thing about you, a shared-goal
+    closing. A thin brief gives the same shape about the ROLE. ``saved`` is your saved open answer, used as one more
+    note about you and for its voice. HARD BLOCKS (the answer is rejected): private data, a number or name that is in
+    none of the notes or the post, assistant talk, a claim like "I heard...", an empty reply. Style problems are
+    warnings in ``DraftResult.note``.
+
+    Raises:
+        DraftError: the question is sensitive or the field is not a text box.
+    """
+    _refuse_if_sensitive(field.label)
+    if field.type not in DRAFTABLE_TYPES:
+        raise DraftError(f"The AI only writes into text boxes, not {field.type!r} fields")
+    if not brief.usable:
+        return _rejected("the job post says nothing about the company or the role")
+    sentences, chars = _limits_for(field, reflective=True)
+    budget = int(sentences)
+    earlier = earlier or []
+    facts = gather_reflective_facts(
+        conn, f"{brief.what_they_do} {brief.role} {field.label}".strip(), settings,
+        count=1, include_result=False, about_first=True,
+    )
+    if not facts:
+        return _rejected("no notes about you to connect the answer to")
+    prompt = load_prompt(
+        "COMPANY",
+        question=" ".join(field.label.split()).replace('"', "'"),
+        saved=" ".join(saved.split()).replace('"', "'"),
+        brief=brief.notes(),
+        facts=format_facts(facts),
+        shape=_COMPANY_SHAPE_ROLE if brief.thin else _COMPANY_SHAPE_FULL,
+        length=_length_hint(budget),
+        max_sentences=sentences,
+        max_chars=chars,
+        voice=_voice_notes(conn) or "(none given)",
+        earlier=_format_earlier(earlier),
+    )
+    try:
+        reply = ai.ask_ai("reflect_text", prompt, settings=settings)
+    except (ai.AIError, NotImplementedError) as exc:
+        return _rejected(f"AI unavailable: {exc}")
+
+    stored = _stored_projects(conn)
+    shorten = {name: project_short_name(p) for name, p in stored.items() if project_short_name(p) != name}
+    text = _shorten_names(" ".join(reply["answer"].split()), shorten)
+    if not text or reply["confidence"] <= 0:
+        return _rejected("the AI found nothing to say from the job post and your notes")
+    text, cut = _fit_to_box(text, int(chars))
+    if not text:
+        return _rejected(f"even the first sentence is longer than the box ({chars} characters)")
+    # Hard blocks.
+    if rag.scrub(text) != text:
+        return _rejected("the AI included an email, phone or ID number")
+    if _AI_TALK.search(text):
+        return _rejected("the AI answered like an assistant, not an applicant")
+    claim = _EXPERIENCE_CLAIM.search(text)
+    if claim:
+        return _rejected(f"the AI claimed experience with the company ({claim.group(0)!r}), which it cannot have")
+    allowed = " ".join([field.label, saved, brief.notes(), job_text, *(h.text for h in facts)])
+    number = _ungrounded_number(text, allowed)
+    if number:
+        return _rejected(f"the number {number} is not in the job post or your notes")
+    name = _ungrounded_name(text, allowed)
+    if name:
+        return _rejected(f"{name!r} is not in the job post or your notes")
+    # Warnings only.
+    warnings = _answer_warnings(text, _tech_terms(conn), budget, section="COMPANY")
+    if brief.company and not _contains(text, brief.company):
+        warnings.append(f"does not name the company ({brief.company})")
+    if brief.thin:
+        warnings.append("the post said little about the company, so this is about the role")
+    if cut:
+        warnings.append(f"cut after the last whole sentence that fits the {chars}-character box")
+    warnings += _earlier_warnings(text, earlier, [])
+    return DraftResult(text, float(reply["confidence"]), "job post + your notes", "; ".join(warnings))
 
 
 # ---- relocation answers -------------------------------------------------------------------------------------
