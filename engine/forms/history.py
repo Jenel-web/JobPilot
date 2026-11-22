@@ -15,8 +15,37 @@ import json
 import sqlite3
 from pathlib import Path
 
+import re
+
 from engine import rag
 from engine.forms.filler import FillReport
+from engine.forms.jobfinder import SHARED_HOSTS
+
+# Names of job boards and application systems. A page that says "Workable" or "Prosple" is not telling you the
+# employer, so these are never saved as the company.
+JOB_BOARD_NAMES = frozenset(
+    {host.split(".")[0] for host in SHARED_HOSTS}
+    | {"careerspage", "indeed", "jobstreet", "linkedin", "glassdoor", "kalibrr", "workday", "careers", "jobs", "apply"}
+)
+MAX_COMPANY_CHARS = 80
+
+
+def _board_key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def pick_company(*candidates: str) -> str:
+    """The first usable company name, in the order given; ``""`` when none is reliable (it never guesses).
+
+    A candidate is skipped when it is empty, too long to be a name, or the name of a job board (``Prosple``,
+    ``Workable``...). Callers pass the most reliable source first: the company brief (checked against the job post),
+    then the page's ``og:site_name``.
+    """
+    for raw in candidates:
+        name = " ".join((raw or "").split())
+        if name and len(name) <= MAX_COMPANY_CHARS and _board_key(name) not in JOB_BOARD_NAMES:
+            return name
+    return ""
 
 
 def last_log_id(conn: sqlite3.Connection) -> int:
@@ -47,7 +76,8 @@ def save_fill(
     """Save the ``fills`` row (status ``filled``) for a finished fill and link its log rows. Returns the row id.
 
     Args:
-        job_title: the job post's tab title, as seen. ``company`` stays empty until a reliable way to read it exists.
+        job_title: the job post's tab title, as seen.
+        company: from :func:`pick_company`; empty (saved as NULL) when no reliable name was found.
         resume_id: ``"A"`` / ``"B"``, or ``None`` when no resume was uploaded.
         log_after: ``last_log_id(conn)`` taken before the fill; every newer unlinked log row belongs to this fill.
     """

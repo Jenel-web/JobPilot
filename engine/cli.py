@@ -574,6 +574,7 @@ def _print_outcome(outcome, saved: bool) -> None:  # type: ignore[no-untyped-def
     else:
         others = "; ".join(f"[{t.index}] {t.title[:40] or t.url[:40]}" for t in outcome.tabs)
         print("Job post used: NONE found." + (f" Your other tabs: {others}" if others else ""))
+    print(f"Company: {outcome.company or '(not found: left empty)'}")
     if outcome.resume_id:
         print(f"Resume: {outcome.resume_id}" + (f"  ({outcome.resume_reason})" if outcome.resume_reason else ""))
     for message in outcome.messages:

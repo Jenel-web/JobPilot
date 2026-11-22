@@ -356,3 +356,93 @@ def test_the_whole_chain_on_each_saved_form(
     assert second.unknown_ids == first.unknown_ids  # ...it finds the same ones
     assert all(r["times_seen"] == 2 for r in again if r["id"] in first.unknown_ids)  # ...and counts them again
     assert bad_clicks(page) == [], "the fill clicked something that is not a field"
+
+
+# ---- the company name in the history row --------------------------------------------------------------------------
+
+
+from engine.forms import drafting  # noqa: E402
+from engine.forms.drafting import CompanyBrief  # noqa: E402
+from engine.forms.history import pick_company  # noqa: E402
+
+META_FORM = FORM.replace("<html><body>", '<html><head><meta property="og:site_name" content="Acme Corp"></head><body>')
+
+
+def count_briefs(monkeypatch: pytest.MonkeyPatch, company: str) -> list[str]:
+    """Replace the brief step with one that names ``company`` and remembers every post it was given."""
+    seen: list[str] = []
+
+    def fake_build(job_text: str | None, settings: Settings | None = None) -> CompanyBrief | None:
+        seen.append(job_text or "")
+        return CompanyBrief(company=company, what_they_do="Builds software.")
+
+    monkeypatch.setattr(drafting, "build_company_brief", fake_build)
+    return seen
+
+
+@pytest.mark.parametrize(
+    "candidates, expected",
+    [
+        (("Acme Corp", "Other"), "Acme Corp"),  # the first usable one wins
+        (("", "Acme Corp"), "Acme Corp"),
+        (("Workable", "Acme Corp"), "Acme Corp"),  # a job board is not the employer
+        (("Prosple", "greenhouse", " Lever "), ""),
+        (("Careers-Page", "jobs"), ""),
+        (("x" * 200,), ""),  # too long to be a name
+        (("  Acme   Corp  ",), "Acme Corp"),  # whitespace tidied
+        ((), ""),
+    ],
+)
+def test_pick_company_never_guesses_and_skips_job_boards(candidates: tuple[str, ...], expected: str) -> None:
+    assert pick_company(*candidates) == expected
+
+
+def test_the_company_comes_from_the_brief_and_is_saved(
+    conn: sqlite3.Connection, page: Page, spy: Spy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = count_briefs(monkeypatch, "Acme Corp")
+    out = run(conn, page, tmp_path, post=JobPost(POST_TEXT, "opener", "Backend Intern - Acme"))
+    assert out.company == "Acme Corp"
+    assert conn.execute("SELECT company FROM fills WHERE id = ?", (out.fill_id,)).fetchone()[0] == "Acme Corp"
+    assert seen == [POST_TEXT]  # the post is read once...
+    assert set(spy.answer_calls[0]["brief_cache"]) == {POST_TEXT}  # ...and the answer engine gets that same brief
+
+
+def test_a_job_board_name_in_the_brief_falls_back_to_the_page_site_name(
+    conn: sqlite3.Connection, browser: Browser, spy: Spy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    count_briefs(monkeypatch, "Workable")
+    pg = browser.new_page()
+    pg.set_content(META_FORM)
+    out = run(conn, pg, tmp_path, post=JobPost(POST_TEXT, "opener"))
+    pg.close()
+    assert out.company == "Acme Corp"
+
+
+def test_no_reliable_name_leaves_the_company_empty(
+    conn: sqlite3.Connection, page: Page, spy: Spy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    count_briefs(monkeypatch, "")
+    out = run(conn, page, tmp_path, post=JobPost(POST_TEXT, "opener"))
+    assert out.company == ""
+    assert conn.execute("SELECT company FROM fills WHERE id = ?", (out.fill_id,)).fetchone()[0] is None
+
+
+def test_no_job_post_means_no_brief_and_no_extra_ai_call(
+    conn: sqlite3.Connection, page: Page, spy: Spy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = count_briefs(monkeypatch, "Acme Corp")
+    out = run(conn, page, tmp_path)  # the finder is stubbed to find nothing
+    assert seen == [] and out.company == ""
+
+
+def test_a_company_question_on_the_form_reuses_the_same_brief(
+    conn: sqlite3.Connection, browser: Browser, real_engine: Spy, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the REAL answer engine and a company question on the form, the post is still read only once."""
+    seen = count_briefs(monkeypatch, "Acme Corp")
+    pg = browser.new_page()
+    pg.set_content(FORM.replace("<button", "<label>Why do you want to work here? <textarea name=why></textarea></label><button"))
+    out = run(conn, pg, tmp_path, post=JobPost(POST_TEXT, "opener"))
+    pg.close()
+    assert seen == [POST_TEXT] and out.company == "Acme Corp"

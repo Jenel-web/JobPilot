@@ -751,17 +751,20 @@ def answer_form(
     settings: Settings | None = None,
     job_text: str | None = None,
     record: bool = True,
+    brief_cache: dict[str, drafting.CompanyBrief | None] | None = None,
 ) -> list[FieldAnswer]:
     """Answer every field, in page order. One failing field never stops the others.
 
     ``record=False`` makes it a preview: unknown questions and suggested wordings are not saved.
+    ``brief_cache`` is the company brief already built for ``job_text`` (``{job_text: brief}``); without one the
+    brief is built when the first company question needs it.
 
     Logs one ``read`` row to ``action_log`` (a count only: values can hold phone or email).
     """
     values = profile_values(conn)
     results: list[FieldAnswer] = []
     earlier: list[str] = []  # long open answers written so far on this page, so the next one sounds different
-    briefs: dict[str, drafting.CompanyBrief | None] = {}  # the company brief, read once for the whole form
+    briefs = brief_cache if brief_cache is not None else {}  # the company brief, read once for the whole form
     for f in fields:
         try:
             answer = answer_field(

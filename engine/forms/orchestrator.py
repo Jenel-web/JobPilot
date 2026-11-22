@@ -24,14 +24,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 
 from engine import matcher, rag, safety
 from engine.ai import AIError
-from engine.forms import jobpost
+from engine.forms import drafting, jobpost
 from engine.forms.answers import answer_form
 from engine.forms.filler import DELAY_RANGE, FillReport, ResumeFile, fill_page, load_resume_file
-from engine.forms.history import last_log_id, private_values, save_fill
+from engine.forms.history import last_log_id, pick_company, private_values, save_fill
 from engine.forms.jobfinder import JobPost, TabInfo, find_job_post, job_text_of
 from engine.forms.reader import read_fields
 from engine.settings import Settings
@@ -48,6 +49,7 @@ class FillOutcome:
     tabs: list[TabInfo] = field(default_factory=list)  # your other tabs, for "Which one is the job post?"
     resume_id: str | None = None
     resume_reason: str = ""
+    company: str = ""  # the employer's name for the history row (empty when no reliable name was found)
     unknown_ids: list[int] = field(default_factory=list)  # questions with no saved answer (already on the list)
     messages: list[str] = field(default_factory=list)  # plain sentences for you: what was skipped and why
 
@@ -92,6 +94,16 @@ def _choose_resume(
         return None
     outcome.resume_id = resume_id.upper()
     return file
+
+
+def _site_name(page: Page) -> str:
+    """The page's ``og:site_name`` (a fallback company name), or "". Read-only; any page problem gives ""."""
+    try:
+        return str(
+            page.evaluate("document.querySelector('meta[property=\"og:site_name\"]')?.content || ''")
+        ).strip()
+    except PlaywrightError:
+        return ""
 
 
 def fill_current_page(
@@ -141,8 +153,16 @@ def fill_current_page(
 
     resume = _choose_resume(conn, job_text, resume_id, settings, outcome)
     scope, city = job_location(job_text)
+    # The company brief is read from the post ONCE: it names the company for the history row, and company questions
+    # on the form reuse it (answer_form gets it through ``brief_cache``). No post means no brief and no AI call.
+    briefs: dict[str, drafting.CompanyBrief | None] = {}
+    if job_text:
+        briefs[job_text] = drafting.build_company_brief(job_text, settings)
+    brief = briefs.get(job_text or "")
+    outcome.company = pick_company(brief.company if brief else "", _site_name(page))
     answers = answer_form(
-        conn, fields, job_scope=scope, job_city=city, page_url=page.url, settings=settings, job_text=job_text, record=save
+        conn, fields, job_scope=scope, job_city=city, page_url=page.url, settings=settings, job_text=job_text, record=save,
+        brief_cache=briefs,
     )
     outcome.unknown_ids = [a.unknown_id for a in answers if a.unknown_id is not None]
 
@@ -153,5 +173,7 @@ def fill_current_page(
     )
     if save:
         title = outcome.post.tab_title if outcome.post else ""
-        outcome.fill_id = save_fill(conn, outcome.report, job_title=title, resume_id=outcome.resume_id, log_after=log_after)
+        outcome.fill_id = save_fill(
+            conn, outcome.report, job_title=title, company=outcome.company, resume_id=outcome.resume_id, log_after=log_after
+        )
     return outcome
