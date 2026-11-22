@@ -168,16 +168,20 @@ CREATE INDEX IF NOT EXISTS idx_log_fill ON action_log(fill_id);
 TABLES = ("profile", "resumes", "answers", "answer_aliases", "unknown_questions", "suggested_wordings", "fills", "action_log")
 
 
-def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
+def connect(path: Path | str = DB_PATH, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open the database (creating the file and its folder if needed).
 
     Rows come back as ``sqlite3.Row`` so you can read ``row["answer"]`` by
     column name. Foreign keys are switched on (SQLite has them off by default).
     Pass ``":memory:"`` for a throwaway database (tests do this).
+
+    ``check_same_thread=False`` is for the API only: it opens ONE connection per request, but a request's
+    set-up, endpoint and clean-up may run on different worker threads. The connection is never shared
+    between requests, so this is safe.
     """
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
