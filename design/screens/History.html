@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Filled pages</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Mockup sheet: the v0 Filled pages history. Every value comes from tokens.css. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--jp-line-soft);font-family:var(--jp-font-sans);color:var(--jp-ink);display:flex;flex-direction:column;gap:40px;padding:32px 0;align-items:center}
+.label{width:1440px;font-size:13px;font-weight:500;color:var(--jp-ink-2);line-height:1.5}
+.label b{color:var(--jp-ink);font-weight:600}
+.frame{position:relative;width:1440px;background:var(--jp-ground);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jp-line)}
+.topbar{height:var(--jp-topbar);flex:0 0 var(--jp-topbar);display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:var(--jp-surface);border-bottom:1px solid var(--jp-line)}
+.logo{font-family:var(--jp-font-serif);font-size:20px;font-weight:500}
+.mode{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--jp-radius-control);background:var(--jp-status-queued-bg);color:var(--jp-status-queued);font-size:13px;font-weight:600;letter-spacing:.02em}
+.sm{font-size:13px;color:var(--jp-ink-2)}
+.body{flex:1;display:flex;min-height:0}
+nav{width:var(--jp-sidebar);flex:0 0 var(--jp-sidebar);background:var(--jp-surface);border-right:1px solid var(--jp-line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;height:var(--jp-row);padding:0 10px;border-radius:var(--jp-radius-control)}
+.nav.on{background:var(--jp-brand-tint);color:var(--jp-brand);font-weight:600}
+.navfoot{margin-top:auto;padding:0 10px;font-size:13px;color:var(--jp-ink-2);line-height:1.6}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
+.count.amber{background:var(--jp-amber)}
+.count.blue{background:var(--jp-status-queued)}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:24px 28px;position:relative}
+h1{margin:0;font-family:var(--jp-font-serif);font-weight:500;font-size:28px;line-height:1.15}
+.sub{margin:6px 0 0;font-size:14px;color:var(--jp-ink-2)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--jp-radius-control);font-size:14px;font-weight:500;border:1px solid var(--jp-line-strong);background:var(--jp-surface);color:var(--jp-ink);white-space:nowrap}
+.btn.primary{background:var(--jp-brand);border-color:var(--jp-brand);color:#fff;font-weight:600}
+.btn.danger{background:var(--jp-danger);border-color:var(--jp-danger);color:#fff;font-weight:600}
+.btn.link{border-color:transparent;background:transparent;color:var(--jp-brand);padding:0 8px}
+.btn.focus{outline:2px solid var(--jp-ink);outline-offset:2px}
+.sm2{height:32px;padding:0 12px;font-size:13px}
+.toolbar{display:flex;align-items:center;gap:8px}
+.fchip{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--jp-line-strong);background:var(--jp-surface);font-size:13px;font-weight:500}
+.fchip.on{background:var(--jp-ink);border-color:var(--jp-ink);color:#fff}
+/* StatusChip: filled uses the "queued" token (waiting for you), abandoned the "rejected" token */
+.st{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:500}
+.st.filled{background:var(--jp-status-queued-bg);color:var(--jp-status-queued)}
+.st.submitted{background:var(--jp-status-submitted-bg);color:var(--jp-status-submitted)}
+.st.abandoned{background:var(--jp-status-rejected-bg);color:var(--jp-status-rejected)}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--jp-amber-text)}
+.flag svg{width:14px;height:14px;fill:var(--jp-amber)}
+.seen{font-size:13px;color:var(--jp-ink-2)}
+.seen a,a.u{color:var(--jp-brand);font-weight:500;text-decoration:none}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--jp-surface)}
+.tablewrap{border:1px solid var(--jp-line);border-radius:var(--jp-radius-card);overflow:hidden;background:var(--jp-surface)}
+th{height:var(--jp-row);text-align:left;font-size:13px;font-weight:500;color:var(--jp-ink-2);padding:0 14px;border-bottom:1px solid var(--jp-line);background:var(--jp-surface)}
+td{height:52px;padding:8px 14px;border-bottom:1px solid var(--jp-line-soft);line-height:1.35;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr.sel td{background:var(--jp-brand-tint)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.act{white-space:nowrap;text-align:right}
+td:first-child{white-space:nowrap}
+td b{font-weight:600}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:var(--jp-drawer);background:var(--jp-surface);border-left:1px solid var(--jp-line);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:16px;overflow:hidden}
+.drawer h2{margin:0;font-size:20px;font-weight:600;padding-right:32px;line-height:1.3}
+.drawer .x{position:absolute;top:18px;right:20px;font-size:20px;color:var(--jp-ink-2)}
+.k{font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.meta{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:14px}
+.meta .k{padding-top:1px}
+.shot{position:relative;height:220px;border:1px solid var(--jp-line);border-radius:var(--jp-radius-control);background:var(--jp-ground);overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:7px}
+.shot .bar{height:8px;border-radius:2px;background:var(--jp-line)}
+.shot .in{height:16px;border-radius:2px;border:1px solid var(--jp-line-strong);background:var(--jp-surface)}
+.shot .in.g{border-color:var(--jp-amber);background:var(--jp-amber-bg)}
+.shot .open{position:absolute;right:10px;bottom:10px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-muted-bg);font-size:12px}
+.fitem{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.4}
+.fitem .flag{padding-top:2px}
+.actions{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:16px;border-top:1px solid var(--jp-line-soft)}
+.note{font-size:13px;color:var(--jp-ink-2);line-height:1.45;margin:0}
+.box{padding:12px 14px;border-radius:var(--jp-radius-control);background:var(--jp-ground);border:1px solid var(--jp-line)}
+.toast{position:absolute;right:24px;bottom:24px;background:var(--jp-ink);color:#fff;font-size:14px;padding:12px 16px;border-radius:var(--jp-radius-card)}
+.overlay{position:absolute;inset:0;background:rgba(23,32,27,.35);display:flex;align-items:center;justify-content:center}
+.dialog{width:480px;background:var(--jp-surface);border-radius:var(--jp-radius-card);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:14px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog ul{margin:0;padding-left:20px;font-size:14px;line-height:1.6}
+.dialog .row{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--jp-ink-2)}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--jp-status-submitted)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 24px;border:1px dashed var(--jp-line-strong);border-radius:var(--jp-radius-card);background:var(--jp-surface);text-align:center}
+.empty p{margin:0;font-size:14px;color:var(--jp-ink-2);max-width:420px;line-height:1.5}
+</style>
+</head>
+<body>
+<!--
+  Filled pages history, v0. Every press of "Fill this page".
+  Frames: 1 Table (filters, Mark submitted / Abandoned on rows still "filled")
+          2 Drawer: screenshot, fields, flagged, actions
+          3 ConfirmDialog for Abandoned
+          4 After Mark submitted: Toast, row moves to submitted
+          5 Empty state
+  Status chip colours (no new tokens): filled = queued blue (waiting for you),
+  submitted = submitted green, abandoned = rejected grey.
+-->
+
+<!-- ============ Frame 1: Table ============ -->
+<div class="label"><b>1 · Table.</b> Newest first. FilterChips by status; "Filled" means you haven't decided yet, so it is the one with a count in the sidebar. Rows still <i>filled</i> carry <b>Mark submitted</b> and <b>Abandoned</b>; once decided, a row has no buttons (the engine allows one change only). Row click opens the drawer. Status always shows as text in its chip.</div>
+<div class="frame" style="height:640px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav on">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Filled pages</h1><p class="sub">9 pages filled · 2 waiting for you to mark</p></div></div>
+      <div class="toolbar"><span class="fchip on">All 9</span><span class="fchip">Filled 2</span><span class="fchip">Submitted 6</span><span class="fchip">Abandoned 1</span></div>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:9%"><col style="width:13%"><col style="width:20%"><col style="width:19%"><col style="width:7%"><col style="width:7%"><col style="width:9%"><col style="width:16%"></colgroup>
+        <thead><tr><th>Date</th><th>Company</th><th>Job</th><th>Page</th><th>Resume</th><th class="num">Flagged</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="seen">Nov 25, 14:02</td><td>Acme</td><td>Junior Java Developer</td><td class="seen"><a href="#">acme.com/careers/apply/…</a></td><td>A</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>2</span></td><td><span class="st filled">Filled</span></td><td class="act"><span class="btn sm2">Mark submitted</span> <span class="btn link sm2">Abandoned</span></td></tr>
+          <tr><td class="seen">Nov 25, 11:40</td><td>Globex</td><td>Backend Intern</td><td class="seen"><a href="#">globex.com/apply</a></td><td>B</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td><span class="st filled">Filled</span></td><td class="act"><span class="btn sm2">Mark submitted</span> <span class="btn link sm2">Abandoned</span></td></tr>
+          <tr><td class="seen">Nov 24, 16:15</td><td>Kumu</td><td>Web Developer Intern</td><td class="seen"><a href="#">apply.workable.com/kumu/…</a></td><td>A</td><td class="num seen">0</td><td><span class="st submitted">Submitted</span></td><td></td></tr>
+          <tr><td class="seen">Nov 24, 10:03</td><td>Pulse Labs</td><td>Frontend Intern</td><td class="seen"><a href="#">boards.greenhouse.io/pulse…</a></td><td>A</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>3</span></td><td><span class="st abandoned">Abandoned</span></td><td></td></tr>
+          <tr><td class="seen">Nov 23, 19:21</td><td><span class="sm">Unknown</span></td><td><span class="sm">No job post</span></td><td class="seen"><a href="#">docs.google.com/forms/…</a></td><td><span class="sm">None</span></td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td><span class="st submitted">Submitted</span></td><td></td></tr>
+          <tr><td class="seen">Nov 22, 15:47</td><td>Taguig Tech</td><td>Junior Developer</td><td class="seen"><a href="#">taguigtech.com/careers/…</a></td><td>A</td><td class="num seen">0</td><td><span class="st submitted">Submitted</span></td><td></td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 2: Drawer ============ -->
+<div class="label"><b>2 · Drawer</b> (row click). The screenshot taken right after the fill (click "Open full size" for the whole image in a new tab). Then what was filled and what was flagged, <b>by label only</b>: the engine never sends typed values to the dashboard (a value could be your phone or email), so the screenshot is where you see the values. Mark as submitted is the primary button here.</div>
+<div class="frame" style="height:900px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav on">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Filled pages</h1><p class="sub">9 pages filled · 2 waiting for you to mark</p></div></div>
+      <div class="toolbar"><span class="fchip on">All 9</span><span class="fchip">Filled 2</span><span class="fchip">Submitted 6</span><span class="fchip">Abandoned 1</span></div>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:14%"><col style="width:20%"><col style="width:36%"><col style="width:12%"><col style="width:18%"></colgroup>
+        <thead><tr><th>Date</th><th>Company</th><th>Job</th><th class="num">Flagged</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td class="seen">Nov 25, 14:02</td><td>Acme</td><td>Junior Java Developer</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>2</span></td><td><span class="st filled">Filled</span></td></tr>
+          <tr><td class="seen">Nov 25, 11:40</td><td>Globex</td><td>Backend Intern</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td><span class="st filled">Filled</span></td></tr>
+          <tr><td class="seen">Nov 24, 16:15</td><td>Kumu</td><td>Web Developer Intern</td><td class="num seen">0</td><td><span class="st submitted">Submitted</span></td></tr>
+          <tr><td class="seen">Nov 24, 10:03</td><td>Pulse Labs</td><td>Frontend Intern</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>3</span></td><td><span class="st abandoned">Abandoned</span></td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+  <div class="drawer">
+    <span class="x">×</span>
+    <div style="display:flex;flex-direction:column;gap:8px"><h2>Junior Java Developer – Acme</h2><span><span class="st filled">Filled</span></span></div>
+    <div class="meta">
+      <span class="k">Page</span><a class="u" href="#">acme.com/careers/apply/java-dev</a>
+      <span class="k">Filled</span><span>Nov 25, 14:02</span>
+      <span class="k">Resume</span><span>A</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="k">Screenshot after filling</span>
+      <div class="shot">
+        <div class="bar" style="width:40%"></div>
+        <div class="bar" style="width:22%;margin-top:6px"></div><div class="in"></div>
+        <div class="bar" style="width:18%"></div><div class="in"></div>
+        <div class="bar" style="width:34%"></div><div class="in g" style="height:40px"></div>
+        <div class="bar" style="width:28%"></div><div class="in g"></div>
+        <span class="btn sm2 open">Open full size</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="k">Flagged · 2</span>
+      <div class="fitem"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg></span><div><b style="font-weight:600">Why do you want to work at Acme?</b><br><span class="sm">AI draft, check it.</span></div></div>
+      <div class="fitem"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg></span><div><b style="font-weight:600">How many hours per week can you commit?</b><br><span class="sm">No saved answer, left empty.</span></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="k">Filled · 12</span>
+      <div class="tags"><span class="tag">First name</span><span class="tag">Last name</span><span class="tag">Email</span><span class="tag">Phone</span><span class="tag">School</span><span class="tag">Degree</span><span class="tag">Graduation year</span><span class="tag">Skills</span><span class="tag">GitHub</span><span class="tag">Expected salary</span><span class="tag">Start date</span><span class="tag">Resume</span></div>
+    </div>
+    <div class="actions"><span class="btn">Abandoned</span><span style="flex:1"></span><span class="btn primary">Mark as submitted</span></div>
+  </div>
+</div>
+
+<!-- ============ Frame 3: Abandoned confirm ============ -->
+<div class="label"><b>3 · Abandoned confirm.</b> A status can be changed only once (the engine refuses a second change), so both buttons are final. Abandoned gets a ConfirmDialog because it is the one you might press by mistake on the wrong row; Mark submitted does not (you just did it, and the Toast names the job). Ask: want a dialog on both?</div>
+<div class="frame" style="height:480px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav on">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main><div class="head"><div><h1>Filled pages</h1><p class="sub">9 pages filled · 2 waiting for you to mark</p></div></div></main>
+  </div>
+  <div class="overlay">
+    <div class="dialog">
+      <h3>Mark as abandoned?</h3>
+      <div class="box" style="font-size:14px;line-height:1.5"><b>Backend Intern – Globex</b><br>Filled Nov 25, 11:40</div>
+      <p style="margin:0;font-size:14px;line-height:1.5">Use this when you closed the form without sending it. It can't be changed to submitted later.</p>
+      <div class="row"><span class="btn focus">Cancel</span><span class="btn danger">Mark abandoned</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Frame 4: After Mark submitted ============ -->
+<div class="label"><b>4 · After Mark submitted.</b> The chip turns green, the buttons leave the row, the sidebar count drops, and a Toast names the job.</div>
+<div class="frame" style="height:420px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav on">Filled pages <span class="count blue">1</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Filled pages</h1><p class="sub">9 pages filled · 1 waiting for you to mark</p></div></div>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:9%"><col style="width:13%"><col style="width:20%"><col style="width:19%"><col style="width:7%"><col style="width:7%"><col style="width:9%"><col style="width:16%"></colgroup>
+        <thead><tr><th>Date</th><th>Company</th><th>Job</th><th>Page</th><th>Resume</th><th class="num">Flagged</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="seen">Nov 25, 14:02</td><td>Acme</td><td>Junior Java Developer</td><td class="seen"><a href="#">acme.com/careers/apply/…</a></td><td>A</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>2</span></td><td><span class="st submitted">Submitted</span></td><td></td></tr>
+          <tr><td class="seen">Nov 25, 11:40</td><td>Globex</td><td>Backend Intern</td><td class="seen"><a href="#">globex.com/apply</a></td><td>B</td><td class="num"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>1</span></td><td><span class="st filled">Filled</span></td><td class="act"><span class="btn sm2">Mark submitted</span> <span class="btn link sm2">Abandoned</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="toast">Junior Java Developer – Acme marked as submitted</div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 5: Empty ============ -->
+<div class="label"><b>5 · Empty state.</b> Before your first fill.</div>
+<div class="frame" style="height:420px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions</div>
+      <div class="nav">Answer bank</div>
+      <div class="nav on">Filled pages</div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Filled pages</h1><p class="sub">Nothing filled yet</p></div></div>
+      <div class="empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--jp-ink-2)" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/></svg>
+        <p>No filled pages yet. Every time you press Fill this page, the page appears here with a screenshot.</p>
+        <span class="btn">Go to Fill this page</span>
+      </div>
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

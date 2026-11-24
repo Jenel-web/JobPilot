@@ -36,7 +36,6 @@ VALUES = {
 
 # Each bug's tests are marked "expected to fail" until its fix lands, so every commit stays green. strict=True: a test
 # that starts passing while still marked makes pytest fail, so the marker must be removed in the fix's own commit.
-BUG1 = pytest.mark.xfail(strict=True, reason="Bug 1 not fixed yet: no <legend> = question text lost")
 BUG2 = pytest.mark.xfail(strict=True, reason="Bug 2 not fixed yet: <button role=combobox> dropdowns skipped")
 BUG2B = pytest.mark.xfail(strict=True, reason="Bug 2b not fixed yet: unknown controls skipped silently")
 BUG3 = pytest.mark.xfail(strict=True, reason="Bug 3 not fixed yet: Workday phone fields")
@@ -89,7 +88,6 @@ def personal_answers(fields: list[FormField], values: dict[str, str]) -> list[Fi
 # ---- Bug 1: radio/checkbox questions without a <legend> ------------------------------------------------------------
 
 
-@BUG1
 @pytest.mark.parametrize(
     ("name", "question"),
     [

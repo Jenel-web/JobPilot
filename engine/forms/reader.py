@@ -13,8 +13,10 @@ Custom dropdowns built from ``<div>``s (no ``<select>``) are found by their clas
 ``dropdown`` field with the options listed in the page (see ``CUSTOM_HELPERS_JS``).
 Radio buttons and checkboxes that belong together (one ``<fieldset>`` with a
 ``<legend>``, or the same ``name``) become ONE field whose options are the
-choices. A field with no readable label keeps an empty label: it is reported as
-"needs you" instead of being guessed.
+choices. Its question is the ``<legend>`` (or the group's aria label); with no
+legend, the short text just before the choices (``questionOf`` in ``_EXTRACT_JS``),
+and only if that is not found, the inputs' ``name``. A field with no readable
+label keeps an empty label: it is reported as "needs you" instead of being guessed.
 
 The reader only reads. It never clicks, types or submits (CLAUDE.md rule 5).
 """
@@ -116,6 +118,39 @@ _EXTRACT_JS = "() => {\n" + CUSTOM_HELPERS_JS + r"""
     const lg = g.querySelector('legend'); if (lg) return clean(lg.innerText);
     return byIds(g.getAttribute('aria-labelledby')) || clean(g.getAttribute('aria-label'));
   };
+  // The question of a choice group with NO <legend> (Lever, Google Forms, Greenhouse without a fieldset): the text
+  // just before the choices. Radios always; checkboxes only when 2+ share a name (a lone "I agree" box is its own
+  // question). Starting at the smallest block holding every choice, look at what comes BEFORE the choices, nearest
+  // first, up to 4 levels up. The first block with no field in it and short text (200 chars max) is the question.
+  // Reaching a block that holds a field means we walked into ANOTHER question: stop and return '' (the old name
+  // fallback is safer than a section heading further up). Found nothing = '' too.
+  const questionOf = e => {
+    if (!e.name || (e.type !== 'radio' && e.type !== 'checkbox')) return '';
+    const peers = [...document.querySelectorAll('input[type="' + e.type + '"][name="' + CSS.escape(e.name) + '"]')]
+      .filter(p => p.form === e.form);
+    if (!peers.length || (e.type === 'checkbox' && peers.length < 2)) return '';
+    const first = peers[0];
+    let wrap = first.parentElement;
+    while (wrap && !peers.every(p => wrap.contains(p))) wrap = wrap.parentElement;
+    const look = el => {  // the question text, '' = nothing here (keep looking), null = another field (stop)
+      if (el.matches(CONTROL) || el.querySelector(CONTROL)) return null;
+      const t = clean(el.innerText);
+      return t && t.length <= 200 ? t : '';
+    };
+    const STOP = ['FORM', 'BODY', 'HTML'];
+    for (let level = 0; level < 4 && wrap && !STOP.includes(wrap.tagName); level++) {
+      const holder = [...wrap.children].find(c => c.contains(first));
+      for (let c = holder && holder.previousElementSibling; c; c = c.previousElementSibling) {
+        const t = look(c);
+        if (t === null) return '';
+        if (t) return t;
+      }
+      if (level === 3 || STOP.includes((wrap.parentElement || {}).tagName)) break;  // keep this wrap for the last try
+      wrap = wrap.parentElement;
+    }
+    const prev = wrap && !STOP.includes(wrap.tagName) && wrap.previousElementSibling;  // last try: the block just before
+    return (prev && look(prev)) || '';
+  };
   const SKIP = new Set(['hidden', 'submit', 'button', 'image', 'reset', 'password', 'search']);
   const shown = e => {
     if (e.type === 'file' || e.type === 'radio' || e.type === 'checkbox') return true;  // often visually hidden
@@ -130,7 +165,7 @@ _EXTRACT_JS = "() => {\n" + CUSTOM_HELPERS_JS + r"""
     entries.push({node: e, item: {
       index, cindex: -1, tag: e.tagName.toLowerCase(), type, name: e.name || '', role: e.getAttribute('role') || '',
       bare: !(e.id || e.name || e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.getAttribute('placeholder')),
-      label: labelOf(e), group: groupOf(e),
+      label: labelOf(e), group: groupOf(e) || questionOf(e),
       required: !!(e.required || e.getAttribute('aria-required') === 'true') || /\*\s*$/.test(labelOf(e)),
       options: e.tagName === 'SELECT' ? [...e.options].filter(o => o.value !== '').map(o => clean(o.text)).filter(t => t) : [],
       autocomplete: clean(e.getAttribute('autocomplete')).toLowerCase(), placeholder: clean(e.getAttribute('placeholder')),

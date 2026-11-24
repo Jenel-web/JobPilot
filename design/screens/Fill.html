@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Fill this page</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Mockup sheet: the v0 "Fill this page" screen in the dashboard. Every value comes from tokens.css. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--jp-line-soft);font-family:var(--jp-font-sans);color:var(--jp-ink);display:flex;flex-direction:column;gap:40px;padding:32px 0;align-items:center}
+.label{width:1440px;font-size:13px;font-weight:500;color:var(--jp-ink-2);line-height:1.5}
+.label b{color:var(--jp-ink);font-weight:600}
+.frame{position:relative;width:1440px;background:var(--jp-ground);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jp-line)}
+.topbar{height:var(--jp-topbar);flex:0 0 var(--jp-topbar);display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:var(--jp-surface);border-bottom:1px solid var(--jp-line)}
+.logo{font-family:var(--jp-font-serif);font-size:20px;font-weight:500}
+.mode{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--jp-radius-control);background:var(--jp-status-queued-bg);color:var(--jp-status-queued);font-size:13px;font-weight:600;letter-spacing:.02em}
+.sm{font-size:13px;color:var(--jp-ink-2)}
+.body{flex:1;display:flex;min-height:0}
+nav{width:var(--jp-sidebar);flex:0 0 var(--jp-sidebar);background:var(--jp-surface);border-right:1px solid var(--jp-line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;height:var(--jp-row);padding:0 10px;border-radius:var(--jp-radius-control)}
+.nav.on{background:var(--jp-brand-tint);color:var(--jp-brand);font-weight:600}
+.navfoot{margin-top:auto;padding:0 10px;font-size:13px;color:var(--jp-ink-2);line-height:1.6}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
+.count.amber{background:var(--jp-amber)}
+.count.blue{background:var(--jp-status-queued)}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:24px 28px;position:relative}
+h1{margin:0;font-family:var(--jp-font-serif);font-weight:500;font-size:28px;line-height:1.15}
+.sub{margin:6px 0 0;font-size:14px;color:var(--jp-ink-2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--jp-radius-control);font-size:14px;font-weight:500;border:1px solid var(--jp-line-strong);background:var(--jp-surface);color:var(--jp-ink);white-space:nowrap}
+.btn.primary{background:var(--jp-brand);border-color:var(--jp-brand);color:#fff;font-weight:600}
+.btn.big{height:44px;font-size:15px}
+.btn.wide{width:100%}
+.btn.disabled{opacity:.45}
+.btn.link{border-color:transparent;background:transparent;color:var(--jp-brand);padding:0 8px}
+.card{display:flex;flex-direction:column;gap:14px;padding:20px 22px;border-radius:var(--jp-radius-card);background:var(--jp-surface);border:1px solid var(--jp-line)}
+.card h2{margin:0;font-size:16px;font-weight:600}
+.cols{display:grid;grid-template-columns:3fr 2fr;gap:16px;align-items:start}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--jp-ink-2)}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--jp-status-submitted)}
+.k{font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.v{font-size:14px;line-height:1.45}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.note{font-size:13px;color:var(--jp-ink-2);line-height:1.45;margin:0}
+.divider{border-top:1px solid var(--jp-line-soft)}
+.tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-muted-bg);color:var(--jp-ink);font-size:13px;font-weight:500}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--jp-amber-text)}
+.flag svg{width:14px;height:14px;fill:var(--jp-amber)}
+.done{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:var(--jp-radius-card);background:var(--jp-brand-tint)}
+.done b{color:var(--jp-brand);font-weight:600;font-size:15px}
+.flist{display:flex;flex-direction:column}
+.fitem{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--jp-line-soft);font-size:14px;line-height:1.4}
+.fitem:last-child{border-bottom:0}
+.fitem .flag{padding-top:2px}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:var(--jp-radius-card);background:var(--jp-surface);border:1px solid var(--jp-line);font-size:14px}
+.alert.amber{border-left:3px solid var(--jp-amber)}
+.alert.blue{border-left:3px solid var(--jp-status-queued)}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-radius:var(--jp-radius-card);font-size:14px;line-height:1.45}
+.banner.danger{background:var(--jp-danger-bg);border:1px solid var(--jp-danger-border)}
+.banner.amber{background:var(--jp-amber-bg);border:1px solid var(--jp-amber-border);color:var(--jp-amber-text)}
+.tabpick{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:var(--jp-radius-control);border:1px solid var(--jp-line-strong);font-size:14px}
+.tabpick.on{border-color:var(--jp-brand);background:var(--jp-brand-tint)}
+.tabpick span{font-size:13px;color:var(--jp-ink-2)}
+.paste{height:88px;padding:10px 12px;border:1px dashed var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-ground);font-size:14px;color:var(--jp-ink-2)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--jp-line);border-top-color:var(--jp-brand)}
+.ann{position:absolute;font-size:12px;font-weight:600;color:#fff;background:var(--jp-status-approved);border-radius:999px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<!--
+  Fill this page, v0 dashboard. The remote control next to the bot's Chrome window.
+  Frames: 1 Ready (job post found)
+          2 Filling (button disabled, simple progress)
+          3 Done (summary, flagged fields, what to do next)
+          4 Job post not found / Change pressed (pick a tab or paste)
+          5 Engine or browser problem (Banner)
+  Shell is the v0 shell used by every v0 screen: 4 nav items, real mode badge, no counters, no STOP.
+-->
+
+<!-- ============ Frame 1: Ready ============ -->
+<div class="label"><b>1 · Ready.</b> v0 shell: four nav items, the mode badge comes from the engine (<code>/health</code>), and the top bar says whether the engine answers. Left: the fill control. The status line names the page open in the bot's Chrome right now. Right: "Needs you", short links to the other three screens (AlertRow component).</div>
+<div class="frame" style="height:720px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav on">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>
+      <div class="cols">
+        <div class="card">
+          <span class="status"><i></i>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">acme.com/careers/apply/java-dev</b></span>
+          <div class="divider"></div>
+          <div class="row">
+            <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Job post</span><span class="v">Junior Java Developer – Acme <span class="sm">(tab 2)</span></span></div>
+            <span class="btn link">Change</span>
+          </div>
+          <span class="btn primary big wide">Fill this page</span>
+          <p class="note">Nothing is submitted. You review the form in the browser and click Submit yourself.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="k">Needs you</span>
+          <div class="alert amber"><span>7 questions to answer or check</span><span class="btn link">Open Questions</span></div>
+          <div class="alert blue"><span>2 filled pages without a status</span><span class="btn link">Open Filled pages</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 2: Filling ============ -->
+<div class="label"><b>2 · Filling.</b> The button is disabled and says "Filling…". The engine answers <i>running</i> until it is done, so the status line shows a spinner and the time so far (no step-by-step list in v0; it can come later if the engine reports steps). Change is hidden while it runs.</div>
+<div class="frame" style="height:520px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav on">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>
+      <div class="cols">
+        <div class="card">
+          <span class="status"><span class="spin"></span>Filling acme.com/careers/apply/java-dev · 18 s</span>
+          <div class="divider"></div>
+          <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Job post</span><span class="v">Junior Java Developer – Acme <span class="sm">(tab 2)</span></span></div>
+          <span class="btn primary big wide disabled">Filling…</span>
+          <p class="note">Reading the form, answering, choosing a resume and filling. The first fill of the day takes longer (the local AI model loads, about 20–50 s). Don't type in the form until it is done.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="k">Needs you</span>
+          <div class="alert amber"><span>7 questions to answer or check</span><span class="btn link">Open Questions</span></div>
+          <div class="alert blue"><span>2 filled pages without a status</span><span class="btn link">Open Filled pages</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 3: Done ============ -->
+<div class="label"><b>3 · Done.</b> Summary first (tint box), then the flagged fields by label so you know what to look at in the page (values are never shown here, only labels and a short reason). The resume line says why. The one primary button points to the next thing you should do; "Fill this page again" is secondary.</div>
+<div class="frame" style="height:860px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav on">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">8</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">3</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>
+      <div class="cols">
+        <div class="card">
+          <span class="status"><i></i>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">acme.com/careers/apply/java-dev</b></span>
+          <div class="done">
+            <b>Done. Review the form in the browser, then submit it yourself.</b>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="tag">12 filled</span><span class="tag">1 new question</span><span class="tag">Resume A</span></div>
+            <span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>2 flagged (guessed or needs you). Outlined in amber on the page.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span class="k">Flagged fields</span>
+            <div class="flist">
+              <div class="fitem"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg></span><div><b style="font-weight:600">Why do you want to work at Acme?</b><br><span class="sm">AI draft from your projects and the job post. Read it before you submit.</span></div></div>
+              <div class="fitem"><span class="flag"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg></span><div><b style="font-weight:600">How many hours per week can you commit?</b><br><span class="sm">No saved answer. Left empty and added to Questions.</span></div></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="row">
+            <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Job post used</span><span class="v">Junior Java Developer – Acme <span class="sm">(tab 2)</span></span></div>
+            <span class="btn link">Change</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Resume</span><span class="v">Resume A · the post asks for Java and Spring; resume A shows both (the library system project).</span></div>
+          <div class="row" style="justify-content:flex-start;gap:8px;padding-top:4px"><span class="btn primary">Answer the new question</span><span class="btn">Fill this page again</span></div>
+          <p class="note">After you submit in the browser, mark it in Filled pages.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="k">Needs you</span>
+          <div class="alert amber"><span>8 questions to answer or check</span><span class="btn link">Open Questions</span></div>
+          <div class="alert blue"><span>3 filled pages without a status</span><span class="btn link">Open Filled pages</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 4: Job post not found / Change ============ -->
+<div class="label"><b>4 · Job post not found</b> (the same picker opens when you press <b>Change</b>). Amber Banner, the open tabs to choose from, or paste the text. "Use this job post and fill" is the one primary button; "Fill without resume" fills everything except the resume file (it never picks one for you). Same wording as the on-page panel (FillPanel.html, frame 5).</div>
+<div class="frame" style="height:840px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav on">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>
+      <div class="cols">
+        <div class="card">
+          <span class="status"><i></i>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">globex.com/apply</b></span>
+          <div class="banner amber"><span><b style="font-weight:600">Job post not found.</b> I can't pick a resume without it, so none will be uploaded until you choose one.</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span class="k">Pick the tab with the job post</span>
+            <div class="tabpick on">Backend Intern – Globex<span>globex.com/careers/backend-intern</span></div>
+            <div class="tabpick">Prosple: graduate roles<span>prosple.com/search</span></div>
+            <div class="tabpick">Apply – Globex (this form)<span>globex.com/apply</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span class="k">Or paste the job post text</span>
+            <div class="paste">Paste here…</div>
+          </div>
+          <span class="btn primary big wide">Use this job post and fill</span>
+          <span class="btn wide">Fill without resume</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="k">Needs you</span>
+          <div class="alert amber"><span>7 questions to answer or check</span><span class="btn link">Open Questions</span></div>
+          <div class="alert blue"><span>2 filled pages without a status</span><span class="btn link">Open Filled pages</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 5: Engine / browser problem ============ -->
+<div class="label"><b>5 · Problem before filling.</b> A danger Banner with the engine's message in plain words and exactly one fix button; the Fill button is disabled until it is fixed. Other messages that use the same Banner: "The engine isn't running. Start it with <code>python -m engine.api</code>." (top bar dot turns red: "Engine not reachable") · "The answer search index is empty. Run <code>python -m engine.cli rag reindex</code>." · "Ollama isn't running." · "A fill is already running."</div>
+<div class="frame" style="height:520px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav on">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>
+      <div class="banner danger"><span><b style="font-weight:600">The bot's Chrome is closed.</b> Start it again, open the application page, then come back here.</span><span class="btn">Check again</span></div>
+      <div class="cols">
+        <div class="card">
+          <span class="status"><i style="background:var(--jp-status-new)"></i>Browser not found</span>
+          <div class="divider"></div>
+          <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Job post</span><span class="v sm">Not looked for yet</span></div>
+          <span class="btn primary big wide disabled">Fill this page</span>
+          <p class="note">Nothing is submitted. You review the form in the browser and click Submit yourself.</p>
+        </div>
+        <div></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

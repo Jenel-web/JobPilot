@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot Answer bank</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Mockup sheet: the v0 Answer bank editor. Every value comes from tokens.css. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--jp-line-soft);font-family:var(--jp-font-sans);color:var(--jp-ink);display:flex;flex-direction:column;gap:40px;padding:32px 0;align-items:center}
+.label{width:1440px;font-size:13px;font-weight:500;color:var(--jp-ink-2);line-height:1.5}
+.label b{color:var(--jp-ink);font-weight:600}
+.frame{position:relative;width:1440px;background:var(--jp-ground);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jp-line)}
+.topbar{height:var(--jp-topbar);flex:0 0 var(--jp-topbar);display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:var(--jp-surface);border-bottom:1px solid var(--jp-line)}
+.logo{font-family:var(--jp-font-serif);font-size:20px;font-weight:500}
+.mode{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--jp-radius-control);background:var(--jp-status-queued-bg);color:var(--jp-status-queued);font-size:13px;font-weight:600;letter-spacing:.02em}
+.sm{font-size:13px;color:var(--jp-ink-2)}
+.body{flex:1;display:flex;min-height:0}
+nav{width:var(--jp-sidebar);flex:0 0 var(--jp-sidebar);background:var(--jp-surface);border-right:1px solid var(--jp-line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;height:var(--jp-row);padding:0 10px;border-radius:var(--jp-radius-control)}
+.nav.on{background:var(--jp-brand-tint);color:var(--jp-brand);font-weight:600}
+.navfoot{margin-top:auto;padding:0 10px;font-size:13px;color:var(--jp-ink-2);line-height:1.6}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
+.count.amber{background:var(--jp-amber)}
+.count.blue{background:var(--jp-status-queued)}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:24px 28px;position:relative}
+h1{margin:0;font-family:var(--jp-font-serif);font-weight:500;font-size:28px;line-height:1.15}
+.sub{margin:6px 0 0;font-size:14px;color:var(--jp-ink-2)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--jp-radius-control);font-size:14px;font-weight:500;border:1px solid var(--jp-line-strong);background:var(--jp-surface);color:var(--jp-ink);white-space:nowrap}
+.btn.primary{background:var(--jp-brand);border-color:var(--jp-brand);color:#fff;font-weight:600}
+.btn.danger{background:var(--jp-danger);border-color:var(--jp-danger);color:#fff;font-weight:600}
+.btn.link{border-color:transparent;background:transparent;color:var(--jp-brand);padding:0 8px}
+.btn.dlink{border-color:transparent;background:transparent;color:var(--jp-danger);padding:0 8px}
+.btn.focus{outline:2px solid var(--jp-ink);outline-offset:2px}
+.toolbar{display:flex;align-items:center;gap:8px}
+.search{width:320px;height:36px;display:inline-flex;align-items:center;padding:0 12px;border:1px solid var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-surface);font-size:14px;color:var(--jp-ink-2)}
+.fchip{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--jp-line-strong);background:var(--jp-surface);font-size:13px;font-weight:500}
+.fchip.on{background:var(--jp-ink);border-color:var(--jp-ink);color:#fff}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-status-new-bg);color:var(--jp-status-new);font-size:13px;font-weight:500}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--jp-amber-text)}
+.flag svg{width:14px;height:14px;fill:var(--jp-amber)}
+.seen{font-size:13px;color:var(--jp-ink-2)}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--jp-surface)}
+.tablewrap{border:1px solid var(--jp-line);border-radius:var(--jp-radius-card);overflow:hidden;background:var(--jp-surface)}
+th{height:var(--jp-row);text-align:left;font-size:13px;font-weight:500;color:var(--jp-ink-2);padding:0 14px;border-bottom:1px solid var(--jp-line);background:var(--jp-surface)}
+td{height:52px;padding:8px 14px;border-bottom:1px solid var(--jp-line-soft);line-height:1.35;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr.sel td{background:var(--jp-brand-tint)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td b{font-weight:600}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:var(--jp-drawer);background:var(--jp-surface);border-left:1px solid var(--jp-line);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:16px}
+.drawer h2{margin:0;font-size:20px;font-weight:600;padding-right:32px}
+.drawer .x{position:absolute;top:18px;right:20px;font-size:20px;color:var(--jp-ink-2)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field .k{font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.input{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border:1px solid var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-surface);font-size:14px}
+.ta{min-height:96px;padding:10px;border:1px solid var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-surface);font-size:14px;line-height:1.5}
+.help{font-size:13px;color:var(--jp-ink-2);line-height:1.45}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-muted-bg);font-size:12px}
+.actions{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:16px;border-top:1px solid var(--jp-line-soft)}
+.box{padding:12px 14px;border-radius:var(--jp-radius-control);background:var(--jp-ground);border:1px solid var(--jp-line)}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-radius:var(--jp-radius-card);font-size:14px;line-height:1.45}
+.banner.amber{background:var(--jp-amber-bg);border:1px solid var(--jp-amber-border);color:var(--jp-amber-text)}
+.toast{position:absolute;right:24px;bottom:24px;background:var(--jp-ink);color:#fff;font-size:14px;padding:12px 16px;border-radius:var(--jp-radius-card)}
+.overlay{position:absolute;inset:0;background:rgba(23,32,27,.35);display:flex;align-items:center;justify-content:center}
+.dialog{width:480px;background:var(--jp-surface);border-radius:var(--jp-radius-card);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:14px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog ul{margin:0;padding-left:20px;font-size:14px;line-height:1.6}
+.dialog .row{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--jp-ink-2)}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--jp-status-submitted)}
+.status i.q{background:var(--jp-status-queued)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 24px;border:1px dashed var(--jp-line-strong);border-radius:var(--jp-radius-card);background:var(--jp-surface);text-align:center}
+.empty p{margin:0;font-size:14px;color:var(--jp-ink-2);max-width:420px;line-height:1.5}
+</style>
+</head>
+<body>
+<!--
+  Answer bank editor, v0. The saved answers the form filler reuses (data/answers.json).
+  Frames: 1 Table (search, kind filter, row click opens the drawer)
+          2 Edit drawer
+          3 ConfirmDialog: saving a change to a protected answer
+          4 After save: Toast + re-index status line; amber Banner when the re-index could not run
+          5 Delete ConfirmDialog
+          6 No search results (EmptyState)
+-->
+
+<!-- ============ Frame 1: Table ============ -->
+<div class="label"><b>1 · Table.</b> Search box (question, answer and other wordings), FilterChips by kind, DataTable sorted by question. One row per saved answer; a question with two location answers shows as two rows. "Also asked as" is the number of approved wordings. Rows open the edit drawer; "Add answer" is the one primary button. Protected answers show their text here (this page is local only), with the kind chip.</div>
+<div class="frame" style="height:760px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div>
+        <span class="btn primary">Add answer</span>
+      </div>
+      <div class="toolbar">
+        <span class="search">Search questions and answers</span>
+        <span style="width:8px"></span>
+        <span class="fchip on">All 41</span><span class="fchip">Fixed 28</span><span class="fchip">Open 6</span><span class="fchip">Protected 7</span>
+      </div>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:30%"><col style="width:30%"><col style="width:10%"><col style="width:14%"><col style="width:8%"><col style="width:8%"></colgroup>
+        <thead><tr><th>Question</th><th>Answer</th><th>Kind</th><th>Location scope</th><th class="num">Used</th><th>Last used</th></tr></thead>
+        <tbody>
+          <tr><td><b>Are you legally allowed to work in the Philippines?</b><br><span class="seen">Also asked as 2</span></td><td>Yes</td><td><span class="chip">protected</span></td><td>Any</td><td class="num">9</td><td class="seen">Nov 22</td></tr>
+          <tr><td><b>What is your expected monthly salary?</b><br><span class="seen">Also asked as 3</span></td><td>PHP 18,000</td><td><span class="chip">fixed</span></td><td>City · Metro Manila</td><td class="num">6</td><td class="seen">Nov 21</td></tr>
+          <tr><td><b>What is your expected monthly salary?</b></td><td>USD 600</td><td><span class="chip">fixed</span></td><td>Remote</td><td class="num">1</td><td class="seen">Nov 14</td></tr>
+          <tr><td><b>When can you start?</b><br><span class="seen">Also asked as 1</span></td><td>January 2027</td><td><span class="chip">fixed</span></td><td>Any</td><td class="num">7</td><td class="seen">Nov 22</td></tr>
+          <tr><td><b>Why should we hire you?</b></td><td>I learn fast and finish what I start: I built a library system in Java…</td><td><span class="chip">open</span></td><td>Any</td><td class="num">4</td><td class="seen">Nov 20</td></tr>
+          <tr><td><b>Have you ever been convicted of a crime?</b></td><td>No</td><td><span class="chip">protected</span></td><td>Any</td><td class="num">2</td><td class="seen">Nov 18</td></tr>
+          <tr><td><b>Are you willing to relocate?</b></td><td>No</td><td><span class="chip">fixed</span></td><td>Abroad</td><td class="num">3</td><td class="seen">Nov 19</td></tr>
+          <tr><td><b>How did you hear about this job?</b></td><td>Prosple</td><td><span class="chip">fixed</span></td><td>Any</td><td class="num">5</td><td class="seen">Nov 22</td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ Frame 2: Edit drawer ============ -->
+<div class="label"><b>2 · Edit drawer</b> (row click; "Add answer" opens the same drawer, empty, titled "Add an answer"). The kind decides how the filler uses the answer, so each kind has one line of help. "Also asked as" lists approved wordings (read only here; they are approved on Questions → Wordings). Delete is a red link at the left, away from Save.</div>
+<div class="frame" style="height:860px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head">
+        <div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div>
+        <span class="btn primary">Add answer</span>
+      </div>
+      <div class="toolbar">
+        <span class="search">Search questions and answers</span>
+        <span style="width:8px"></span>
+        <span class="fchip on">All 41</span><span class="fchip">Fixed 28</span><span class="fchip">Open 6</span><span class="fchip">Protected 7</span>
+      </div>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:30%"><col style="width:30%"><col style="width:10%"><col style="width:14%"><col style="width:8%"><col style="width:8%"></colgroup>
+        <thead><tr><th>Question</th><th>Answer</th><th>Kind</th><th>Location scope</th><th class="num">Used</th><th>Last used</th></tr></thead>
+        <tbody>
+          <tr><td><b>Are you legally allowed to work in the Philippines?</b></td><td>Yes</td><td><span class="chip">protected</span></td><td>Any</td><td class="num">9</td><td class="seen">Nov 22</td></tr>
+          <tr class="sel"><td><b>What is your expected monthly salary?</b></td><td>PHP 18,000</td><td><span class="chip">fixed</span></td><td>City · Metro Manila</td><td class="num">6</td><td class="seen">Nov 21</td></tr>
+          <tr><td><b>What is your expected monthly salary?</b></td><td>USD 600</td><td><span class="chip">fixed</span></td><td>Remote</td><td class="num">1</td><td class="seen">Nov 14</td></tr>
+          <tr><td><b>When can you start?</b></td><td>January 2027</td><td><span class="chip">fixed</span></td><td>Any</td><td class="num">7</td><td class="seen">Nov 22</td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+  <div class="drawer">
+    <span class="x">×</span>
+    <h2>Edit answer</h2>
+    <div class="field"><span class="k">Question</span><div class="input">What is your expected monthly salary?</div></div>
+    <div class="field"><span class="k">Answer</span><div class="ta">PHP 18,000</div></div>
+    <div class="field"><span class="k">Kind</span><div class="input">Fixed <span class="sm">▾</span></div>
+      <span class="help"><b>Fixed:</b> filled word for word. <b>Open:</b> used as notes; the AI rewrites it for each form (flagged). <b>Protected:</b> legal and eligibility; filled word for word, never touched by the AI, and changes need a confirm.</span></div>
+    <div class="grid2">
+      <div class="field"><span class="k">Location scope</span><div class="input">A specific city <span class="sm">▾</span></div></div>
+      <div class="field"><span class="k">City</span><div class="input">Metro Manila</div></div>
+    </div>
+    <div class="field"><span class="k">Also asked as</span><div class="tags"><span class="tag">How much pay do you want?</span><span class="tag">Salary expectation</span><span class="tag">Expected compensation (monthly)</span></div></div>
+    <span class="help">Used 6 times · last on Nov 21</span>
+    <div class="actions"><span class="btn dlink">Delete</span><span style="flex:1"></span><span class="btn">Cancel</span><span class="btn primary">Save changes</span></div>
+    <span class="help" style="margin-top:-6px">Saving makes a backup of answers.json, then re-indexes so the filler finds the new text.</span>
+  </div>
+</div>
+
+<!-- ============ Frame 3: Protected confirm ============ -->
+<div class="label"><b>3 · Saving a protected answer.</b> The engine refuses a change to a protected answer without confirmation (also when you change its kind away from protected), so Save opens a ConfirmDialog. Cancel has default focus, the risky button is red.</div>
+<div class="frame" style="height:620px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div><span class="btn primary">Add answer</span></div>
+    </main>
+  </div>
+  <div class="drawer"><span class="x">×</span><h2>Edit answer</h2>
+    <div class="field"><span class="k">Question</span><div class="input">Are you legally allowed to work in the Philippines?</div></div>
+    <div class="field"><span class="k">Answer</span><div class="ta">Yes, I am a Filipino citizen.</div></div>
+  </div>
+  <div class="overlay">
+    <div class="dialog">
+      <h3>Change a protected answer?</h3>
+      <p style="margin:0;font-size:14px;line-height:1.5">Protected answers are legal and eligibility answers. Every form that asks this question will get the new text, word for word.</p>
+      <div class="box" style="font-size:14px;line-height:1.5"><b>Before:</b> Yes<br><b>After:</b> Yes, I am a Filipino citizen.</div>
+      <p style="margin:0;font-size:14px">If you confirm:</p>
+      <ul>
+        <li>A backup of <b>answers.json</b> is made, then the change is saved.</li>
+        <li>The engine re-indexes the answer bank.</li>
+      </ul>
+      <div class="row"><span class="btn focus">Cancel</span><span class="btn danger">Save protected answer</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Frame 4: After save ============ -->
+<div class="label"><b>4 · After save.</b> The drawer closes, a Toast confirms, and a status line shows the re-index until it finishes. If the engine saved the answer but could not re-index (Ollama off), an amber Banner says so; its one button dismisses it, because the fix is to start Ollama and re-index (no re-index button in v0: the engine has no endpoint for it).</div>
+<div class="frame" style="height:560px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div><span class="btn primary">Add answer</span></div>
+      <div class="banner amber"><span><b style="font-weight:600">Saved, but not re-indexed yet.</b> Ollama isn't running, so the filler may not find the new text. Start Ollama, then run <code>python -m engine.cli rag reindex</code>.</span><span class="btn">Got it</span></div>
+      <span class="status"><i class="q"></i>Re-indexing the answer bank…</span>
+      <div class="tablewrap"><table>
+        <colgroup><col style="width:30%"><col style="width:30%"><col style="width:10%"><col style="width:14%"><col style="width:8%"><col style="width:8%"></colgroup>
+        <thead><tr><th>Question</th><th>Answer</th><th>Kind</th><th>Location scope</th><th class="num">Used</th><th>Last used</th></tr></thead>
+        <tbody>
+          <tr><td><b>What is your expected monthly salary?</b></td><td>PHP 20,000</td><td><span class="chip">fixed</span></td><td>City · Metro Manila</td><td class="num">6</td><td class="seen">Nov 21</td></tr>
+          <tr><td><b>When can you start?</b></td><td>January 2027</td><td><span class="chip">fixed</span></td><td>Any</td><td class="num">7</td><td class="seen">Nov 22</td></tr>
+        </tbody>
+      </table></div>
+      <div class="toast">Saved to answers.json (backup made)</div>
+    </main>
+  </div>
+</div>
+<p class="label" style="margin-top:-28px">The Banner and the status line are shown together only to save space: the status line appears while re-indexing; the Banner replaces it if the re-index fails.</p>
+
+<!-- ============ Frame 5: Delete ============ -->
+<div class="label"><b>5 · Delete.</b> Always a ConfirmDialog (it can't be undone from the dashboard; a backup is still made). Protected answers use the same dialog with one extra line.</div>
+<div class="frame" style="height:520px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main><div class="head"><div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div><span class="btn primary">Add answer</span></div></main>
+  </div>
+  <div class="overlay">
+    <div class="dialog">
+      <h3>Delete this answer?</h3>
+      <div class="box" style="font-size:14px;line-height:1.5"><b>What is your expected monthly salary?</b><br>USD 600 · Remote</div>
+      <p style="margin:0;font-size:14px">If you confirm:</p>
+      <ul>
+        <li>A backup of <b>answers.json</b> is made, then the answer is removed.</li>
+        <li>Forms that ask this question (for remote jobs) will flag it and add it to Questions again.</li>
+      </ul>
+      <div class="row"><span class="btn focus">Cancel</span><span class="btn danger">Delete answer</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Frame 6: No results ============ -->
+<div class="label"><b>6 · No search results.</b> EmptyState: one sentence, one button.</div>
+<div class="frame" style="height:440px">
+  <div class="topbar"><span class="logo">JobPilot</span><span class="mode">DRY RUN</span><span class="status"><i></i>Engine connected</span><span style="flex:1"></span><span class="sm">Runs on this computer only</span></div>
+  <div class="body">
+    <nav>
+      <div class="nav">Fill this page</div>
+      <div class="nav">Questions <span class="count amber">7</span></div>
+      <div class="nav on">Answer bank</div>
+      <div class="nav">Filled pages <span class="count blue">2</span></div>
+      <div class="navfoot">v0 · form filler</div>
+    </nav>
+    <main>
+      <div class="head"><div><h1>Answer bank</h1><p class="sub">41 saved answers · reused on every form, matched by meaning</p></div><span class="btn primary">Add answer</span></div>
+      <div class="toolbar"><span class="search" style="color:var(--jp-ink)">driver's license</span><span style="width:8px"></span><span class="fchip on">All 41</span><span class="fchip">Fixed 28</span><span class="fchip">Open 6</span><span class="fchip">Protected 7</span></div>
+      <div class="empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--jp-ink-2)" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <p>No saved answer matches "driver's license". Search looks at questions, answers and other wordings.</p>
+        <span class="btn">Clear search</span>
+      </div>
+    </main>
+  </div>
+</div>
+
+</body>
+</html>
