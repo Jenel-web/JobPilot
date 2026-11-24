@@ -318,6 +318,6 @@ JobPilot is a student project, built to be used and to be understood. Each stage
 
 <div align="center">
 
-*Nothing is ever submitted without your approval.*
+*Nothing is ever submitted without your approval.Project will take about a month. *
 
 </div>
