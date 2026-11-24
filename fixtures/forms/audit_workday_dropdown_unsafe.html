@@ -1,0 +1,10 @@
+<!doctype html>
+<!-- Audit regression (Bug 2): a <button role="combobox"> with NO type attribute inside a form.
+     A <button> without a type is a SUBMIT button, so the filler must refuse to click it. Synthetic. -->
+<html><head><meta charset="utf-8"><title>Audit: Workday dropdown (unsafe)</title></head>
+<body>
+<form id="app" onsubmit="event.preventDefault()"><label id="l">Source</label>
+<div><button role="combobox" aria-labelledby="l" id="b" onclick="this.nextElementSibling.style.display='block'">Select One</button>
+<ul role="listbox" style="display:none"><li role="option">LinkedIn</li></ul></div>
+<button type="submit">Apply</button></form>
+</body></html>

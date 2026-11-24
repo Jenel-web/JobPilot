@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- Audit regression (Bug 2): a Workday-style <button role="combobox"> dropdown with an explicit type="button".
+     Its option list is a sibling <ul role="listbox">. Picking an option shows it on the button, like Workday. Synthetic. -->
+<html><head><meta charset="utf-8"><title>Audit: Workday dropdown (safe)</title></head>
+<body>
+<form id="app" onsubmit="event.preventDefault()">
+  <div class="dd"><label id="l1">How Did You Hear About Us? *</label>
+  <button type="button" role="combobox" aria-haspopup="listbox" aria-labelledby="l1" id="b1"
+          onclick="this.nextElementSibling.style.display='block'">Select One</button>
+  <ul role="listbox" style="display:none">
+    <li role="option" onclick="pick(this)">Careers Website</li>
+    <li role="option" onclick="pick(this)">LinkedIn</li>
+    <li role="option" onclick="pick(this)">Referral</li>
+    <li role="option" onclick="pick(this)">Other</li>
+  </ul></div>
+  <button type="submit">Submit</button>
+</form>
+<script>
+  function pick(li) {
+    document.getElementById('b1').textContent = li.textContent;
+    li.parentElement.style.display = 'none';
+  }
+</script>
+</body></html>

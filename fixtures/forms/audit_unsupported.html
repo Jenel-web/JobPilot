@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Audit regression (Bug 2b): controls the reader cannot drive must be REPORTED, not skipped.
+     A slider and a rich-text box are real questions; the nav menu button is not. Synthetic. -->
+<html><head><meta charset="utf-8"><title>Audit: unsupported controls</title></head>
+<body>
+<nav><button aria-haspopup="true">Account menu</button></nav>
+<form id="app" onsubmit="event.preventDefault()">
+  <div><label for="fname">First name</label><input id="fname" name="fname"></div>
+
+  <div><span id="rate">Rate your Python skill</span>
+  <div role="slider" aria-labelledby="rate" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1" tabindex="0"
+       style="width:200px;height:12px;background:#ccc"></div></div>
+
+  <div><span id="note">Cover note</span>
+  <div contenteditable="true" aria-labelledby="note" style="width:300px;height:80px;border:1px solid #999"></div></div>
+
+  <button type="submit">Submit</button>
+</form>
+</body></html>

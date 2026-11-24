@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Audit regression (Bug 4, end to end): a Google-Form-style page. Questions are labels beside the choices
+     (no <legend>), so this page also needs the Bug 1 fix. Synthetic, no real data. -->
+<html><head><meta charset="utf-8"><title>Audit: Google Form style</title></head>
+<body>
+<form id="app" onsubmit="event.preventDefault()">
+  <div><label for="course">Course / Program *</label><input id="course" name="entry.1"></div>
+
+  <div><label>Year level *</label>
+  <label><input type="radio" name="entry.2" value="1st year"> 1st year</label>
+  <label><input type="radio" name="entry.2" value="2nd year"> 2nd year</label>
+  <label><input type="radio" name="entry.2" value="3rd year"> 3rd year</label>
+  <label><input type="radio" name="entry.2" value="4th year"> 4th year</label></div>
+
+  <div><label>Which of these technologies have you used?</label>
+  <label><input type="checkbox" name="entry.3" value="Python"> Python</label>
+  <label><input type="checkbox" name="entry.3" value="Java"> Java</label>
+  <label><input type="checkbox" name="entry.3" value="React"> React</label>
+  <label><input type="checkbox" name="entry.3" value="Docker"> Docker</label>
+  <label><input type="checkbox" name="entry.3" value="Rust"> Rust</label></div>
+
+  <div><label>Do you have your own laptop? *</label>
+  <label><input type="radio" name="entry.4" value="Yes"> Yes</label>
+  <label><input type="radio" name="entry.4" value="No"> No</label></div>
+
+  <button type="submit">Submit</button>
+</form>
+</body></html>
