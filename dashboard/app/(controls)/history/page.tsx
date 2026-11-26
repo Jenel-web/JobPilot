@@ -1,8 +1,8 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+import { HistoryScreen } from "@/components/history/HistoryScreen";
 
 export const metadata = { title: "Filled pages · JobPilot" };
 
-/** Placeholder until its step of stage 4.5 is built. */
-export default function Page() {
-  return <PageHeader title="Filled pages" subtitle="Every page JobPilot filled, with a screenshot." />;
+/** Filled pages history: every fill, its screenshot, and Mark submitted / Abandoned (design/screens/History.html). */
+export default function HistoryPage() {
+  return <HistoryScreen />;
 }

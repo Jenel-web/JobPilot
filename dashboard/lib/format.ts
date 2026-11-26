@@ -23,13 +23,18 @@ export function isWebUrl(url: string | null | undefined): url is string {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** The engine's "2026-11-25 14:02:31" as "Nov 25, 14:02" (or "Nov 25" with `withTime` false). */
+/**
+ * The engine's time stamps ("2026-11-22 10:23:34") are UTC: SQLite's datetime('now'). Show them in YOUR time:
+ * "Nov 22, 18:23" in Manila (or "Nov 22" with `withTime` false). Never throws on odd input.
+ */
 export function dateLabel(stamp: string | null | undefined, withTime = true): string {
   if (!stamp) return "";
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(stamp) ?? /^(\d{4})-(\d{2})-(\d{2})/.exec(stamp);
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(stamp);
   if (!m) return stamp;
-  const day = `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}`;
-  return withTime && m[4] ? `${day}, ${m[4]}:${m[5]}` : day;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)));
+  const day = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  if (!withTime || m[4] === undefined) return day;
+  return `${day}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 /** "1 time" / "3 times", "1 question" / "2 questions". */
