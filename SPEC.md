@@ -273,7 +273,8 @@ The same Fill control also appears on the job page itself, so you don't have to 
 └───────────────────────────────┘
 ```
 
-- Clicking **Fill this page** calls the Python engine through Playwright `expose_binding`, which runs the same steps as the dashboard button: reader → job post finder → answer engine → resume picker → filler. No HTTP call is made from the page, so websites can never trigger a fill.
+- Clicking **Fill this page** calls Python through a Playwright `expose_binding` bridge, which forwards it to the engine API on 127.0.0.1 (`POST /fill`, the same call as the dashboard button): reader → job post finder → answer engine → resume picker → filler. No HTTP call is made from the page itself.
+- **Bridge safety (decided Nov 26).** `expose_binding` puts a function on `window` that the website's own scripts could call, so: the panel script runs before any site script, keeps the function in its closure and deletes it from `window`; every call carries a secret token made fresh each time the bot's browser opens (only the panel knows it); calls from embedded frames are refused; the panel ignores clicks a script fakes (`event.isTrusted`); it can only ask for status, the job post, a fill and a fill's result, with three fill choices (pasted post, picked tab, no resume), and the page to fill is always the panel's own page. The panel's shadow DOM is closed, so the site cannot look inside.
 - It shows the job post used (✎ = Change), progress, and the result summary. It can be collapsed to a small tab and dragged aside. **It opens by itself when the page looks like an application form** (decided by code, e.g. the form reader finds fillable fields, no AI; decided Nov 20) and stays a collapsed tab on every other page.
 - It never clicks Submit, and it is never placed over the site's Submit button.
 - It exists only in the bot's browser profile, never in your everyday Chrome. The dashboard keeps Unknown questions, Answer bank and Filled pages history.
@@ -1076,7 +1077,7 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 
 - [x] `engine/forms/filler.py`: fill text, select, radio, checkbox and date fields; upload the chosen resume under the formal `upload_name` (Playwright can set the uploaded file's name, so the original file is never renamed); random 1–4 s delays between actions
 - [x] **Job post finder** (see "Finding the job post" in Part 1): form page → opener tab → same-site tab → ask you (pick a tab or paste). Read-only; shows the job post used with a Change button; no job post = no resume upload, flagged. Mock-mode tests with saved pages
-- [ ] **On-page Fill button** (Part 2, 1b): floating panel injected into the bot's browser (`add_init_script`, shadow DOM), wired to the engine with `expose_binding`; shows job post (Change), progress and result; never clicks or covers Submit. Mockup first; test on saved HTML in mock mode
+- [x] **On-page Fill button** (Part 2, 1b): floating panel injected into the bot's browser (`add_init_script`, shadow DOM), wired to the engine with `expose_binding`; shows job post (Change), progress and result; never clicks or covers Submit. Mockup first; test on saved HTML in mock mode
 - [x] `safety.check()` before every fill; every fill logged to `action_log`
 - [x] Highlight guessed answers in the page (visible outline + small note); leave known answers plain
 - [x] **Never clicks Submit.** A test proves no Submit/Apply button is ever clicked

@@ -19,9 +19,11 @@ How the reader reaches this window later:
 from __future__ import annotations
 
 import logging
+from secrets import token_urlsafe  # Python's random-token maker (not engine/secrets.py, which reads the keyring)
 from pathlib import Path
 
 from engine import safety
+from engine.forms.panel import install_panel
 from engine.settings import ROOT, Settings
 
 logger = logging.getLogger(__name__)
@@ -67,8 +69,10 @@ def open_browser(url: str | None = None, *, settings: Settings | None = None) ->
             args=LAUNCH_ARGS,
             ignore_default_args=["--enable-automation"],  # drop the automation banner/flag
         )
+        # The on-page Fill panel (engine/forms/panel.py): a fresh secret token every time the window opens.
+        install_panel(context, token_urlsafe(32))
         page = context.pages[0] if context.pages else context.new_page()
         if url:
             page.goto(url)
-        logger.info("Bot browser open. Close the window to stop.")
+        logger.info("Bot browser open, with the JobPilot panel on every page. Close the window to stop.")
         context.wait_for_event("close", timeout=0)  # block until you close the window
