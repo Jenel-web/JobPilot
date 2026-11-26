@@ -1083,9 +1083,9 @@ Goal: press **Fill this page** and the form gets filled, the resume uploaded and
 - [ ] Screenshot of the filled form; save a row in `fills`: URL, job and company, resume, flagged count, screenshot path, status `filled`
 - [ ] Unknown questions saved to `unknown_questions` with their source page
 - [ ] `engine/api.py` (FastAPI, `127.0.0.1` only): endpoints for fill, unknown questions, answers, filled pages
-- [ ] Controls page in `dashboard/` (existing scaffold, design system, shared components first): Fill this page, Unknown questions, Answer bank editor, Filled pages history (see Part 2)
-- [ ] **Suggested wordings screen** (Approve / Reject, protected needs a ConfirmDialog) and the unknown-questions answer form, as described in "2b. Suggested wordings" in Part 2. Needs: the Wordings mockup in `design/screens/Questions.html`, the `/wordings` and `/unknown` endpoints, and re-index after approve or answer
-- [ ] **Mark as submitted** and **Abandoned** buttons on the history
+- [x] Controls page in `dashboard/` (existing scaffold, design system, shared components first): Fill this page, Unknown questions, Answer bank editor, Filled pages history (see Part 2)
+- [x] **Suggested wordings screen** (Approve / Reject, protected needs a ConfirmDialog) and the unknown-questions answer form, as described in "2b. Suggested wordings" in Part 2. Needs: the Wordings mockup in `design/screens/Questions.html`, the `/wordings` and `/unknown` endpoints, and re-index after approve or answer
+- [x] **Mark as submitted** and **Abandoned** buttons on the history
 - [ ] **Passive submit detection:** after a fill, the engine watches the page read-only (confirmation text such as "thank you / application received", or a URL change after you click Submit) and offers "Looks submitted. Mark it?". It never clicks anything and never marks it without your confirmation
 - [ ] Run for a week of real applications; fix what breaks (log each miss in a notes file)
 - [ ] README with how to run it and what it does; tag `v0.1`

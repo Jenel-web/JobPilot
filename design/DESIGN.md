@@ -63,10 +63,12 @@ Newsreader is only for page titles and large numbers. Numbers in tables use `fon
 | Drawer | 520 px from the right, overlay shadow, close X |
 | AI-guess field | Amber bg + amber border + "AI guess, check this" in amber text |
 
-## Screens still to design (reminder)
+## v0 controls page (stage 4.5, built)
 
-- **Wordings tab / card** (suggested new wordings of a saved question: new wording, matched saved question, score, times seen, kind chip, Approve and Reject, ConfirmDialog for protected, Toast, Banner, EmptyState). The full requirements are in `SPEC.md`, Part 2, "2b. Suggested wordings". Add it to `screens/Questions.html` as a third tab (Waiting | Wordings | Answered) **before** building it in the dashboard.
-- **Unknown question cards** also need "seen N times" and "on N pages" with links.
+- Mockups: `screens/Fill.html`, `Questions.html` (Waiting | Wordings | Answered), `AnswerBank.html`, `History.html`; clickable prototype `screens/Dashboard.html`.
+- v0 shell: four nav items (Fill this page, Questions, Answer bank, Filled pages), the engine's mode badge and "Engine connected"; no counters, quota or STOP until v1.
+- Filled-page status chips reuse existing tokens: filled = queued blue, submitted = submitted green, abandoned = rejected grey.
+- Shared pieces added for it (in `dashboard/components/ui/`): `TextArea`, `StatusLine` (dot or spinner + one line), `SearchInput`, Button variant `dangerLink` (red text button, e.g. Delete in a drawer), and DataTable options `tall` (56 px rows that wrap), `align: "right"` and `emptyMessage`.
 
 ## Not defined yet (ask before inventing)
 
