@@ -14,7 +14,7 @@ import json
 import sqlite3
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Kind = Literal["fixed", "open", "protected"]
 FillStatus = Literal["filled", "submitted", "abandoned"]
@@ -230,6 +230,17 @@ class FillIn(BaseModel):
     tab: str | None = Field(default=None, min_length=1, max_length=300)  # part of a tab's address, to fill that tab
     post_text: str | None = Field(default=None, min_length=1, max_length=200_000)  # a job post you pasted ("Change")
     resume: Literal["A", "B"] | None = None  # skips the picker
+    post_tab_url: str | None = Field(default=None, min_length=1, max_length=2000)  # the exact address of the tab you picked as the job post
+    no_resume: bool = False  # "Fill without resume": no job post, no picker, no upload
+
+    @model_validator(mode="after")
+    def _one_choice_for_the_post(self) -> FillIn:
+        """A job post can come from ONE place, and "no resume" means no post and no resume at all."""
+        if self.post_text and self.post_tab_url:
+            raise ValueError("Choose a tab OR paste the job post, not both.")
+        if self.no_resume and (self.post_text or self.post_tab_url or self.resume):
+            raise ValueError("'Fill without resume' cannot be combined with a job post or a chosen resume.")
+        return self
 
 
 class FillPostOut(BaseModel):
@@ -277,3 +288,25 @@ class FillJobOut(BaseModel):
     finished_at: str | None
     result: FillResultOut | None
     error: str | None
+
+
+# ---- the browser, read only (stage 4.5): status line and job post preview ----------------------------
+
+
+class StatusOut(BaseModel):
+    """What the controls page shows in its top bar and status line. Reading it changes nothing."""
+
+    run_mode: str
+    browser_open: bool
+    page_url: str | None  # the page you are looking at in the bot's browser; None when closed or no web page
+    page_title: str | None
+    fill_running: bool
+    fill_job_id: str | None  # the running fill, so a reloaded dashboard can keep following it
+
+
+class JobPostPreviewOut(BaseModel):
+    """The job post a fill WOULD use right now, and the other tabs to choose from. Read only: nothing is filled."""
+
+    page_url: str
+    post: FillPostOut | None  # None: no tab looks like a job post, so you are asked
+    tabs: list[TabOut]

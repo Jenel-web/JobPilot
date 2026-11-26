@@ -38,6 +38,7 @@ from engine.api_deps import get_conn, get_settings
 from engine.api_models import AnswerOut, FillOut, FillStatus, Kind, UnknownOut, WordingOut
 from engine.api_fill import JobManager, bot_browser_runner, install_fill_handlers
 from engine.api_fill import router as fill_router
+from engine.api_browser import install_browser
 from engine.api_write import install_error_handlers, router as write_router
 from engine.forms.history import list_fills
 from engine.profile import ANSWERS_PATH
@@ -160,6 +161,7 @@ def create_app(
     app.state.fill_runner = bot_browser_runner  # tests swap this for a stub
     app.include_router(write_router)  # the endpoints that change things (4.4d)
     app.include_router(fill_router)  # POST /fill, GET /fill/{job_id}
+    install_browser(app)  # GET /status, /jobpost, /fills/{id}/screenshot (4.5, read only)
     install_error_handlers(app)
     install_fill_handlers(app)
     return app

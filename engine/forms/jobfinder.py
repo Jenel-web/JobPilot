@@ -372,6 +372,18 @@ def post_from_tab(form_page: Page, tab: TabInfo) -> JobPost | None:
     return JobPost(text, "chosen", _title(chosen), chosen.url) if text else None
 
 
+def post_from_tab_url(form_page: Page, url: str) -> JobPost | None:
+    """A post from the tab whose address is exactly ``url`` (what the dashboard sends when you pick a tab).
+
+    The address, not the tab number, is what identifies your choice: numbers shift when a tab opens or closes.
+    Returns None when no open tab has that address any more, or the tab cannot be read (LinkedIn is never read).
+    """
+    for index, tab in enumerate(form_page.context.pages):
+        if not tab.is_closed() and tab.url == url:
+            return post_from_tab(form_page, TabInfo(index, _title(tab), tab.url))
+    return None
+
+
 def job_text_of(post: JobPost | None) -> str | None:
     """The text to hand to ``pick_resume`` and ``answer_form(job_text=...)``; None means "no job post".
 

@@ -117,6 +117,7 @@ def fill_current_page(
     sleep: Callable[[float], None] = time.sleep,
     delay_range: tuple[float, float] = DELAY_RANGE,
     screenshot_path: Path | None = None,
+    no_resume: bool = False,
 ) -> FillOutcome:
     """Run the whole fill on ``page`` and stop before Submit.
 
@@ -124,6 +125,8 @@ def fill_current_page(
         post: a job post you chose or pasted. Without it the finder looks through your open tabs.
         resume_id: ``"A"`` or ``"B"`` to skip the picker. Without it, the picker chooses from the job post.
         save: False for a preview run: no unknown questions, wordings or ``fills`` row are saved.
+        no_resume: you chose "Fill without resume": no job post is looked for, no resume is picked or uploaded,
+            and the rest of the form is filled as usual. ``post`` and ``resume_id`` must then be None.
         sleep, delay_range: the pause between actions. Tests pass a fake ``sleep``.
 
     Returns:
@@ -141,7 +144,9 @@ def fill_current_page(
         safety.log_action(conn, "read", page.url, "fill stopped: no form fields")
         return outcome
 
-    if post is None:
+    if no_resume and (post is not None or resume_id is not None):
+        raise ValueError("no_resume cannot be combined with a job post or a chosen resume.")
+    if post is None and not no_resume:
         found = find_job_post(page, settings=settings, conn=conn)
         post, outcome.tabs = found.post, found.tabs
     outcome.post = post
@@ -151,7 +156,11 @@ def fill_current_page(
     if job_text is None:
         outcome.post = None
 
-    resume = _choose_resume(conn, job_text, resume_id, settings, outcome)
+    if no_resume:
+        resume = None
+        outcome.messages.append("Filled without a resume, as you asked. Upload one by hand if the form needs it.")
+    else:
+        resume = _choose_resume(conn, job_text, resume_id, settings, outcome)
     scope, city = job_location(job_text)
     # The company brief is read from the post ONCE: it names the company for the history row, and company questions
     # on the form reuse it (answer_form gets it through ``brief_cache``). No post means no brief and no AI call.

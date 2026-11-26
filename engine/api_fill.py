@@ -39,7 +39,7 @@ from engine.api_deps import get_conn, get_settings
 from engine.api_models import FillIn, FillJobOut, FillPostOut, FillResultOut, FlaggedField, TabOut
 from engine.forms.browser import CDP_PORT
 from engine.forms.history import private_values
-from engine.forms.jobfinder import SOURCE_LABELS, post_from_pasted
+from engine.forms.jobfinder import SOURCE_LABELS, post_from_pasted, post_from_tab_url
 from engine.forms.orchestrator import FillOutcome, fill_current_page
 from engine.forms.reader import connect_to_bot_browser, find_current_page
 from engine.matcher import PickError
@@ -138,10 +138,16 @@ def perform_fill(
     sleep: Callable[[float], None] = time.sleep,
 ) -> FillResultOut:
     """Fill ``page`` and stop (the same call the command line makes). Always saves the history row and unknown questions."""
-    post = post_from_pasted(request.post_text) if request.post_text else None
+    post = None
+    if request.post_text:
+        post = post_from_pasted(request.post_text)
+    elif request.post_tab_url:
+        post = post_from_tab_url(page, request.post_tab_url)
+        if post is None:
+            raise RuntimeError("The tab you picked as the job post is closed or changed. Pick it again.")
     outcome = fill_current_page(
         conn, page, settings=settings, post=post, resume_id=request.resume, save=True, sleep=sleep,
-        screenshot_path=screenshot_path,
+        screenshot_path=screenshot_path, no_resume=request.no_resume,
     )
     return to_result(conn, outcome)
 
@@ -211,6 +217,12 @@ class JobManager:
     def busy(self) -> bool:
         with self._lock:
             return self._busy
+
+    @property
+    def running_id(self) -> str | None:
+        """The id of the fill that is running now, or None."""
+        with self._lock:
+            return next((k for k, j in self._jobs.items() if j.status == "running"), None)
 
     def get(self, job_id: str) -> Job | None:
         with self._lock:
