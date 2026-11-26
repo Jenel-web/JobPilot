@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobPilot v0 dashboard (clickable prototype)</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Clickable prototype of the whole v0 dashboard: Fill this page, Questions, Answer bank, Filled pages.
+   Sample data only; nothing is saved. Every value comes from tokens.css.
+   The frame-by-frame specs are in Fill.html, Questions.html, AnswerBank.html and History.html. */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--jp-font-sans);color:var(--jp-ink);background:var(--jp-ground);display:flex;flex-direction:column;min-width:1280px}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--jp-brand);text-decoration:none;font-weight:500}
+/* prototype strip (not part of the design) */
+.proto{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:var(--jp-ink);color:#fff;font-size:12px}
+.proto b{font-weight:600;margin-right:6px}
+.proto button{height:24px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;cursor:pointer;font-size:12px}
+.proto button:hover{background:rgba(255,255,255,.12)}
+.proto .sep{width:1px;height:16px;background:rgba(255,255,255,.3);margin:0 4px}
+/* shell */
+.app{flex:1;display:flex;flex-direction:column;min-height:0}
+.topbar{height:var(--jp-topbar);flex:0 0 var(--jp-topbar);display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;background:var(--jp-surface);border-bottom:1px solid var(--jp-line)}
+.logo{font-family:var(--jp-font-serif);font-size:20px;font-weight:500}
+.mode{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--jp-radius-control);font-size:13px;font-weight:600;letter-spacing:.02em}
+.mode.mock{background:var(--jp-status-new-bg);color:var(--jp-status-new)}
+.mode.dry{background:var(--jp-status-queued-bg);color:var(--jp-status-queued)}
+.mode.live{background:var(--jp-danger);color:#fff}
+.sm{font-size:13px;color:var(--jp-ink-2)}
+.body{flex:1;display:flex;min-height:0}
+nav{width:var(--jp-sidebar);flex:0 0 var(--jp-sidebar);background:var(--jp-surface);border-right:1px solid var(--jp-line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;height:var(--jp-row);padding:0 10px;border-radius:var(--jp-radius-control);cursor:pointer;border:0;background:transparent;text-align:left;width:100%}
+.nav:hover{background:var(--jp-ground)}
+.nav.on{background:var(--jp-brand-tint);color:var(--jp-brand);font-weight:600}
+.navfoot{margin-top:auto;padding:0 10px;font-size:13px;color:var(--jp-ink-2);line-height:1.6}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
+.count.amber{background:var(--jp-amber)}
+.count.blue{background:var(--jp-status-queued)}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:24px 28px;overflow-y:auto;position:relative}
+h1{margin:0;font-family:var(--jp-font-serif);font-weight:500;font-size:28px;line-height:1.15}
+.sub{margin:6px 0 0;font-size:14px;color:var(--jp-ink-2)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--jp-radius-control);font-size:14px;font-weight:500;border:1px solid var(--jp-line-strong);background:var(--jp-surface);color:var(--jp-ink);white-space:nowrap;cursor:pointer}
+.btn:hover{background:var(--jp-ground)}
+.btn.primary{background:var(--jp-brand);border-color:var(--jp-brand);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{background:var(--jp-danger);border-color:var(--jp-danger);color:#fff;font-weight:600}
+.btn.link{border-color:transparent;background:transparent;color:var(--jp-brand);padding:0 8px}
+.btn.dlink{border-color:transparent;background:transparent;color:var(--jp-danger);padding:0 8px}
+.btn.big{height:44px;font-size:15px}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:default;filter:none}
+.btn.sm2{height:32px;padding:0 12px;font-size:13px}
+.btn.xs{height:28px;padding:0 10px;font-size:13px}
+/* cards, layout */
+.card{display:flex;flex-direction:column;gap:14px;padding:20px 22px;border-radius:var(--jp-radius-card);background:var(--jp-surface);border:1px solid var(--jp-line)}
+.card.q{border-left:3px solid var(--jp-amber)}
+.card.small{gap:8px;padding:16px 18px;cursor:pointer}
+.card.small:hover{border-color:var(--jp-line-strong)}
+.cols{display:grid;grid-template-columns:3fr 2fr;gap:16px;align-items:start}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.k{font-size:13px;font-weight:500;color:var(--jp-ink-2)}
+.v{font-size:14px;line-height:1.45}
+.note{font-size:13px;color:var(--jp-ink-2);line-height:1.45;margin:0}
+.divider{border-top:1px solid var(--jp-line-soft)}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--jp-ink-2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--jp-status-submitted);flex:0 0 8px}
+.dot.grey{background:var(--jp-status-new)}.dot.red{background:var(--jp-danger)}.dot.blue{background:var(--jp-status-queued)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--jp-line);border-top-color:var(--jp-brand);animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-muted-bg);color:var(--jp-ink);font-size:13px;font-weight:500}
+.tag.s{font-size:12px;font-weight:400}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--jp-status-new-bg);color:var(--jp-status-new);font-size:13px;font-weight:500}
+.st{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:500}
+.st.filled{background:var(--jp-status-queued-bg);color:var(--jp-status-queued)}
+.st.submitted{background:var(--jp-status-submitted-bg);color:var(--jp-status-submitted)}
+.st.abandoned{background:var(--jp-status-rejected-bg);color:var(--jp-status-rejected)}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--jp-amber-text)}
+.flag svg{width:14px;height:14px;fill:var(--jp-amber);flex:0 0 14px}
+.seen{font-size:13px;color:var(--jp-ink-2)}
+.done{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:var(--jp-radius-card);background:var(--jp-brand-tint)}
+.done b{color:var(--jp-brand);font-weight:600;font-size:15px}
+.fitem{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--jp-line-soft);font-size:14px;line-height:1.4}
+.fitem:last-child{border-bottom:0}
+.fitem .flag{padding-top:2px}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:var(--jp-radius-card);background:var(--jp-surface);border:1px solid var(--jp-line);font-size:14px}
+.alert.amber{border-left:3px solid var(--jp-amber)}
+.alert.blue{border-left:3px solid var(--jp-status-queued)}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-radius:var(--jp-radius-card);font-size:14px;line-height:1.45}
+.banner.danger{background:var(--jp-danger-bg);border:1px solid var(--jp-danger-border)}
+.banner.amber{background:var(--jp-amber-bg);border:1px solid var(--jp-amber-border);color:var(--jp-amber-text)}
+.tabpick{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:var(--jp-radius-control);border:1px solid var(--jp-line-strong);font-size:14px;cursor:pointer;background:var(--jp-surface);text-align:left;width:100%}
+.tabpick.on{border-color:var(--jp-brand);background:var(--jp-brand-tint)}
+.tabpick span{font-size:13px;color:var(--jp-ink-2)}
+/* form controls */
+.input,.ta,.sel{width:100%;border:1px solid var(--jp-line-strong);border-radius:var(--jp-radius-control);background:var(--jp-surface);font-size:14px}
+.input,.sel{height:36px;padding:0 10px}
+.ta{min-height:88px;padding:10px;line-height:1.5;resize:vertical}
+.ta.paste{border-style:dashed;background:var(--jp-ground)}
+.input:focus,.ta:focus,.sel:focus{outline:2px solid var(--jp-brand);outline-offset:-1px}
+.field{display:flex;flex-direction:column;gap:6px}
+.help{font-size:13px;color:var(--jp-ink-2);line-height:1.45}
+.box{padding:12px 14px;border-radius:var(--jp-radius-control);background:var(--jp-ground);border:1px solid var(--jp-line)}
+/* tabs, filters */
+.tabs{display:flex;gap:6px;font-size:14px}
+.tab{padding:8px 14px;border-radius:var(--jp-radius-control);background:var(--jp-surface);border:1px solid var(--jp-line);cursor:pointer}
+.tab.on{border-color:var(--jp-brand);color:var(--jp-brand);font-weight:600}
+.toolbar{display:flex;align-items:center;gap:8px}
+.fchip{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--jp-line-strong);background:var(--jp-surface);font-size:13px;font-weight:500;cursor:pointer}
+.fchip.on{background:var(--jp-ink);border-color:var(--jp-ink);color:#fff}
+.search{width:320px}
+/* table */
+.tablewrap{border:1px solid var(--jp-line);border-radius:var(--jp-radius-card);overflow:hidden;background:var(--jp-surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{height:var(--jp-row);text-align:left;font-size:13px;font-weight:500;color:var(--jp-ink-2);padding:0 14px;border-bottom:1px solid var(--jp-line);background:var(--jp-surface);position:sticky;top:0}
+td{height:52px;padding:8px 14px;border-bottom:1px solid var(--jp-line-soft);line-height:1.35;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--jp-ground)}
+tr.sel td,tr.sel:hover td{background:var(--jp-brand-tint)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.act{white-space:nowrap;text-align:right}
+td.nw{white-space:nowrap}
+td b{font-weight:600}
+/* overlays */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:var(--jp-drawer);background:var(--jp-surface);border-left:1px solid var(--jp-line);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;z-index:20}
+.drawer h2{margin:0;font-size:20px;font-weight:600;padding-right:32px;line-height:1.3}
+.drawer .x{position:absolute;top:14px;right:16px;font-size:22px;color:var(--jp-ink-2);background:none;border:0;cursor:pointer}
+.meta{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:14px}
+.shot{position:relative;height:220px;border:1px solid var(--jp-line);border-radius:var(--jp-radius-control);background:var(--jp-ground);overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:7px}
+.shot .bar{height:8px;border-radius:2px;background:var(--jp-line)}
+.shot .in{height:16px;border-radius:2px;border:1px solid var(--jp-line-strong);background:var(--jp-surface)}
+.shot .in.g{border-color:var(--jp-amber);background:var(--jp-amber-bg)}
+.shot .open{position:absolute;right:10px;bottom:10px}
+.actions{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:16px;border-top:1px solid var(--jp-line-soft)}
+.overlay{position:fixed;inset:0;background:rgba(23,32,27,.35);display:flex;align-items:center;justify-content:center;z-index:30}
+.dialog{width:480px;background:var(--jp-surface);border-radius:var(--jp-radius-card);box-shadow:var(--jp-shadow-overlay);padding:24px;display:flex;flex-direction:column;gap:14px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog p{margin:0;font-size:14px;line-height:1.5}
+.dialog ul{margin:0;padding-left:20px;font-size:14px;line-height:1.6}
+.dialog .row{justify-content:flex-end;gap:8px;margin-top:6px}
+.toast{position:fixed;right:24px;bottom:24px;background:var(--jp-ink);color:#fff;font-size:14px;padding:12px 16px;border-radius:var(--jp-radius-card);z-index:40}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 24px;border:1px dashed var(--jp-line-strong);border-radius:var(--jp-radius-card);background:var(--jp-surface);text-align:center}
+.empty p{margin:0;font-size:14px;color:var(--jp-ink-2);max-width:440px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <b>Prototype · sample data · nothing is saved.</b>
+  Fill page:
+  <button data-act="jump" data-arg="ready">Ready</button>
+  <button data-act="jump" data-arg="done">Done</button>
+  <button data-act="jump" data-arg="notfound">Job post not found</button>
+  <span class="sep"></span>
+  <button data-act="toggleBrowser">Toggle browser closed</button>
+  <button data-act="cycleMode">Cycle mode badge</button>
+  <button data-act="emptyAll">Show empty states</button>
+  <button data-act="reset">Reset</button>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <span class="logo">JobPilot</span>
+    <span id="mode" class="mode dry">DRY RUN</span>
+    <span class="status"><span class="dot"></span>Engine connected</span>
+    <span style="flex:1"></span>
+    <span class="sm">Runs on this computer only</span>
+  </div>
+  <div class="body">
+    <nav id="nav"></nav>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="layer"></div>
+<div id="toastbox"></div>
+
+<script>
+const FLAG = '<svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z"/></svg>';
+const MODES = [["mock","MOCK"],["dry","DRY RUN"],["live","LIVE"]];
+
+function freshData() {
+  return {
+    unknowns: [
+      {id:1, cat:"Salary and pay", q:"What is your expected monthly salary?", seen:3, pages:["acme.com/careers/apply","appify.ph/apply","kumu.ph/jobs"], legal:false, ai:"PHP 20,000–25,000 for Metro Manila internships"},
+      {id:2, cat:"Availability and schedule", q:"How many hours per week can you commit during the semester?", seen:1, pages:["acme.com/careers/apply"], legal:false, ai:""},
+      {id:3, cat:"Legal and eligibility", q:"Have you ever been employed by a government agency?", seen:2, pages:["pulselabs.io/apply","globex.com/apply"], legal:true, ai:""},
+      {id:4, cat:"Open-ended", q:"Why do you want to work here?", seen:1, pages:["taguigtech.com/careers"], legal:false, ai:""},
+    ],
+    wordings: [
+      {id:1, w:"How much pay do you want?", m:"What is your expected monthly salary?", a:"PHP 18,000 (Metro Manila) · USD 600 (remote)", score:0.91, seen:4, page:"acme.com/careers/apply +2", kind:"fixed"},
+      {id:2, w:"When could you begin?", m:"When can you start?", a:"January 2027", score:0.91, seen:3, page:"appify.ph/apply +1", kind:"fixed"},
+      {id:3, w:"Are you authorised to work in the country?", m:"Are you legally allowed to work in the Philippines?", a:"", score:0.88, seen:2, page:"pulselabs.io/apply +1", kind:"protected"},
+      {id:4, w:"Tell us what makes you a good fit", m:"Why should we hire you?", a:"(open: written fresh each time)", score:0.87, seen:1, page:"taguigtech.com/careers", kind:"open"},
+    ],
+    answered: [],
+    answers: [
+      {id:1, q:"Are you legally allowed to work in the Philippines?", a:"Yes", kind:"protected", scope:"any", city:"", used:9, last:"Nov 22", aka:["Are you eligible to work in the PH?","Work authorization (Philippines)"]},
+      {id:2, q:"What is your expected monthly salary?", a:"PHP 18,000", kind:"fixed", scope:"city", city:"Metro Manila", used:6, last:"Nov 21", aka:["How much pay do you want?","Salary expectation","Expected compensation (monthly)"]},
+      {id:3, q:"What is your expected monthly salary?", a:"USD 600", kind:"fixed", scope:"remote", city:"", used:1, last:"Nov 14", aka:[]},
+      {id:4, q:"When can you start?", a:"January 2027", kind:"fixed", scope:"any", city:"", used:7, last:"Nov 22", aka:["Availability to start"]},
+      {id:5, q:"Why should we hire you?", a:"I learn fast and finish what I start: I built a library system in Java and kept improving it after the class ended.", kind:"open", scope:"any", city:"", used:4, last:"Nov 20", aka:[]},
+      {id:6, q:"Have you ever been convicted of a crime?", a:"No", kind:"protected", scope:"any", city:"", used:2, last:"Nov 18", aka:[]},
+      {id:7, q:"Are you willing to relocate?", a:"No", kind:"fixed", scope:"abroad", city:"", used:3, last:"Nov 19", aka:[]},
+      {id:8, q:"How did you hear about this job?", a:"Prosple", kind:"fixed", scope:"any", city:"", used:5, last:"Nov 22", aka:["Where did you find this posting?"]},
+    ],
+    fills: [
+      {id:9, date:"Nov 25, 14:02", co:"Acme", job:"Junior Java Developer", url:"acme.com/careers/apply/java-dev", res:"A", status:"filled",
+        flagged:[["Why do you want to work at Acme?","AI draft, check it."],["How many hours per week can you commit?","No saved answer, left empty."]],
+        filled:["First name","Last name","Email","Phone","School","Degree","Graduation year","Skills","GitHub","Expected salary","Start date","Resume"]},
+      {id:8, date:"Nov 25, 11:40", co:"Globex", job:"Backend Intern", url:"globex.com/apply", res:"B", status:"filled",
+        flagged:[["Have you ever been employed by a government agency?","Protected, no saved answer. You must answer it."]],
+        filled:["First name","Last name","Email","Phone","School","Skills","Resume"]},
+      {id:7, date:"Nov 24, 16:15", co:"Kumu", job:"Web Developer Intern", url:"apply.workable.com/kumu/j/1A2B", res:"A", status:"submitted", flagged:[], filled:["First name","Last name","Email","Phone","Resume","Start date"]},
+      {id:6, date:"Nov 24, 10:03", co:"Pulse Labs", job:"Frontend Intern", url:"boards.greenhouse.io/pulselabs/jobs/42", res:"A", status:"abandoned",
+        flagged:[["Portfolio","No portfolio, used GitHub."],["Cover letter","Left for you."],["Are you authorised to work in the country?","Matched a protected answer by a new wording."]],
+        filled:["First name","Last name","Email","GitHub"]},
+      {id:5, date:"Nov 23, 19:21", co:null, job:null, url:"docs.google.com/forms/d/e/1FAIpQL", res:null, status:"submitted", flagged:[["Student number","Needs you."]], filled:["Full name","Email","Year level","Course"]},
+      {id:4, date:"Nov 22, 15:47", co:"Taguig Tech", job:"Junior Developer", url:"taguigtech.com/careers/apply", res:"A", status:"submitted", flagged:[], filled:["Full name","Email","Phone","Resume"]},
+    ],
+  };
+}
+
+let D = freshData();
+const ACME = {name:"Junior Java Developer – Acme", src:"(tab 2)"};
+const S = {screen:"fill", fill:"ready", pickedTab:0, post:ACME, page:"acme.com/careers/apply/java-dev", noResume:false, browserClosed:false, mode:1,
+           qtab:"waiting", sel:0, search:"", kind:"all", hf:"all", reindexing:false, abBanner:false};
+let timer = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const scopeLabel = (a) => ({any:"Any", city:"City · " + (a.city || "?"), remote:"Remote", abroad:"Abroad"}[a.scope]);
+const qCount = () => D.unknowns.length + D.wordings.length;
+const openFills = () => D.fills.filter(f => f.status === "filled").length;
+
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  $("toastbox").innerHTML = ""; $("toastbox").appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+function closeLayer() { $("layer").innerHTML = ""; }
+
+/* ---------------- shell ---------------- */
+function renderNav() {
+  const items = [
+    ["fill","Fill this page",""],
+    ["questions","Questions", qCount() ? `<span class="count amber">${qCount()}</span>` : ""],
+    ["answers","Answer bank",""],
+    ["history","Filled pages", openFills() ? `<span class="count blue">${openFills()}</span>` : ""],
+  ];
+  $("nav").innerHTML = items.map(([k,l,c]) =>
+    `<button class="nav ${S.screen===k?"on":""}" data-act="go" data-arg="${k}">${l}${c}</button>`).join("")
+    + `<div class="navfoot">v0 · form filler</div>`;
+  const [cls, label] = MODES[S.mode];
+  $("mode").className = "mode " + cls; $("mode").textContent = label;
+}
+function render() { renderNav(); $("main").innerHTML = SCREENS[S.screen](); afterRender(); }
+function afterRender() {
+  const s = $("absearch"); if (s) { s.value = S.search; s.oninput = () => { S.search = s.value; $("abbody").innerHTML = abRows(); }; }
+}
+
+/* ---------------- Fill this page ---------------- */
+function needsYou() {
+  const q = qCount(), f = openFills();
+  return `<div class="stack" style="gap:10px"><span class="k">Needs you</span>
+    ${q ? `<div class="alert amber"><span>${q} question${q>1?"s":""} to answer or check</span><button class="btn link" data-act="go" data-arg="questions">Open Questions</button></div>` : ""}
+    ${f ? `<div class="alert blue"><span>${f} filled page${f>1?"s":""} without a status</span><button class="btn link" data-act="go" data-arg="history">Open Filled pages</button></div>` : ""}
+    ${!q && !f ? `<p class="note">Nothing waiting. Nice.</p>` : ""}</div>`;
+}
+const TABS = [["Backend Intern – Globex","globex.com/careers/backend-intern"],["Prosple: graduate roles","prosple.com/search"],["Apply – Globex (this form)","globex.com/apply"]];
+function jobPostLine(label) {
+  if (S.noResume) return `<div class="row"><div class="stack" style="gap:4px"><span class="k">${label}</span><span class="v">None · no resume uploaded</span></div><button class="btn link" data-act="change">Change</button></div>`;
+  return `<div class="row"><div class="stack" style="gap:4px"><span class="k">${label}</span><span class="v">${esc(S.post.name)} <span class="sm">${S.post.src}</span></span></div>${S.fill==="filling"?"":`<button class="btn link" data-act="change">Change</button>`}</div>`;
+}
+function fillScreen() {
+  const page = S.page;
+  const head = `<div><h1>Fill this page</h1><p class="sub">Open an application form in the bot's Chrome, then press Fill. JobPilot never clicks Submit.</p></div>`;
+  if (S.browserClosed) {
+    return head + `<div class="banner danger"><span><b style="font-weight:600">The bot's Chrome is closed.</b> Start it again, open the application page, then come back here.</span><button class="btn" data-act="toggleBrowser">Check again</button></div>
+    <div class="cols"><div class="card"><span class="status"><span class="dot grey"></span>Browser not found</span><div class="divider"></div>
+    <div class="stack" style="gap:4px"><span class="k">Job post</span><span class="v sm">Not looked for yet</span></div>
+    <button class="btn primary big wide" disabled>Fill this page</button><p class="note">Nothing is submitted. You review the form in the browser and click Submit yourself.</p></div>${needsYou()}</div>`;
+  }
+  let card = "";
+  if (S.fill === "ready") {
+    card = `<span class="status"><span class="dot"></span>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">${page}</b></span>
+      <div class="divider"></div>${jobPostLine("Job post")}
+      <button class="btn primary big wide" data-act="fill">Fill this page</button>
+      <p class="note">Nothing is submitted. You review the form in the browser and click Submit yourself.</p>`;
+  } else if (S.fill === "filling") {
+    card = `<span class="status"><span class="spin"></span>Filling ${page} · <span id="secs">0</span> s</span>
+      <div class="divider"></div>${jobPostLine("Job post")}
+      <button class="btn primary big wide" disabled>Filling…</button>
+      <p class="note">Reading the form, answering, choosing a resume and filling. The first fill of the day takes longer (the local AI model loads, about 20–50 s). Don't type in the form until it is done.</p>`;
+  } else if (S.fill === "done") {
+    const newQ = D.unknowns.some(u => u.id === 2);
+    card = `<span class="status"><span class="dot"></span>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">${page}</b></span>
+      <div class="done"><b>Done. Review the form in the browser, then submit it yourself.</b>
+        <div class="tags"><span class="tag">12 filled</span><span class="tag">1 new question</span><span class="tag">${S.noResume?"No resume":"Resume A"}</span></div>
+        <span class="flag">${FLAG}2 flagged (guessed or needs you). Outlined in amber on the page.</span></div>
+      <div class="stack" style="gap:4px"><span class="k">Flagged fields</span><div>
+        <div class="fitem"><span class="flag">${FLAG}</span><div><b style="font-weight:600">Why do you want to work at Acme?</b><br><span class="sm">AI draft from your projects and the job post. Read it before you submit.</span></div></div>
+        <div class="fitem"><span class="flag">${FLAG}</span><div><b style="font-weight:600">How many hours per week can you commit?</b><br><span class="sm">No saved answer. Left empty and added to Questions.</span></div></div>
+      </div></div>
+      <div class="divider"></div>${jobPostLine("Job post used")}
+      <div class="stack" style="gap:4px"><span class="k">Resume</span><span class="v">${S.noResume ? "None uploaded (no job post chosen). Upload one by hand if the form needs it." : "Resume A · the post asks for Java and Spring; resume A shows both (the library system project)."}</span></div>
+      <div class="row" style="justify-content:flex-start;gap:8px;padding-top:4px">
+        ${newQ ? `<button class="btn primary" data-act="answerNew">Answer the new question</button>` : `<button class="btn primary" data-act="go" data-arg="history">Open Filled pages</button>`}
+        <button class="btn" data-act="fill">Fill this page again</button></div>
+      <p class="note">After you submit in the browser, mark it in Filled pages.</p>`;
+  } else {
+    card = `<span class="status"><span class="dot"></span>Browser ready · current page: <b style="color:var(--jp-ink);font-weight:500">${page}</b></span>
+      <div class="banner amber"><span><b style="font-weight:600">Job post not found.</b> I can't pick a resume without it, so none will be uploaded until you choose one.</span></div>
+      <div class="stack" style="gap:8px"><span class="k">Pick the tab with the job post</span>
+        ${TABS.map((t,i) => `<button class="tabpick ${S.pickedTab===i?"on":""}" data-act="pickTab" data-arg="${i}">${t[0]}<span>${t[1]}</span></button>`).join("")}</div>
+      <div class="field"><span class="k">Or paste the job post text</span><textarea id="paste" class="ta paste" placeholder="Paste here…"></textarea></div>
+      <button class="btn primary big wide" data-act="useJobPost">Use this job post and fill</button>
+      <button class="btn wide" data-act="fillNoResume">Fill without resume</button>`;
+  }
+  return head + `<div class="cols"><div class="card">${card}</div>${needsYou()}</div>`;
+}
+function startFill() {
+  S.fill = "filling"; render();
+  let n = 0; clearInterval(timer);
+  timer = setInterval(() => { n++; const e = $("secs"); if (e) e.textContent = n * 6;
+    if (n >= 4) { clearInterval(timer); S.fill = "done";
+      if (!D.fills.some(f => f.id === 10)) D.fills.unshift({id:10, date:"Nov 25, 15:10", co:"Acme", job:"Junior Java Developer", url:"acme.com/careers/apply/java-dev", res:S.noResume?null:"A", status:"filled",
+        flagged:[["Why do you want to work at Acme?","AI draft, check it."],["How many hours per week can you commit?","No saved answer, left empty."]], filled:["First name","Last name","Email","Phone","School","Degree","Skills","GitHub","Expected salary","Start date","Graduation year","Resume"]});
+      render(); } }, 600);
+}
+
+/* ---------------- Questions ---------------- */
+function qHead(sub) {
+  return `<div class="head"><div><h1>Questions</h1><p class="sub">${sub}</p></div>
+    <div class="tabs">
+      <span class="tab ${S.qtab==="waiting"?"on":""}" data-act="qtab" data-arg="waiting">Waiting (${D.unknowns.length})</span>
+      <span class="tab ${S.qtab==="wordings"?"on":""}" data-act="qtab" data-arg="wordings">Wordings (${D.wordings.length})</span>
+      <span class="tab ${S.qtab==="answered"?"on":""}" data-act="qtab" data-arg="answered">Answered (${D.answers.length})</span></div></div>`;
+}
+function seenLine(u) {
+  const shown = u.pages.slice(0,2).map(p => `<a href="#">${p}</a>`).join(", ");
+  const more = u.pages.length > 2 ? `, <a href="#">+${u.pages.length-2} more</a>` : "";
+  return `<span class="seen">Seen ${u.seen} time${u.seen>1?"s":""} · on ${u.pages.length} page${u.pages.length>1?"s":""}: ${shown}${more}</span>`;
+}
+function waitingTab() {
+  if (!D.unknowns.length) return qHead("Nothing waiting") + empty("No questions waiting. When a form asks something JobPilot has no answer for, it appears here.", "Open Answer bank", "go", "answers");
+  const sel = D.unknowns.find(u => u.id === S.sel) || D.unknowns[0]; S.sel = sel.id;
+  const others = D.unknowns.filter(u => u.id !== sel.id);
+  const form = `
+    ${sel.legal ? `<div class="banner amber"><span><b style="font-weight:600">You must answer this yourself.</b> Legal and eligibility questions never get an AI suggestion. It will be saved as protected.</span></div>`
+      : sel.ai ? `<div class="box" style="border-style:dashed;display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;font-weight:500;color:var(--jp-ink-2)">AI suggestion</span><span style="font-size:14px">${esc(sel.ai)}</span><button class="btn xs" style="align-self:flex-start" data-act="useAi">Use this</button></div>` : ""}
+    <div class="field"><span class="k">Your answer</span><textarea id="qans" class="ta" placeholder="Type the answer once. It is reused on every form that asks this."></textarea></div>
+    <div class="grid2" style="gap:12px">
+      <div class="field"><span class="k">Kind</span><select id="qkind" class="sel" ${sel.legal?"disabled":""}>
+        <option value="fixed" ${!sel.legal && sel.cat!=="Open-ended"?"selected":""}>Fixed: filled word for word</option>
+        <option value="open" ${sel.cat==="Open-ended"?"selected":""}>Open: AI adapts it per form</option>
+        <option value="protected" ${sel.legal?"selected":""}>Protected: legal, never AI</option></select></div>
+      <div class="field"><span class="k">Location scope</span><select class="sel"><option>Any job</option><option>A specific city</option><option>Remote</option><option>Abroad</option></select></div>
+    </div>`;
+  return qHead(`${D.unknowns.length} waiting · ${D.wordings.length} new wordings to check`) + `
+    <div class="grid2">
+      <div class="card q"><span class="sm">${sel.cat}</span>
+        <span style="font-size:18px;font-weight:600;line-height:1.35">${esc(sel.q)}</span>${seenLine(sel)}${form}
+        <div class="row" style="padding-top:12px;border-top:1px solid var(--jp-line-soft)"><span class="sm">Saved answers are reused on future forms.</span><button class="btn primary" data-act="saveUnknown">Save answer</button></div></div>
+      <div class="stack">${others.map(u => `<div class="card small" data-act="selQ" data-arg="${u.id}"><span class="sm">${u.cat}</span><span style="font-size:15px;font-weight:600">${esc(u.q)}</span>${seenLine(u)}<span class="sm">${u.legal?"You must answer this yourself.":"Waiting for your answer."}</span></div>`).join("")}</div>
+    </div>`;
+}
+function wordingsTab() {
+  const top = qHead(D.wordings.length ? `${D.wordings.length} new wordings waiting · most seen first` : "No new wordings waiting");
+  if (!D.wordings.length) return top + empty("No new wordings waiting. When a form words a question in a new way, it appears here.", "See answered questions", "qtab", "answered");
+  return top + `<p class="note" style="max-width:600px">A form asked a saved question in new words. Nothing is saved until you approve it, because a wrong match would become a permanent 1.0 match.</p>
+    ${S.reindexing ? `<span class="status"><span class="dot blue"></span>Re-indexing the answer bank…</span>` : ""}
+    <div class="tablewrap"><table><colgroup><col style="width:22%"><col style="width:21%"><col style="width:17%"><col style="width:7%"><col style="width:6%"><col style="width:12%"><col style="width:15%"></colgroup>
+    <thead><tr><th>New wording</th><th>Matches saved question</th><th>Saved answer</th><th class="num">Score</th><th class="num">Seen</th><th>Kind</th><th></th></tr></thead><tbody>
+    ${D.wordings.map(w => `<tr><td><b>${esc(w.w)}</b><br><span class="seen"><a href="#">${w.page}</a></span></td><td>${esc(w.m)}</td>
+      <td>${w.kind==="protected" ? `<span class="sm">Hidden (protected)</span>` : esc(w.a)}</td><td class="num">${w.score.toFixed(2)}</td><td class="num">${w.seen}</td>
+      <td class="nw"><span class="chip">${w.kind}</span>${w.kind==="protected" ? ` <span class="flag" style="margin-left:6px" title="Matches a protected answer. Check the two questions mean the same thing.">${FLAG}1</span>` : ""}</td>
+      <td class="act"><button class="btn primary sm2" data-act="approve" data-arg="${w.id}">Approve</button> <button class="btn sm2" data-act="reject" data-arg="${w.id}">Reject</button></td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+function answeredTab() {
+  return qHead("Questions you have answered") + (D.answered.length
+    ? `<div class="tablewrap"><table><thead><tr><th>Question</th><th>Your answer</th><th>Saved</th></tr></thead><tbody>
+       ${D.answered.map(a => `<tr><td><b>${esc(a.q)}</b></td><td>${esc(a.a)}</td><td class="seen">Just now</td></tr>`).join("")}</tbody></table></div>`
+    : "") + `<div class="alert"><span>All ${D.answers.length} saved answers, with search and editing, are in the Answer bank.</span><button class="btn link" data-act="go" data-arg="answers">Open Answer bank</button></div>`;
+}
+
+/* ---------------- Answer bank ---------------- */
+function abRows() {
+  const s = S.search.toLowerCase();
+  const rows = D.answers.filter(a => (S.kind === "all" || a.kind === S.kind) &&
+    (!s || (a.q + " " + a.a + " " + a.aka.join(" ")).toLowerCase().includes(s)));
+  if (!rows.length) return `<tr><td colspan="6" style="height:auto;padding:0;border:0">${empty(`No saved answer matches "${esc(S.search)}". Search looks at questions, answers and other wordings.`, "Clear search", "clearSearch")}</td></tr>`;
+  return rows.map(a => `<tr class="click" data-act="editAnswer" data-arg="${a.id}">
+    <td><b>${esc(a.q)}</b>${a.aka.length ? `<br><span class="seen">Also asked as ${a.aka.length}</span>` : ""}</td>
+    <td>${esc(a.a.length > 70 ? a.a.slice(0,70) + "…" : a.a)}</td><td><span class="chip">${a.kind}</span></td>
+    <td>${esc(scopeLabel(a))}</td><td class="num">${a.used}</td><td class="seen nw">${a.last}</td></tr>`).join("");
+}
+function answersScreen() {
+  const n = (k) => k === "all" ? D.answers.length : D.answers.filter(a => a.kind === k).length;
+  return `<div class="head"><div><h1>Answer bank</h1><p class="sub">${D.answers.length} saved answers · reused on every form, matched by meaning</p></div>
+      <button class="btn primary" data-act="editAnswer" data-arg="new">Add answer</button></div>
+    ${S.abBanner ? `<div class="banner amber"><span><b style="font-weight:600">Saved, but not re-indexed yet.</b> Ollama isn't running, so the filler may not find the new text. Start Ollama, then run <code>python -m engine.cli rag reindex</code>.</span><button class="btn" data-act="dismissAb">Got it</button></div>` : ""}
+    ${S.reindexing ? `<span class="status"><span class="dot blue"></span>Re-indexing the answer bank…</span>` : ""}
+    <div class="toolbar"><input id="absearch" class="input search" placeholder="Search questions and answers"><span style="width:8px"></span>
+      ${["all","fixed","open","protected"].map(k => `<span class="fchip ${S.kind===k?"on":""}" data-act="kind" data-arg="${k}">${k[0].toUpperCase()+k.slice(1)} ${n(k)}</span>`).join("")}</div>
+    <div class="tablewrap"><table><colgroup><col style="width:30%"><col style="width:30%"><col style="width:10%"><col style="width:14%"><col style="width:8%"><col style="width:8%"></colgroup>
+      <thead><tr><th>Question</th><th>Answer</th><th>Kind</th><th>Location scope</th><th class="num">Used</th><th>Last used</th></tr></thead>
+      <tbody id="abbody">${abRows()}</tbody></table></div>`;
+}
+function answerDrawer(id) {
+  const a = id === "new" ? {id:"new", q:"", a:"", kind:"fixed", scope:"any", city:"", used:0, last:"", aka:[]} : D.answers.find(x => x.id == id);
+  $("layer").innerHTML = `<div class="drawer"><button class="x" data-act="close">×</button>
+    <h2>${a.id==="new" ? "Add an answer" : "Edit answer"}</h2>
+    <div class="field"><span class="k">Question</span><input id="dq" class="input" value="${esc(a.q)}" placeholder="The question as forms usually ask it"></div>
+    <div class="field"><span class="k">Answer</span><textarea id="da" class="ta">${esc(a.a)}</textarea></div>
+    <div class="field"><span class="k">Kind</span><select id="dk" class="sel">${["fixed","open","protected"].map(k => `<option value="${k}" ${a.kind===k?"selected":""}>${k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select>
+      <span class="help"><b>Fixed:</b> filled word for word. <b>Open:</b> used as notes; the AI rewrites it for each form (flagged). <b>Protected:</b> legal and eligibility; filled word for word, never touched by the AI, and changes need a confirm.</span></div>
+    <div class="grid2" style="gap:12px">
+      <div class="field"><span class="k">Location scope</span><select id="ds" class="sel">${[["any","Any job"],["city","A specific city"],["remote","Remote"],["abroad","Abroad"]].map(([v,l]) => `<option value="${v}" ${a.scope===v?"selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><span class="k">City</span><input id="dc" class="input" value="${esc(a.city)}" placeholder="Only for a specific city"></div></div>
+    ${a.aka.length ? `<div class="field"><span class="k">Also asked as</span><div class="tags">${a.aka.map(w => `<span class="tag s">${esc(w)}</span>`).join("")}</div><span class="help">Approved on Questions → Wordings.</span></div>` : ""}
+    ${a.id !== "new" ? `<span class="help">Used ${a.used} times · last on ${a.last}</span>` : ""}
+    <div class="actions">${a.id !== "new" ? `<button class="btn dlink" data-act="deleteAnswer" data-arg="${a.id}">Delete</button>` : ""}<span style="flex:1"></span>
+      <button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="saveAnswer" data-arg="${a.id}">${a.id==="new"?"Add answer":"Save changes"}</button></div>
+    <span class="help" style="margin-top:-6px">Saving makes a backup of answers.json, then re-indexes so the filler finds the new text.</span></div>`;
+}
+function readDrawer() { return {q:$("dq").value.trim(), a:$("da").value.trim(), kind:$("dk").value, scope:$("ds").value, city:$("dc").value.trim()}; }
+function commitAnswer(id, v) {
+  if (id === "new") D.answers.push({id:Date.now(), ...v, used:0, last:"Never", aka:[]});
+  else Object.assign(D.answers.find(x => x.id == id), v);
+  D.answers.sort((x,y) => x.q.localeCompare(y.q));
+  closeLayer(); toast("Saved to answers.json (backup made)"); reindex();
+}
+function reindex() { S.reindexing = true; render(); setTimeout(() => { S.reindexing = false; render(); }, 2200); }
+
+/* ---------------- Filled pages ---------------- */
+function historyScreen() {
+  const n = (k) => k === "all" ? D.fills.length : D.fills.filter(f => f.status === k).length;
+  const rows = D.fills.filter(f => S.hf === "all" || f.status === S.hf);
+  const head = `<div class="head"><div><h1>Filled pages</h1><p class="sub">${D.fills.length ? `${D.fills.length} pages filled · ${openFills()} waiting for you to mark` : "Nothing filled yet"}</p></div></div>`;
+  if (!D.fills.length) return head + empty("No filled pages yet. Every time you press Fill this page, the page appears here with a screenshot.", "Go to Fill this page", "go", "fill");
+  return head + `<div class="toolbar">${["all","filled","submitted","abandoned"].map(k => `<span class="fchip ${S.hf===k?"on":""}" data-act="hf" data-arg="${k}">${k[0].toUpperCase()+k.slice(1)} ${n(k)}</span>`).join("")}</div>
+    <div class="tablewrap"><table><colgroup><col style="width:10%"><col style="width:12%"><col style="width:19%"><col style="width:20%"><col style="width:7%"><col style="width:7%"><col style="width:9%"><col style="width:16%"></colgroup>
+    <thead><tr><th>Date</th><th>Company</th><th>Job</th><th>Page</th><th>Resume</th><th class="num">Flagged</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(f => `<tr class="click" data-act="openFill" data-arg="${f.id}"><td class="seen nw">${f.date}</td><td>${f.co ? esc(f.co) : `<span class="sm">Unknown</span>`}</td>
+      <td>${f.job ? esc(f.job) : `<span class="sm">No job post</span>`}</td><td class="seen"><a href="#">${esc(f.url.length > 28 ? f.url.slice(0,28) + "…" : f.url)}</a></td>
+      <td>${f.res || `<span class="sm">None</span>`}</td><td class="num">${f.flagged.length ? `<span class="flag">${FLAG}${f.flagged.length}</span>` : `<span class="seen">0</span>`}</td>
+      <td><span class="st ${f.status}">${f.status[0].toUpperCase()+f.status.slice(1)}</span></td>
+      <td class="act">${f.status === "filled" ? `<button class="btn sm2" data-act="markSubmitted" data-arg="${f.id}">Mark submitted</button> <button class="btn link sm2" data-act="abandon" data-arg="${f.id}">Abandoned</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+function fillDrawer(id) {
+  const f = D.fills.find(x => x.id == id);
+  $("layer").innerHTML = `<div class="drawer"><button class="x" data-act="close">×</button>
+    <div class="stack" style="gap:8px"><h2>${f.job ? esc(f.job) + (f.co ? " – " + esc(f.co) : "") : "Form without a job post"}</h2><span><span class="st ${f.status}">${f.status[0].toUpperCase()+f.status.slice(1)}</span></span></div>
+    <div class="meta"><span class="k">Page</span><a href="#">${esc(f.url)}</a><span class="k">Filled</span><span>${f.date}</span><span class="k">Resume</span><span>${f.res || "None uploaded"}</span></div>
+    <div class="stack" style="gap:8px"><span class="k">Screenshot after filling</span>
+      <div class="shot"><div class="bar" style="width:40%"></div><div class="bar" style="width:22%;margin-top:6px"></div><div class="in"></div><div class="bar" style="width:18%"></div><div class="in"></div>
+        <div class="bar" style="width:34%"></div><div class="in g" style="height:40px"></div><div class="bar" style="width:28%"></div><div class="in g"></div>
+        <button class="btn sm2 open" data-act="fullShot">Open full size</button></div></div>
+    ${f.flagged.length ? `<div class="stack" style="gap:8px"><span class="k">Flagged · ${f.flagged.length}</span>${f.flagged.map(([l,n]) => `<div class="fitem" style="padding:4px 0;border:0"><span class="flag">${FLAG}</span><div><b style="font-weight:600">${esc(l)}</b><br><span class="sm">${esc(n)}</span></div></div>`).join("")}</div>` : ""}
+    <div class="stack" style="gap:8px"><span class="k">Filled · ${f.filled.length}</span><div class="tags">${f.filled.map(l => `<span class="tag s">${esc(l)}</span>`).join("")}</div>
+      <span class="help">Field names only. The typed values are in the screenshot, never sent to the dashboard.</span></div>
+    ${f.status === "filled" ? `<div class="actions"><button class="btn" data-act="abandon" data-arg="${f.id}">Abandoned</button><span style="flex:1"></span><button class="btn primary" data-act="markSubmitted" data-arg="${f.id}">Mark as submitted</button></div>` : `<div class="actions"><span class="help">Status is final: a page can be marked once.</span></div>`}
+  </div>`;
+}
+
+/* ---------------- shared ---------------- */
+function empty(text, btn, act, arg="") {
+  return `<div class="empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--jp-ink-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
+    <p>${text}</p><button class="btn" data-act="${act}" data-arg="${arg}">${btn}</button></div>`;
+}
+function confirmDialog({title, body, confirm, onYes}) {
+  $("layer").insertAdjacentHTML("beforeend", `<div class="overlay" id="dlg"><div class="dialog"><h3>${title}</h3>${body}
+    <div class="row"><button class="btn" id="dlgNo">Cancel</button><button class="btn danger" id="dlgYes">${confirm}</button></div></div></div>`);
+  $("dlgNo").focus();
+  $("dlgNo").onclick = () => $("dlg").remove();
+  $("dlgYes").onclick = () => { $("dlg").remove(); onYes(); };
+}
+const SCREENS = {
+  fill: fillScreen,
+  questions: () => ({waiting: waitingTab, wordings: wordingsTab, answered: answeredTab})[S.qtab](),
+  answers: answersScreen,
+  history: historyScreen,
+};
+
+/* ---------------- actions ---------------- */
+const ACTS = {
+  go: (a) => { S.screen = a; closeLayer(); render(); },
+  jump: (a) => { clearInterval(timer); S.screen = "fill"; S.fill = a; S.browserClosed = false; S.noResume = false; S.post = ACME;
+    S.pickedTab = a === "notfound" ? null : 0; S.page = a === "notfound" ? "globex.com/apply" : "acme.com/careers/apply/java-dev"; closeLayer(); render(); },
+  toggleBrowser: () => { S.browserClosed = !S.browserClosed; S.screen = "fill"; render(); },
+  cycleMode: () => { S.mode = (S.mode + 1) % 3; renderNav(); },
+  emptyAll: () => { D.unknowns = []; D.wordings = []; D.fills = []; S.search = "zzz"; closeLayer(); render(); toast("Empty states: open each screen (Answer bank shows a search with no results)"); },
+  reset: () => { clearInterval(timer); D = freshData(); Object.assign(S, {screen:"fill", fill:"ready", pickedTab:0, post:ACME, page:"acme.com/careers/apply/java-dev", noResume:false, browserClosed:false, qtab:"waiting", sel:0, search:"", kind:"all", hf:"all", reindexing:false, abBanner:false}); closeLayer(); render(); },
+  fill: () => { S.noResume = S.noResume && S.fill !== "ready"; startFill(); },
+  change: () => { S.fill = "notfound"; render(); },
+  pickTab: (a) => { S.pickedTab = +a; render(); },
+  useJobPost: () => {
+    const p = $("paste"), pasted = !!(p && p.value.trim());
+    if (S.pickedTab === null && !pasted) { toast("Pick a tab or paste the job post first"); return; }
+    S.post = pasted ? {name:"Pasted text", src:""} : {name:TABS[S.pickedTab][0], src:`(tab ${S.pickedTab + 1})`};
+    S.noResume = false; startFill();
+  },
+  fillNoResume: () => { S.noResume = true; startFill(); },
+  answerNew: () => { S.screen = "questions"; S.qtab = "waiting"; S.sel = 2; render(); },
+  qtab: (a) => { S.screen = "questions"; S.qtab = a; render(); },
+  selQ: (a) => { S.sel = +a; render(); },
+  useAi: () => { const u = D.unknowns.find(x => x.id === S.sel); $("qans").value = u.ai; },
+  saveUnknown: () => {
+    const v = $("qans").value.trim(); if (!v) { toast("Type an answer first"); return; }
+    const u = D.unknowns.find(x => x.id === S.sel);
+    D.unknowns = D.unknowns.filter(x => x.id !== u.id);
+    D.answered.unshift({q:u.q, a:v});
+    D.answers.push({id:Date.now(), q:u.q, a:v, kind:u.legal ? "protected" : $("qkind").value, scope:"any", city:"", used:0, last:"Never", aka:[]});
+    S.sel = 0; toast("Saved to answers.json (backup made) · re-indexing"); render();
+  },
+  approve: (a) => {
+    const w = D.wordings.find(x => x.id == a);
+    const go = () => { D.wordings = D.wordings.filter(x => x.id != a); toast("Added to answers.json (backup made)"); S.reindexing = true; render(); setTimeout(() => { S.reindexing = false; render(); }, 2200); };
+    if (w.kind !== "protected") return go();
+    confirmDialog({title:"Approve a protected wording?", confirm:"Yes, they mean the same", onYes:go,
+      body:`<p>This answer is protected. Do you confirm both questions mean exactly the same?</p>
+        <div class="box" style="font-size:14px;line-height:1.5"><b>New:</b> ${esc(w.w)}<br><b>Saved:</b> ${esc(w.m)}</div>
+        <p>If you confirm:</p><ul><li>The new wording is added to <b>answers.json</b> (a backup is made first).</li><li>It will be answered with your saved protected answer, word for word.</li><li>The engine re-indexes the answer bank.</li></ul>`});
+  },
+  reject: (a) => { D.wordings = D.wordings.filter(x => x.id != a); toast("Rejected. This wording won't come back."); render(); },
+  kind: (a) => { S.kind = a; render(); },
+  clearSearch: () => { S.search = ""; render(); },
+  editAnswer: (a) => answerDrawer(a),
+  saveAnswer: (id) => {
+    const v = readDrawer(); if (!v.q || !v.a) { toast("Question and answer are both needed"); return; }
+    const old = id === "new" ? null : D.answers.find(x => x.id == id);
+    if (old && old.kind === "protected") {
+      confirmDialog({title:"Change a protected answer?", confirm:"Save protected answer", onYes:() => commitAnswer(id, v),
+        body:`<p>Protected answers are legal and eligibility answers. Every form that asks this question will get the new text, word for word.</p>
+          <div class="box" style="font-size:14px;line-height:1.5"><b>Before:</b> ${esc(old.a)} (${old.kind})<br><b>After:</b> ${esc(v.a)} (${v.kind})</div>
+          <p>If you confirm:</p><ul><li>A backup of <b>answers.json</b> is made, then the change is saved.</li><li>The engine re-indexes the answer bank.</li></ul>`});
+    } else commitAnswer(id, v);
+  },
+  deleteAnswer: (id) => {
+    const a = D.answers.find(x => x.id == id);
+    confirmDialog({title:"Delete this answer?", confirm:"Delete answer",
+      onYes:() => { D.answers = D.answers.filter(x => x.id != id); closeLayer(); toast("Deleted (backup made)"); reindex(); },
+      body:`<div class="box" style="font-size:14px;line-height:1.5"><b>${esc(a.q)}</b><br>${esc(a.a)} · ${esc(scopeLabel(a))}</div>
+        <p>If you confirm:</p><ul><li>A backup of <b>answers.json</b> is made, then the answer is removed.</li><li>Forms that ask this question will flag it and add it to Questions again.</li>
+        ${a.kind === "protected" ? "<li>This is a protected (legal) answer: forms will leave it empty until you answer again.</li>" : ""}</ul>`});
+  },
+  dismissAb: () => { S.abBanner = false; render(); },
+  hf: (a) => { S.hf = a; render(); },
+  openFill: (a) => fillDrawer(a),
+  markSubmitted: (a) => { const f = D.fills.find(x => x.id == a); f.status = "submitted"; closeLayer(); toast(`${f.job || "Form"}${f.co ? " – " + f.co : ""} marked as submitted`); render(); },
+  abandon: (a) => {
+    const f = D.fills.find(x => x.id == a);
+    confirmDialog({title:"Mark as abandoned?", confirm:"Mark abandoned",
+      onYes:() => { f.status = "abandoned"; closeLayer(); toast(`${f.job || "Form"} marked as abandoned`); render(); },
+      body:`<div class="box" style="font-size:14px;line-height:1.5"><b>${esc(f.job || "Form without a job post")}${f.co ? " – " + esc(f.co) : ""}</b><br>Filled ${f.date}</div>
+        <p>Use this when you closed the form without sending it. It can't be changed to submitted later.</p>`});
+  },
+  fullShot: () => toast("Opens the full screenshot in a new tab (real app)"),
+  close: () => closeLayer(),
+};
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-act]"); if (!t) return;
+  if (t.tagName === "TR" && e.target.closest("button")) return; // buttons inside rows win
+  e.preventDefault(); ACTS[t.dataset.act](t.dataset.arg, t);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const d = $("dlg"); d ? d.remove() : closeLayer(); } });
+render();
+</script>
+</body>
+</html>
