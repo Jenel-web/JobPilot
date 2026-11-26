@@ -36,7 +36,9 @@ from engine import safety
 from engine.forms.browser import CDP_URL
 from engine.settings import Settings
 
-FieldType = Literal["text", "email", "tel", "url", "number", "date", "textarea", "select", "dropdown", "radio", "checkbox", "file"]
+FieldType = Literal["text", "email", "tel", "url", "number", "date", "textarea", "select", "dropdown", "radio", "checkbox", "file", "unsupported"]
+# "unsupported": a real question the bot cannot drive (a slider, a rich-text box, a toggle switch). It is REPORTED so the
+# fill summary says "needs you" instead of skipping it silently; no position is saved, so nothing can ever touch it.
 
 # How a CUSTOM dropdown is recognised (shared with the filler, which must find the same elements again).
 # Many sites (Shopee, Element UI, Ant Design...) build dropdowns from <div>s instead of a <select>: a box you click,
@@ -210,6 +212,30 @@ _EXTRACT_JS = "() => {\n" + CUSTOM_HELPERS_JS + r"""
       maxChoices: parseInt(((ph + ' ' + label).match(/up to (\d+)/i) || [])[1] || '0', 10),
     }});
   });
+  // Controls the bot cannot drive: report them (type "unsupported") so they are never skipped silently. Only the
+  // outermost one counts (a rich-text editor holds many editable blocks). A plain button, link or menu never has one
+  // of these roles, so it is never reported; a toggle <button role="switch"> is (it is a question).
+  const UNSUPPORTED_ROLES = ['slider', 'spinbutton', 'switch', 'textbox'];
+  const isUnsupported = e => {
+    if (['INPUT', 'SELECT', 'TEXTAREA', 'OPTION'].includes(e.tagName)) return false;  // real fields are read above
+    const role = e.getAttribute('role') || '';
+    const ce = e.getAttribute('contenteditable');
+    const editable = ce !== null && ce.toLowerCase() !== 'false';
+    if (!UNSUPPORTED_ROLES.includes(role) && !editable) return false;
+    return true;
+  };
+  [...document.querySelectorAll('[role], [contenteditable]')].forEach(e => {
+    if (!isUnsupported(e) || !isShown(e) || inCustom(e) || e.getAttribute('aria-disabled') === 'true') return;
+    if (e.parentElement && e.parentElement.closest('button, a, [role=button]')) return;
+    for (let p = e.parentElement; p; p = p.parentElement) if (isUnsupported(p)) return;  // inside another one: outermost only
+    const label = labelOf(e);
+    entries.push({node: e, item: {
+      index: -1, cindex: -1, tag: e.tagName.toLowerCase(), type: 'unsupported', name: '', role: e.getAttribute('role') || '',
+      bare: false, label, group: '', options: [], autocomplete: '', maxLength: 0, pattern: '',
+      placeholder: clean(e.getAttribute('aria-placeholder') || e.getAttribute('data-placeholder')),
+      required: e.getAttribute('aria-required') === 'true' || /\*\s*$/.test(label),
+    }});
+  });
   entries.sort((a, b) => (a.node.compareDocumentPosition(b.node) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
   return entries.map(x => x.item);
 }
@@ -301,6 +327,11 @@ def build_fields(raw: list[dict[str, Any]]) -> list[FormField]:
                     placeholder=item.get("placeholder", ""),
                 )
             )
+            continue
+        if item.get("type") == "unsupported":  # reported only: no index, so the filler can never touch it
+            previous = item
+            fields.append(FormField(label=clean_label(item["label"]), type="unsupported", required=item["required"],
+                                    placeholder=item.get("placeholder", "")))
             continue
         # Custom dropdowns (react-select and similar) are two inputs: the real question
         # (role=combobox) plus a bare helper box right after it. Keep only the real one.

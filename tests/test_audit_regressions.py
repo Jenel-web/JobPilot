@@ -24,7 +24,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 from engine.db import connect, init_db
 from engine.forms import answers
 from engine.forms.answers import FieldAnswer, fill_personal
-from engine.forms.reader import FormField
+from engine.forms.reader import FormField, read_fields
 from tests.test_filler import MOCK, bad_clicks, build, install_recorder, known, open_fixture, run
 
 VALUES = {
@@ -156,7 +156,6 @@ def test_bug2_a_button_combobox_that_could_submit_is_never_clicked(page: Page) -
 # ---- Bug 2b: never skip a control silently --------------------------------------------------------------------------
 
 
-@BUG2B
 def test_bug2b_unknown_controls_are_reported_not_skipped(page: Page) -> None:
     fields = open_fixture(page, "audit_unsupported.html")
     unsupported = [f for f in fields if f.type == "unsupported"]
@@ -165,7 +164,6 @@ def test_bug2b_unknown_controls_are_reported_not_skipped(page: Page) -> None:
     assert not any("Account menu" in f.label for f in fields)  # a nav menu button is an action, not a question
 
 
-@BUG2B
 def test_bug2b_unknown_controls_end_as_needs_you_after_a_fill(page: Page, conn: sqlite3.Connection) -> None:
     fields = open_fixture(page, "audit_unsupported.html")
     decided = [
@@ -179,6 +177,34 @@ def test_bug2b_unknown_controls_end_as_needs_you_after_a_fill(page: Page, conn: 
             assert r.outcome == "needs_you" and r.flagged
     assert sum(r.type == "unsupported" for r in report.results) == 2
     assert bad_clicks(page) == []
+
+
+def test_bug2b_a_toggle_switch_is_reported_and_a_menu_button_is_not(page: Page) -> None:
+    page.set_content(
+        "<nav><button aria-haspopup='menu'>Menu</button><a href='#' role='button'>Help</a></nav>"
+        "<form><span id='r'>Open to remote work</span><button type='button' role='switch' aria-checked='false' aria-labelledby='r'>off</button>"
+        "<div><span id='e'>Summary</span><div contenteditable='true' aria-labelledby='e'><p contenteditable='true'>x</p></div></div></form>"
+    )
+    unsupported = [(f.label, f.type) for f in read_fields(page) if f.type == "unsupported"]
+    assert unsupported == [("Open to remote work", "unsupported"), ("Summary", "unsupported")]  # the outer editor only
+
+
+def test_bug2b_an_unsupported_control_is_never_touched_even_with_an_answer(page: Page) -> None:
+    """Defence in depth: even if something hands the filler a value for a slider, it is left for you, untouched."""
+    fields = open_fixture(page, "audit_unsupported.html")
+    install_recorder(page)
+    decided = [known(f.label, "5") if f.type == "unsupported" else known(f.label, "Juan") for f in fields]
+    report = run(page, fields, decided)
+    assert [r.outcome for r in report.results if r.type == "unsupported"] == ["needs_you", "needs_you"]
+    assert page.get_attribute("[role=slider]", "aria-valuenow") == "1" and page.inner_text("[contenteditable]") == ""
+    assert bad_clicks(page) == []
+
+
+def test_bug2b_an_unsupported_control_is_never_added_to_your_questions(conn: sqlite3.Connection) -> None:
+    """There is nothing you could save for it (the bot cannot fill a slider), so it never lands in Questions."""
+    a = answers.answer_field(conn, field("Rate your Python skill", "unsupported"), VALUES, settings=MOCK, record=True)
+    assert (a.value, a.flagged, a.unknown_id) == ("", True, None) and "cannot fill" in a.note
+    assert conn.execute("SELECT count(*) FROM unknown_questions").fetchone()[0] == 0
 
 
 # ---- Bug 3: Workday phone fields (no browser) -----------------------------------------------------------------------

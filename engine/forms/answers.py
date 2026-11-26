@@ -546,6 +546,9 @@ class FieldAnswer:
     unknown_id: int | None = None  # row on the unknown questions list, when the question was filed there
 
 
+UNSUPPORTED_NOTE = "a control JobPilot cannot fill (slider, rich-text box or switch): fill it yourself"
+
+
 def _needs_you(label: str, note: str, unknown_id: int | None = None) -> FieldAnswer:
     """An empty, flagged field: you fill it yourself."""
     return FieldAnswer(label, "", "none", True, note, unknown_id=unknown_id)
@@ -652,6 +655,9 @@ def answer_field(
 
     if field.type == "file":
         return file_answer(field, has_job_post=bool(job_text))
+
+    if field.type == "unsupported":  # a slider, rich-text box or switch: the bot cannot fill it, so it never asks or saves
+        return _needs_you(field.label, UNSUPPORTED_NOTE)
 
     personal = fill_personal(field, values)
     if personal is not None:

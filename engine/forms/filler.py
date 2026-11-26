@@ -335,6 +335,8 @@ class _Filler:
         name = f.label or "(no label)"
         if f.needs_you:
             return self._leave(f,"the page gave no readable question")
+        if f.type == "unsupported":  # reported by the reader so it is never skipped silently; never touched
+            return self._leave(f, a.note or "a control JobPilot cannot fill: fill it yourself")
         if f.type == "file":
             if a.source != "resume":
                 return self._leave(f,a.note or "only the resume is uploaded by the bot")
