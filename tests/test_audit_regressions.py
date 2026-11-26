@@ -210,7 +210,6 @@ def test_bug2b_an_unsupported_control_is_never_added_to_your_questions(conn: sql
 # ---- Bug 3: Workday phone fields (no browser) -----------------------------------------------------------------------
 
 
-@BUG3
 def test_bug3_phone_device_type_is_mobile_for_a_mobile_number() -> None:
     f = field("Phone Device Type", "dropdown", options=["Mobile", "Home", "Work"], custom_index=0)
     p = fill_personal(f, {**VALUES, "phone": "+63 917 555 0142"})
@@ -223,7 +222,6 @@ def test_bug3_phone_device_type_is_never_guessed_for_a_landline() -> None:
     assert p is not None and p.value == "" and p.flagged
 
 
-@BUG3
 def test_bug3_country_phone_code_picks_your_country() -> None:
     f = field("Country Phone Code", "select", options=["Philippines (+63)", "United States of America (+1)", "Singapore (+65)"])
     p = fill_personal(f, VALUES)
@@ -233,6 +231,17 @@ def test_bug3_country_phone_code_picks_your_country() -> None:
 @pytest.mark.parametrize("label", ["Verification code", "Referral code", "Promo code", "Confirmation code"])
 def test_bug3_other_codes_are_still_not_personal(label: str) -> None:
     assert fill_personal(field(label), VALUES) is None
+
+
+@pytest.mark.parametrize("label", ["Verification code", "Referral code", "Promo code", "Discount code", "Course code"])
+def test_bug3_a_code_dropdown_that_is_not_a_phone_code_is_still_not_personal(label: str) -> None:
+    f = field(label, "select", options=["Philippines (+63)", "Singapore (+65)"])
+    assert fill_personal(f, VALUES) is None
+
+
+def test_bug3_a_country_phone_code_text_box_is_left_to_the_old_rules() -> None:
+    """Only a DROPDOWN of codes is answered from your number; a text box named like that is not touched by the new rule."""
+    assert fill_personal(field("Country Phone Code", "text"), VALUES) is None
 
 
 # ---- Bug 4: course, year level and technology checkboxes (no browser) -----------------------------------------------

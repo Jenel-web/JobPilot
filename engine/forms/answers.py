@@ -133,6 +133,12 @@ SENSITIVE_PATTERN = re.compile(
 )
 
 _PERSONAL_TYPES = {"text", "email", "tel", "url", "select", "dropdown", "textarea"}
+
+# A dropdown of country calling codes ("Country Phone Code", "Phone code", "Dialing code"). Checked BEFORE the
+# "someone else's details" words, which contain "code" (so referral, promo and verification codes stay not personal).
+_PHONE_CODE = re.compile(r"^(country )?(phone |calling |dial(l)?ing )(country )?code$|^country code$")
+# "Phone Device Type" / "Type of phone": Mobile, Home or Work (Workday). Answered from your number only.
+_PHONE_TYPE = re.compile(r"\b(phone|device|number) (device )?type\b|\btype of (phone|number|device)\b")
 _CHOICE_TYPES = {"select", "dropdown"}
 _GROUP_TYPES = {"select", "dropdown", "radio", "checkbox"}  # answers picked from a list of options
 
@@ -276,6 +282,8 @@ def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
         for key, pattern in _EDUCATION_PATTERNS:
             if pattern.search(label):
                 return key, "label"
+    if field.type in _CHOICE_TYPES and _PHONE_CODE.search(label):
+        return "phone", "label"  # the country-code box beside the number (fill_personal picks your country's code)
     if len(label.split()) > MAX_LABEL_WORDS or _NOT_YOURS.search(label) or _NOT_YOURS.search(_words(field.name)):
         return None  # a real question, or someone else's details
 
@@ -486,6 +494,25 @@ def bare_phone(stored: str) -> str:
     return stored
 
 
+def is_ph_mobile(stored: str) -> bool:
+    """True for a Philippine MOBILE number (09XX... or +639XX..., 10 digits after the 0 / +63). Landlines are False."""
+    digits = re.sub(r"\D", "", stored)
+    return (digits.startswith("639") and len(digits) == 12) or (digits.startswith("09") and len(digits) == 11)
+
+
+def phone_type_fill(stored: str, field: FormField, signal: str) -> PersonalFill:
+    """A "Phone Device Type" dropdown: "Mobile" for a Philippine mobile number. Anything else is left for you.
+
+    Decided by code from your ONE stored number, never guessed: a landline could be Home or Work, so it stays empty.
+    """
+    if not is_ph_mobile(stored):
+        return PersonalFill("phone", "", signal, True, "phone device type: your number is not a mobile number, so choose it yourself")
+    option = pick_option("Mobile", field.options) or pick_option("Cell", field.options) or pick_option("Cellphone", field.options)
+    if not option:
+        return PersonalFill("phone", "", signal, True, "phone device type: no Mobile option in the list")
+    return PersonalFill("phone", option, signal, False, "a mobile number: Mobile")
+
+
 def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | None:
     """Recognise a personal field and decide its value. ``None`` means "not personal": try the answer bank."""
     found = detect_personal(field)
@@ -499,6 +526,8 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
         value, flagged, note = values["github"], True, "no portfolio saved: your GitHub is used"
     if not value:
         return PersonalFill(key, "", signal, True, f"no {key.replace('_', ' ')} in your profile")
+    if key == "phone" and field.type in _CHOICE_TYPES and _PHONE_TYPE.search(_words(field.label)):
+        return phone_type_fill(value, field, signal)
     if key == "phone" and field.type in _CHOICE_TYPES:  # the country-code box next to the number
         option = country_code_option(value, field.options)
         if not option:
