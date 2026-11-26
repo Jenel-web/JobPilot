@@ -72,6 +72,7 @@ _OPTIONS_JS = "(box) => {\n" + CUSTOM_HELPERS_JS + r"""
       if (list) opts.push(...[...list.querySelectorAll('*')].filter(usable));
     }
   }
+  if (!opts.length && listFor(box)) opts = [...listFor(box).querySelectorAll('*')].filter(usable);  // a list beside the box (Workday)
   if (!opts.length) opts = [...document.querySelectorAll('[role=option]')].filter(usable);
   return opts.filter(o => !opts.some(other => other !== o && o.contains(other)));  // the innermost option element
 }
@@ -86,6 +87,18 @@ _SHOWN_JS = "(box) => {\n" + CUSTOM_HELPERS_JS + r"""
 # The part you click to open it, and its search box (only once it is open and showing).
 _TRIGGER_JS = r"""
 (box) => box.querySelector('[role=combobox], [class*=selector], [class*=trigger], [class*=control], [tabindex]') || box
+"""
+# May this element be clicked to open or close a dropdown? A <button> (or link) is only ever clicked when it is a
+# dropdown box that CANNOT submit: <button role="combobox" type="button">. A button with no type, or type=submit,
+# submits its form when clicked, so it is never touched (CLAUDE.md rule 5). Everything else (a div, a span) is fine.
+_SAFE_TRIGGER_JS = r"""
+(e) => {
+  const PRESS_TYPES = ['submit', 'button', 'image', 'reset'];
+  const pressable = e.closest('button, a, [role=button]') || (e.tagName === 'INPUT' && PRESS_TYPES.includes(e.type) ? e : null);
+  if (!pressable) return true;
+  return pressable.tagName === 'BUTTON' && pressable.getAttribute('role') === 'combobox'
+    && (pressable.getAttribute('type') || '').trim().toLowerCase() === 'button';
+}
 """
 _SEARCH_JS = r"""
 (box) => [...box.querySelectorAll('input')].find(i => !['hidden', 'checkbox', 'radio', 'file'].includes(i.type) && !i.readOnly
@@ -510,6 +523,8 @@ class _Filler:
         if self._options(box):
             return
         trigger = own_input or box.evaluate_handle(_TRIGGER_JS).as_element() or box
+        if not trigger.evaluate(_SAFE_TRIGGER_JS):
+            raise _CannotFill("this dropdown is a button that could submit the form: pick it yourself")
         trigger.click(timeout=ACTION_TIMEOUT_MS)
         self.page.wait_for_timeout(OPEN_WAIT_MS)
 
@@ -578,7 +593,8 @@ class _Filler:
         try:
             if self._options(box):
                 trigger = own_input or box.evaluate_handle(_TRIGGER_JS).as_element() or box
-                trigger.click(timeout=ACTION_TIMEOUT_MS)
+                if trigger.evaluate(_SAFE_TRIGGER_JS):
+                    trigger.click(timeout=ACTION_TIMEOUT_MS)
         except PlaywrightError:
             pass
 

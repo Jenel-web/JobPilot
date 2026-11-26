@@ -114,7 +114,11 @@ _RECORDER = r"""
   };
   document.addEventListener('click', e => {
     const t = e.target;
-    const pressable = t.closest('button, a, [role=button], input[type=submit], input[type=button], input[type=image], input[type=reset]');
+    let pressable = t.closest('button, a, [role=button], input[type=submit], input[type=button], input[type=image], input[type=reset]');
+    // The ONE kind of button the filler may click: a dropdown box that cannot submit (Workday's
+    // <button role="combobox" type="button">). Any other button, link or submit click is still reported.
+    if (pressable && pressable.tagName === 'BUTTON' && pressable.getAttribute('role') === 'combobox'
+        && (pressable.getAttribute('type') || '').trim().toLowerCase() === 'button') pressable = null;
     window.__jp.clicks.push({
       tag: t.tagName.toLowerCase(), type: (t.type || '').toLowerCase(),
       text: (t.innerText || t.value || '').trim().slice(0, 40),

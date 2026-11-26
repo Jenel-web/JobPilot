@@ -53,6 +53,9 @@ CUSTOM_HELPERS_JS = r"""
   const isOption = e => e.getAttribute('role') === 'option' || [...e.classList].some(c => OPTION_CLASS.test(c));
   const looksCustom = e => {
     if (['INPUT', 'SELECT', 'TEXTAREA', 'OPTION'].includes(e.tagName)) return false;
+    // Workday draws a dropdown as <button role="combobox">, its options in a list beside it (see listFor).
+    // Any other button is an action, never a question. Whether it is safe to CLICK is the filler's call.
+    if (e.tagName === 'BUTTON') return e.getAttribute('role') === 'combobox';
     const cls = [...e.classList];
     const byClass = cls.some(c => SELECT_CLASS.test(c)) && !cls.some(c => NOT_SELECT.test(c));
     const byRole = e.getAttribute('role') === 'combobox';
@@ -65,8 +68,17 @@ CUSTOM_HELPERS_JS = r"""
     return byRole || !!e.querySelector('input') || [...e.querySelectorAll('*')].some(isOption);
   };
   const findCustoms = () => {
-    const all = [...document.querySelectorAll('div, span, section')].filter(looksCustom);
+    const all = [...document.querySelectorAll('div, span, section, button')].filter(looksCustom);
     return all.filter(e => !all.some(o => o !== e && o.contains(e)));
+  };
+  // The option list a dropdown box controls when the options are NOT inside it: the list its aria-controls /
+  // aria-owns points to, else a role=listbox right after it (Workday). null = none of these.
+  const listFor = box => {
+    const id = box.getAttribute('aria-controls') || box.getAttribute('aria-owns');
+    const byId = id && document.getElementById(id);
+    if (byId) return byId;
+    const next = box.nextElementSibling;
+    return next && next.getAttribute('role') === 'listbox' ? next : null;
   };
 """
 
@@ -175,12 +187,16 @@ _EXTRACT_JS = "() => {\n" + CUSTOM_HELPERS_JS + r"""
   customs.forEach((c, cindex) => {
     if (!isShown(c)) return;
     const options = [];
-    for (const o of c.querySelectorAll('*')) {
-      if (!isOption(o) || o.closest('button, a, [role=button]')) continue;  // a button in a list is an action, not a choice
-      const t = clean(o.innerText || o.textContent);
-      if (t && !options.includes(t)) options.push(t);
-      if (options.length >= 1000) break;
-    }
+    const collect = root => {
+      for (const o of root.querySelectorAll('*')) {
+        if (!isOption(o) || o.closest('button, a, [role=button]')) continue;  // a button in a list is an action, not a choice
+        const t = clean(o.innerText || o.textContent);
+        if (t && !options.includes(t)) options.push(t);
+        if (options.length >= 1000) break;
+      }
+    };
+    collect(c);
+    if (!options.length && listFor(c)) collect(listFor(c));  // options kept outside the box (Workday)
     const ph = clean((c.querySelector('[class*=placeholder]') || {}).innerText)
       || clean([...c.querySelectorAll('input')].map(i => i.getAttribute('placeholder')).find(Boolean));
     const label = labelOf(c);

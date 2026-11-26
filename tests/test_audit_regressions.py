@@ -122,26 +122,23 @@ def test_bug1_a_section_heading_past_another_field_is_never_taken(page: Page) ->
 # ---- Bug 2: <button role="combobox"> dropdowns (Workday) -----------------------------------------------------------
 
 
-@BUG2
 def test_bug2_a_button_combobox_is_read_as_a_dropdown(page: Page) -> None:
     fields = open_fixture(page, "audit_workday_dropdown_safe.html")
     f = next(f for f in fields if "Hear About Us" in f.label)
     assert f.type == "dropdown" and f.custom_index >= 0
-    assert f.label == "How Did You Hear About Us"
+    assert f.label == "How Did You Hear About Us?"  # clean_label drops the star, keeps the "?" (as for every label)
     assert f.options == ["Careers Website", "LinkedIn", "Referral", "Other"]
 
 
-@BUG2
 def test_bug2_a_safe_button_combobox_is_filled_and_nothing_else_is_clicked(page: Page) -> None:
     fields = open_fixture(page, "audit_workday_dropdown_safe.html")
     install_recorder(page)
-    report = run(page, fields, build(fields, {"How Did You Hear About Us": "Referral"}))
+    report = run(page, fields, build(fields, {"How Did You Hear About Us?": "Referral"}))
     assert page.inner_text("#b1").strip() == "Referral"
     assert report.failed == 0
     assert bad_clicks(page) == []
 
 
-@BUG2
 def test_bug2_a_button_combobox_that_could_submit_is_never_clicked(page: Page) -> None:
     """No type attribute = a submit button by default: refused, left for you, nothing clicked at all."""
     fields = open_fixture(page, "audit_workday_dropdown_unsafe.html")
