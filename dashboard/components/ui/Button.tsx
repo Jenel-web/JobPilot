@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "link";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "link" | "dangerLink";
 export type ButtonSize = "md" | "sm" | "xs";
 
 const VARIANTS: Record<ButtonVariant, string> = {
@@ -9,6 +9,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   secondary: "border border-jp-line-strong bg-jp-surface text-jp-ink font-medium",
   danger: "bg-jp-danger text-white font-semibold",
   link: "bg-transparent text-jp-brand font-medium",
+  /** A red text button for a destructive action kept away from Save (Answer bank → Delete). */
+  dangerLink: "bg-transparent text-jp-danger font-medium",
 };
 
 // md = 36 px (page actions), sm = 32 px (detail panel), xs = 30 px (banners)
@@ -47,7 +49,7 @@ export function Button({
     "disabled:cursor-not-allowed disabled:opacity-45",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-jp-brand",
     VARIANTS[variant],
-    variant === "link" ? "h-9 px-3 text-sm" : SIZES[size],
+    variant === "link" || variant === "dangerLink" ? "h-9 px-3 text-sm" : SIZES[size],
     className,
   );
 

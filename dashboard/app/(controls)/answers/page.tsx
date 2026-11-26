@@ -1,8 +1,8 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+import { AnswersScreen } from "@/components/answers/AnswersScreen";
 
 export const metadata = { title: "Answer bank · JobPilot" };
 
-/** Placeholder until its step of stage 4.5 is built. */
-export default function Page() {
-  return <PageHeader title="Answer bank" subtitle="Reused on every form, matched by meaning." />;
+/** Answer bank editor: search, filter by kind, add, edit, delete (design/screens/AnswerBank.html). */
+export default function AnswersPage() {
+  return <AnswersScreen />;
 }
