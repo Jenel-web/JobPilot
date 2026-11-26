@@ -99,7 +99,8 @@ _PATTERNS: list[tuple[PersonalKey, re.Pattern[str]]] = [
 # Whole-label patterns only, so "School email" or "Course you are applying for" never match.
 _EDUCATION_PATTERNS: list[tuple[PersonalKey, re.Pattern[str]]] = [
     ("school", re.compile(r"^(name of (your )?)?(current |last )?(school|university|college|institution|alma mater)( name| attended)?$")),
-    ("degree", re.compile(r"^(course( of study)?|degree( program(me)?)?|program(me)?( of study)?|major|field of study|area of study|course name|degree name)$")),
+    ("degree", re.compile(r"^(course( of study)?|degree( program(me)?)?|program(me)?( of study)?|major|field of study|area of study|course name|degree name)$"
+                          r"|^(course|program(me)?|degree)( and| or)? (course|program(me)?|major)$")),  # "Course / Program", "Degree and Major"
     ("education_level", re.compile(r"^(highest )?(education(al)? level|level of education|education(al)? attainment|highest (level of )?education|education)$")),
     ("year_level", re.compile(r"^(current )?year level$|^year of study$")),
     ("grad_year", re.compile(r"^(expected |anticipated )?(graduation|grad)( year| date)?$|^(expected )?year of graduation$")),
@@ -137,6 +138,9 @@ _PERSONAL_TYPES = {"text", "email", "tel", "url", "select", "dropdown", "textare
 # A dropdown of country calling codes ("Country Phone Code", "Phone code", "Dialing code"). Checked BEFORE the
 # "someone else's details" words, which contain "code" (so referral, promo and verification codes stay not personal).
 _PHONE_CODE = re.compile(r"^(country )?(phone |calling |dial(l)?ing )(country )?code$|^country code$")
+# A checkbox group asking which technologies you use ("Which of these technologies have you used?", "Programming
+# languages", "Tools you know"). Its options are ticked from your saved skills, exact names only (fill_personal).
+_TECH_CHOICE = re.compile(r"\b(technolog(y|ies)|programming languages?|languages|frameworks?|tools|tech stack|skills)\b")
 # "Phone Device Type" / "Type of phone": Mobile, Home or Work (Workday). Answered from your number only.
 _PHONE_TYPE = re.compile(r"\b(phone|device|number) (device )?type\b|\btype of (phone|number|device)\b")
 _CHOICE_TYPES = {"select", "dropdown"}
@@ -275,6 +279,14 @@ def wants_opinion(label: str) -> bool:
 
 def detect_personal(field: FormField) -> tuple[PersonalKey, str] | None:
     """Return ``(which profile value, which hint said so)``, or ``None`` if not a personal field."""
+    if field.type in ("radio", "checkbox"):  # choices: only education ("Year level") and technology lists, never name/email/phone
+        label = _words(field.label)
+        for key, pattern in _EDUCATION_PATTERNS:
+            if pattern.search(label):
+                return key, "label"
+        if field.type == "checkbox" and len(field.options) > 1 and _TECH_CHOICE.search(label) and not _NOT_YOURS.search(label):
+            return "skills", "label"
+        return None
     if field.type not in _PERSONAL_TYPES:
         return None
     label = _words(field.label)
@@ -513,6 +525,19 @@ def phone_type_fill(stored: str, field: FormField, signal: str) -> PersonalFill:
     return PersonalFill("phone", option, signal, False, "a mobile number: Mobile")
 
 
+def skills_checkbox_fill(stored: str, field: FormField, signal: str) -> PersonalFill:
+    """A "Which technologies have you used?" checkbox group: tick ONLY the options named exactly like a saved skill.
+
+    "Java" is not "JavaScript", and a technology you never saved is never ticked (no invented facts, rule 4).
+    Always flagged: you check the ticks before you submit. The options keep the page's order.
+    """
+    mine = {_option_key(s) for s in re.split(r"[,;\n]+", stored) if s.strip()}
+    picked = [o for o in field.options if _option_key(o) in mine]
+    if not picked:
+        return PersonalFill("skills", "", signal, True, "none of these options is one of your saved skills: choose them yourself")
+    return PersonalFill("skills", ", ".join(picked), signal, True, "ticked only the options that match your saved skills: check them")
+
+
 def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | None:
     """Recognise a personal field and decide its value. ``None`` means "not personal": try the answer bank."""
     found = detect_personal(field)
@@ -538,7 +563,9 @@ def fill_personal(field: FormField, values: dict[str, str]) -> PersonalFill | No
     if key == "skills" and field.type in _CHOICE_TYPES:
         # Every skill, in your order: the filler searches the list for each one and picks exact matches only.
         return PersonalFill(key, value, signal, False, "your skills, in the order of your profile")
-    if field.type in _CHOICE_TYPES and field.options:
+    if key == "skills" and field.type == "checkbox":
+        return skills_checkbox_fill(value, field, signal)
+    if field.type in (*_CHOICE_TYPES, "radio") and field.options:
         option = pick_option(value, field.options)
         if option:
             exact = _same_meaning(option, value)

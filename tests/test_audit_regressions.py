@@ -36,10 +36,6 @@ VALUES = {
 
 # Each bug's tests are marked "expected to fail" until its fix lands, so every commit stays green. strict=True: a test
 # that starts passing while still marked makes pytest fail, so the marker must be removed in the fix's own commit.
-BUG2 = pytest.mark.xfail(strict=True, reason="Bug 2 not fixed yet: <button role=combobox> dropdowns skipped")
-BUG2B = pytest.mark.xfail(strict=True, reason="Bug 2b not fixed yet: unknown controls skipped silently")
-BUG3 = pytest.mark.xfail(strict=True, reason="Bug 3 not fixed yet: Workday phone fields")
-BUG4 = pytest.mark.xfail(strict=True, reason="Bug 4 not fixed yet: course, year level, technology checkboxes")
 
 
 @pytest.fixture(scope="module")
@@ -247,28 +243,24 @@ def test_bug3_a_country_phone_code_text_box_is_left_to_the_old_rules() -> None:
 # ---- Bug 4: course, year level and technology checkboxes (no browser) -----------------------------------------------
 
 
-@BUG4
 @pytest.mark.parametrize("label", ["Course / Program", "Course or Program", "Program / Course", "Degree and Major"])
 def test_bug4_course_and_program_labels_give_your_degree(label: str) -> None:
     p = fill_personal(field(label), VALUES)
     assert p is not None and p.value == VALUES["degree"]
 
 
-@BUG4
 def test_bug4_year_level_radio_picks_your_year() -> None:
     f = field("Year level", "radio", options=["1st year", "2nd year", "3rd year", "4th year"])
     p = fill_personal(f, VALUES)
     assert p is not None and p.value == "4th year" and not p.flagged
 
 
-@BUG4
 def test_bug4_year_level_radio_with_other_words_is_left_for_you() -> None:
     f = field("Year level", "radio", options=["Freshman", "Sophomore", "Junior", "Senior"])
     p = fill_personal(f, VALUES)
     assert p is not None and p.value == "" and p.flagged
 
 
-@BUG4
 def test_bug4_technology_checkboxes_tick_only_your_saved_skills() -> None:
     f = field("Which of these technologies have you used?", "checkbox", options=["Python", "Java", "React", "Docker", "Rust"])
     p = fill_personal(f, VALUES)
@@ -276,11 +268,20 @@ def test_bug4_technology_checkboxes_tick_only_your_saved_skills() -> None:
     assert "Java" not in p.value and "Rust" not in p.value
 
 
+@pytest.mark.parametrize(
+    ("label", "type"),
+    [("Are you willing to move to another city?", "radio"), ("Can we contact you by phone?", "radio"),
+     ("Email me about new jobs", "checkbox"), ("Preferred name pronunciation", "radio")],
+)
+def test_bug4_a_choice_question_with_a_profile_word_is_still_not_personal(label: str, type: str) -> None:
+    """Radios and checkboxes only use the education and technology rules, never the name/email/phone/city words."""
+    assert fill_personal(field(label, type, options=["Yes", "No"]), VALUES) is None
+
+
 def test_bug4_a_yes_no_radio_is_not_personal() -> None:
     assert fill_personal(field("Do you have your own laptop?", "radio", options=["Yes", "No"]), VALUES) is None
 
 
-@BUG4
 def test_bug4_google_form_end_to_end(page: Page) -> None:
     fields = open_fixture(page, "audit_google_form.html")
     install_recorder(page)
