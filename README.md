@@ -212,7 +212,7 @@ The default run mode is `mock`: fake vectors, saved pages, nothing real touched.
 </details>
 
 <details>
-<summary><b>Engine API</b> (127.0.0.1 only; the controls page will use it)</summary>
+<summary><b>Engine API</b> (127.0.0.1 only; the controls page uses it)</summary>
 
 | Endpoint | What it does |
 | --- | --- |
@@ -222,7 +222,10 @@ The default run mode is `mock`: fake vectors, saved pages, nothing real touched.
 | `POST /wordings/{id}/approve` · `/reject` | Approve a wording (protected answers need `confirm_protected`) or reject it |
 | `POST /answers` · `PUT` / `DELETE /answers/{id}` | Add, edit or delete a saved answer |
 | `POST /fills/{id}/status` | Mark a filled page `submitted` or `abandoned` |
-| `POST /fill` · `GET /fill/{job_id}` | Start "Fill this page" in the background and poll for the result (one fill at a time) |
+| `POST /fill` · `GET /fill/{job_id}` | Start "Fill this page" in the background and poll for the result (one fill at a time). Optional body: `post_text`, `post_tab_url`, `no_resume`, `resume` |
+| `GET /status` | Run mode, whether the bot's Chrome is open, the page you are looking at, and the running fill (read-only) |
+| `GET /jobpost` | The job post a fill would use for the current page, plus your other tabs for Change (read-only) |
+| `GET /fills/{id}/screenshot` | The screenshot taken after that fill (only PNGs inside `data/screenshots/`) |
 
 To try it without touching your real files: `python scripts\api_sandbox.py` (a copy of your data, mock mode, port 8001).
 
@@ -240,7 +243,7 @@ JobPilot is built in stages, and each stage must work in mock mode with tests be
 | **v0 · Phase 1** | Profile, resumes, answer bank in SQLite, safety gate, keyring | ✅ Done |
 | **v0 · Phase 2** | Form reader: iframes, custom dropdowns, offline fixtures | ✅ Done |
 | **v0 · Phase 3** | RAG, unknown-question learning, personal-field detector, answer rules for fixed / open / protected, resume picker | ✅ Done |
-| **v0 · Phase 4** | Filler ✅ · job post finder ✅ · "Fill this page" orchestrator + filled pages history ✅ · company answers from the job post ✅ · engine API ✅ · controls page 🚧 · on-page Fill panel 🚧 · passive submit detection 🚧 · a week of real use 🚧 | 🚧 In progress |
+| **v0 · Phase 4** | Filler ✅ · job post finder ✅ · "Fill this page" orchestrator + filled pages history ✅ · company answers from the job post ✅ · engine API ✅ · controls page ✅ · on-page Fill panel 🚧 · passive submit detection 🚧 · audit fixes (4 bugs) 🚧 · a week of real use 🚧 | 🚧 In progress |
 | **v1** | Prosple job discovery and batch mode with approval | 📋 Planned |
 | **v2** | Cold email through Gmail (`gmail.send` only) | 📋 Planned |
 | **v3** | Scheduling, kill switch, encryption at rest | 📋 Planned |
