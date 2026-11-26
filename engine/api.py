@@ -40,6 +40,7 @@ from engine.api_fill import JobManager, bot_browser_runner, install_fill_handler
 from engine.api_fill import router as fill_router
 from engine.api_browser import install_browser
 from engine.api_write import install_error_handlers, router as write_router
+from engine.forms.answers import is_sensitive
 from engine.forms.history import list_fills
 from engine.profile import ANSWERS_PATH
 from engine.settings import Settings, load_settings
@@ -126,8 +127,12 @@ def create_app(
 
     @app.get("/unknown")
     def unknown(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> list[UnknownOut]:
-        """Questions the bot could not answer, most-seen first. You answer them in the dashboard."""
-        return [UnknownOut.from_row(r) for r in learning.open_unknowns(conn)]
+        """Questions the bot could not answer, most-seen first. You answer them in the dashboard.
+
+        ``protected`` marks legal / eligibility questions (``is_sensitive``): the screen says "You must answer this
+        yourself", offers no AI help, and saves your answer as protected.
+        """
+        return [UnknownOut.from_row(r, protected=is_sensitive(r["question_text"])) for r in learning.open_unknowns(conn)]
 
     @app.get("/wordings")
     def wordings(conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> list[WordingOut]:

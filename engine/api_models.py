@@ -32,13 +32,14 @@ class UnknownOut(BaseModel):
     options: list[str]  # the choices of a dropdown or radio group, else empty
     first_seen: str
     last_seen: str | None
+    protected: bool = False  # legal / eligibility / identity: you must answer it yourself, never the AI (rule 5b)
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> UnknownOut:
+    def from_row(cls, row: sqlite3.Row, protected: bool = False) -> UnknownOut:
         return cls(
             id=row["id"], question=row["question_text"], times_seen=row["times_seen"], page_url=row["page_url"],
             field_type=row["field_type"], options=_json_list(row["options"]), first_seen=row["first_seen"],
-            last_seen=row["last_seen"],
+            last_seen=row["last_seen"], protected=protected,
         )
 
 

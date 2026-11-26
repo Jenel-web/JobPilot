@@ -201,6 +201,20 @@ def test_unknown_lists_most_seen_first_with_options(seeded) -> None:  # type: ig
     assert [r["question"] for r in client.get("/unknown").json()] == ["Preferred shift?"]  # answered ones leave
 
 
+def test_unknown_marks_legal_questions_as_yours_to_answer(seeded) -> None:  # type: ignore[no-untyped-def]
+    """Rule 5b: the screen must know which unknown questions only YOU may answer (no AI help, saved as protected)."""
+    client, conn, learning = seeded
+    learning.record_unknown(conn, "Have you ever been employed by a government agency?", "https://x.test/1", "text")
+    learning.record_unknown(conn, "Do you require visa sponsorship?", "https://x.test/2", "text")
+    learning.record_unknown(conn, "Favourite programming language?", "https://x.test/3", "text")
+    flags = {r["question"]: r["protected"] for r in client.get("/unknown").json()}
+    assert flags == {
+        "Have you ever been employed by a government agency?": True,
+        "Do you require visa sponsorship?": True,
+        "Favourite programming language?": False,
+    }
+
+
 def test_wordings_carry_protected_flag_and_kind(seeded) -> None:  # type: ignore[no-untyped-def]
     client, conn, learning = seeded
     learning.suggest_wording(conn, "How much pay do you want?", SALARY, 0.88, "https://x.test/a")

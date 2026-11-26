@@ -1,8 +1,14 @@
+import { Suspense } from "react";
+import { QuestionsScreen } from "@/components/questions/QuestionsScreen";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Questions · JobPilot" };
 
-/** Placeholder until its step of stage 4.5 is built. */
-export default function Page() {
-  return <PageHeader title="Questions" subtitle="Questions the bot could not answer, and new wordings to check." />;
+/** Questions: Waiting | Wordings | Answered. The screen reads ?tab= and ?id=, so it sits in a Suspense boundary. */
+export default function QuestionsPage() {
+  return (
+    <Suspense fallback={<PageHeader title="Questions" subtitle="Loading…" />}>
+      <QuestionsScreen />
+    </Suspense>
+  );
 }

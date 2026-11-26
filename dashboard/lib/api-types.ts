@@ -20,6 +20,7 @@ export type UnknownQuestion = {
   options: string[];
   first_seen: string;
   last_seen: string | null;
+  protected: boolean; // legal / eligibility: you must answer it yourself, never the AI (rule 5b)
 };
 
 export type Wording = {
