@@ -7,7 +7,7 @@ import { shell } from "@/lib/mock-data";
 type Item = { href: string; label: string; count?: number; countTone?: "blue" | "amber" };
 
 const ITEMS: Item[] = [
-  { href: "/", label: "Home" },
+  { href: "/home", label: "Home" },
   { href: "/review", label: "Review batch", count: shell.reviewCount, countTone: "blue" },
   { href: "/applications", label: "Applications" },
   { href: "/questions", label: "Questions", count: shell.questionCount, countTone: "amber" },
@@ -19,7 +19,7 @@ const ITEMS: Item[] = [
 
 /** Home is active only on "/"; every other item is active for its own section. */
 function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  return href === "/home" ? pathname === "/home" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /** Left navigation: 220 px wide, 8 items, counts on Review batch and Questions. */

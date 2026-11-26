@@ -47,7 +47,7 @@ export function TopBar() {
         stopped ? "bg-jp-danger-bg" : "bg-jp-surface",
       )}
     >
-      <Link href="/" className="font-serif text-[20px] font-medium">
+      <Link href="/home" className="font-serif text-[20px] font-medium">
         JobPilot
       </Link>
       <Link href="/settings" aria-label="Run mode: open Settings">
