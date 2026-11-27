@@ -39,7 +39,7 @@ from engine.api_deps import get_conn, get_settings
 from engine.api_models import FillIn, FillJobOut, FillPostOut, FillResultOut, FlaggedField, TabOut
 from engine.forms.browser import CDP_PORT
 from engine.forms.history import private_values
-from engine.forms.jobfinder import SOURCE_LABELS, post_from_pasted, post_from_tab_url
+from engine.forms.jobfinder import SOURCE_LABELS, _target_id, post_from_pasted, post_from_tab_url
 from engine.forms.orchestrator import FillOutcome, fill_current_page
 from engine.forms.reader import connect_to_bot_browser, find_current_page
 from engine.matcher import PickError
@@ -163,6 +163,14 @@ def _pick_page(browser: object, tab: str | None) -> Page:
     return matches[0]
 
 
+def tab_id(page: Page) -> str:
+    """Chrome's own id for the tab (read-only); "" if it cannot be read."""
+    try:
+        return _target_id(page)
+    except Exception:  # noqa: BLE001 - no id simply means no passive submit detection for this fill
+        return ""
+
+
 def bot_browser_runner(db_path: Path | str, settings: Settings, request: FillIn) -> FillResultOut:
     """The real job: attach to the bot's browser, pick the tab, fill it. Runs in the job's own thread.
 
@@ -177,7 +185,9 @@ def bot_browser_runner(db_path: Path | str, settings: Settings, request: FillIn)
         with sync_playwright() as p:
             page = _pick_page(connect_to_bot_browser(p), request.tab)
             shot = ROOT / "data" / "screenshots" / f"fill-{datetime.now():%Y%m%d-%H%M%S}.png"
-            return perform_fill(conn, page, settings, request, shot)
+            result = perform_fill(conn, page, settings, request, shot)
+            result.target_id = tab_id(page)  # so the submit watcher can find this tab again, even after it navigates
+            return result
     finally:
         conn.close()
 
@@ -305,12 +315,17 @@ def start_fill(
     check_ready(conn, settings)
     db_path, runner = request.app.state.db_path, request.app.state.fill_runner
 
+    watcher = request.app.state.submit_watcher
+
     def work() -> FillResultOut:
         try:
-            return runner(db_path, settings, body)
+            result = runner(db_path, settings, body)
         except Exception as exc:
             _log_failure(db_path, exc)
             raise
+        if result.fill_id is not None and result.target_id:
+            watcher.watch(result.fill_id, result.target_id, result.url)  # read-only: offers "Looks submitted. Mark it?"
+        return result
 
     return _to_out(jobs.start(work))
 

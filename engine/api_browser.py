@@ -21,11 +21,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from engine import api_fill, learning, safety
+from engine import api_fill, db, learning, safety
 from engine.api_deps import get_conn, get_settings
-from engine.api_models import FillPostOut, JobPostPreviewOut, StatusOut, TabOut
+from engine.api_models import FillPostOut, JobPostPreviewOut, StatusOut, SubmitOfferOut, TabOut
 from engine.forms.jobfinder import SOURCE_LABELS, find_job_post
 from engine.forms.reader import connect_to_bot_browser, find_current_page
+from engine.forms.submitwatch import SubmitWatcher
 from engine.settings import ROOT, Settings
 
 SCREENSHOTS_DIR = ROOT / "data" / "screenshots"
@@ -96,8 +97,27 @@ def status(request: Request, settings: Annotated[Settings, Depends(get_settings)
             pass  # open but no web page (or it closed a moment ago): the screen says "no page open"
     return StatusOut(
         run_mode=settings.run_mode, browser_open=browser_open, page_url=url, page_title=title,
-        fill_running=running is not None, fill_job_id=running,
+        fill_running=running is not None, fill_job_id=running, submit_offer=newest_offer(request),
     )
+
+
+def newest_offer(request: Request) -> SubmitOfferOut | None:
+    """The newest "Looks submitted. Mark it?" offer for a page that is still ``filled``, with its history title."""
+    offers = request.app.state.submit_watcher.offers()
+    if not offers:
+        return None
+    conn = db.connect(request.app.state.db_path)
+    try:
+        for offer in offers:
+            row = conn.execute("SELECT job_title, company, status FROM fills WHERE id = ?", (offer.fill_id,)).fetchone()
+            if row is None or row["status"] != "filled":
+                request.app.state.submit_watcher.forget(offer.fill_id)
+                continue
+            title = " – ".join(x for x in (row["job_title"], row["company"]) if x) or "Form without a job post"
+            return SubmitOfferOut(fill_id=offer.fill_id, title=title, reason=offer.reason, strong=offer.strong)
+    finally:
+        conn.close()
+    return None
 
 
 @router.get("/jobpost")
@@ -154,6 +174,7 @@ def install_browser(app: FastAPI) -> None:
     app.state.page_reader = read_current_tab
     app.state.post_previewer = preview_job_post
     app.state.screenshots_dir = SCREENSHOTS_DIR
+    app.state.submit_watcher = SubmitWatcher(app.state.db_path)  # passive submit detection (read-only)
     app.include_router(router)
 
     async def no_page(_request: Request, exc: Exception) -> JSONResponse:

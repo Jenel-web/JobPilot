@@ -191,9 +191,10 @@ def delete_answer(
 
 
 @router.post("/fills/{fill_id}/status")
-def set_fill_status(fill_id: int, body: FillStatusIn, conn: Conn) -> FillOut:
+def set_fill_status(fill_id: int, body: FillStatusIn, conn: Conn, request: Request) -> FillOut:
     """Say what happened to a filled page: ``submitted`` or ``abandoned``. Only you decide; only a ``filled`` row can change."""
     history.mark_fill(conn, fill_id, body.status)
+    request.app.state.submit_watcher.forget(fill_id)  # decided: no more "Looks submitted" offer or watching
     return FillOut.from_row(conn.execute("SELECT * FROM fills WHERE id = ?", (fill_id,)).fetchone())
 
 

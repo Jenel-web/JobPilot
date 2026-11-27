@@ -73,7 +73,10 @@ export type EngineStatus = {
   page_title: string | null;
   fill_running: boolean;
   fill_job_id: string | null;
+  submit_offer: SubmitOffer | null; // "Looks submitted. Mark it?" (passive detection); JobPilot never marks it itself
 };
+
+export type SubmitOffer = { fill_id: number; title: string; reason: string; strong: boolean };
 
 export type FillPost = { label: string; source: string; tab_title: string; tab_url: string };
 export type Tab = { index: number; title: string; url: string };

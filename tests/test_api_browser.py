@@ -67,7 +67,7 @@ def test_status_shows_mode_and_the_page_you_are_looking_at(client: TestClient) -
     body = client.get("/status").json()
     assert body == {
         "run_mode": "mock", "browser_open": True, "page_url": "https://jobs.test/apply", "page_title": "Apply – Acme",
-        "fill_running": False, "fill_job_id": None,
+        "fill_running": False, "fill_job_id": None, "submit_offer": None,
     }
 
 

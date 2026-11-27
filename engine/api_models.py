@@ -278,6 +278,7 @@ class FillResultOut(BaseModel):
     resume_reason: str
     unknown_ids: list[int]
     messages: list[str]
+    target_id: str = Field(default="", exclude=True)  # Chrome's id for the filled tab: for the submit watcher only, never sent
 
 
 class FillJobOut(BaseModel):
@@ -294,6 +295,15 @@ class FillJobOut(BaseModel):
 # ---- the browser, read only (stage 4.5): status line and job post preview ----------------------------
 
 
+class SubmitOfferOut(BaseModel):
+    """An offer to mark a filled page as submitted. JobPilot never marks it itself: you press the button."""
+
+    fill_id: int
+    title: str  # job title and company, as in the history
+    reason: str  # why it looks submitted, e.g. 'The page now says "Application received".'
+    strong: bool  # True: confirmation words were seen; False: the page only changed
+
+
 class StatusOut(BaseModel):
     """What the controls page shows in its top bar and status line. Reading it changes nothing."""
 
@@ -303,6 +313,8 @@ class StatusOut(BaseModel):
     page_title: str | None
     fill_running: bool
     fill_job_id: str | None  # the running fill, so a reloaded dashboard can keep following it
+    submit_offer: SubmitOfferOut | None = None  # "Looks submitted. Mark it?" (passive detection), newest first
+
 
 
 class JobPostPreviewOut(BaseModel):

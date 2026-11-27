@@ -2,6 +2,7 @@ import { ControlsSidebar } from "@/components/shell/ControlsSidebar";
 import { ControlsTopBar } from "@/components/shell/ControlsTopBar";
 import { EngineDownBanner } from "@/components/shell/EngineDownBanner";
 import { EngineProvider } from "@/components/shell/EngineProvider";
+import { SubmitOfferBanner } from "@/components/shell/SubmitOfferBanner";
 import { ToastProvider } from "@/components/ui/Toast";
 
 /**
@@ -19,6 +20,7 @@ export default function ControlsLayout({ children }: { children: React.ReactNode
             <ControlsSidebar />
             <main className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-7 py-6">
               <EngineDownBanner />
+              <SubmitOfferBanner />
               {children}
             </main>
           </div>
